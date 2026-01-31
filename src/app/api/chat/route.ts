@@ -1,3 +1,6 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
@@ -136,7 +139,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ reply: crisisReplyPH(), flagged: "crisis" });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+
+const apiKey = process.env.GEMINI_API_KEY;
+
+
     if (!apiKey) {
       return NextResponse.json(
         { error: "Missing GEMINI_API_KEY in .env.local" },

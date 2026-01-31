@@ -70,7 +70,7 @@ export default function ChatPage() {
     // Build nextMessages from the latest state (avoids stale state bugs)
     let nextMessages: ChatMessage[] = [];
     setMessages((prev) => {
-      nextMessages = [...prev, { role: "user", content: text }].slice(-MAX_MESSAGES);
+      nextMessages = [...prev, { role: "user" as const, content: text }].slice(-MAX_MESSAGES);
       return nextMessages;
     });
 
@@ -104,7 +104,7 @@ export default function ChatPage() {
       // 🚨 Crisis reply
       if (data?.flagged === "crisis") {
         const crisisText = String(data?.reply ?? "").trim();
-
+    
         setMessages((prev) => {
           const next = [
             ...prev,
@@ -119,6 +119,7 @@ export default function ChatPage() {
         });
 
         setCrisisLock(true);
+       
         return;
       }
 

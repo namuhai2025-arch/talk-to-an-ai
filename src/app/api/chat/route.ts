@@ -114,6 +114,10 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
+  if (looksLikeCrisis(message) || looksLikeCrisis(historyText)) {
+  return NextResponse.json({ reply: crisisReplyPH(), flagged: "crisis" });
+}
+    
     const raw =
       (typeof body?.message === "string" && body.message) ||
       (typeof body?.prompt === "string" && body.prompt) ||
@@ -126,22 +130,8 @@ export async function POST(req: Request) {
     if (!message) {
       return NextResponse.json({ error: "Invalid message" }, { status: 400 });
     }
-
-    // --- Crisis guard: NO model call ---
-    const historyText = Array.isArray(history)
-      ? history
-          .filter((m) => m && typeof m.content === "string")
-          .map((m) => String(m.content))
-          .join("\n")
-      : "";
-
-    if (looksLikeCrisis(message) || looksLikeCrisis(historyText)) {
-      return NextResponse.json({ reply: crisisReplyPH(), flagged: "crisis" });
-    }
-
-
+    
 const apiKey = process.env.GEMINI_API_KEY;
-
 
     if (!apiKey) {
       return NextResponse.json(

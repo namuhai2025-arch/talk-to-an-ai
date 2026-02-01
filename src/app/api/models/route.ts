@@ -70,32 +70,25 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const raw =
+    // 1) Extract text FIRST
+    const message =
       (typeof body?.message === "string" && body.message) ||
       (typeof body?.prompt === "string" && body.prompt) ||
       "";
 
-    const message = String(raw).trim();
-    const mode = String(body?.mode ?? "open_chat");
     const history = Array.isArray(body?.history) ? body.history : [];
+    const historyText = history
+      .map((m: any) => (typeof m?.content === "string" ? m.content : ""))
+      .join("\n");
 
-    if (!message) {
-      return NextResponse.json({ error: "Invalid message" }, { status: 400 });
-    }
-
-    // --- CRISIS GUARD (NO MODEL CALL) ---
-    const historyText = Array.isArray(history)
-      ? history
-          .filter((m: any) => m && typeof m.content === "string")
-          .map((m: any) => String(m.content))
-          .join("\n")
-      : "";
-
+    // 2) Crisis guard SECOND (before Gemini)
     if (looksLikeCrisis(message) || looksLikeCrisis(historyText)) {
       return NextResponse.json({ reply: crisisReplyPH(), flagged: "crisis" });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    // 3) Then continue to Gemini/model code...
+  
+        const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
         { error: "Missing GEMINI_API_KEY in .env.local" },

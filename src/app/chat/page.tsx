@@ -12,73 +12,111 @@ const INITIAL_GREETING: ChatMessage = {
     "Hi, I’m Talkio. We can chat about anything — ideas, experiences, questions, or whatever’s on your mind.",
 };
 
-const MAX_MESSAGES = 10; // ~5 turns
+const MAX_MESSAGES = 10;
+
+function isBlank(s: string) {
+  return !s || !s.trim();
+}
+
+function getOrCreateSessionId() {
+  if (typeof window === "undefined") return "server";
+
+  let id = localStorage.getItem("talkio_session");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("talkio_session", id);
+  }
+  return id;
+}
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_GREETING]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (typeof window === "undefined") return [INITIAL_GREETING];
+
+    const sessionId = getOrCreateSessionId();
+    const saved = localStorage.getItem(`talkio_messages_${sessionId}`);
+    try {
+      return saved ? JSON.parse(saved) : [INITIAL_GREETING];
+    } catch {
+      return [INITIAL_GREETING];
+    }
+  });
+
+  const [mode, setMode] = useState<Mode>(() => {
+    if (typeof window === "undefined") return "supportive";
+
+    const sessionId = getOrCreateSessionId();
+    return (localStorage.getItem(`talkio_mode_${sessionId}`) as Mode) || "supportive";
+  });
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [crisisLock, setCrisisLock] = useState(false);
-  const [mode, setMode] = useState<Mode>("supportive");
-  
- useEffect(() => {
-  function handleEsc(e: KeyboardEvent) {
-    if (e.key === "Escape") {
-      setShowClearConfirm(false);
-    }
-  }
 
-  window.addEventListener("keydown", handleEsc);
-  return () => window.removeEventListener("keydown", handleEsc);
-}, []);
-
-  // ✅ Auto-scroll ref
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // ✅ Auto-scroll when new bubbles are added
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
   useEffect(() => {
-  if (!loading && !crisisLock) {
-    inputRef.current?.focus();
-  }
-}, [loading, crisisLock, messages.length]);
+    if (!loading && !crisisLock) inputRef.current?.focus();
+  }, [loading, crisisLock, messages.length]);
+
+  useEffect(() => {
+    function handleEsc(e: KeyboardEvent) {
+      if (e.key === "Escape" && showClearConfirm) setShowClearConfirm(false);
+    }
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [showClearConfirm]);
+
+  useEffect(() => {
+    const sessionId = getOrCreateSessionId();
+    localStorage.setItem(`talkio_messages_${sessionId}`, JSON.stringify(messages));
+  }, [messages]);
+
+  useEffect(() => {
+    const sessionId = getOrCreateSessionId();
+    localStorage.setItem(`talkio_mode_${sessionId}`, mode);
+  }, [mode]);
 
   function clearChat() {
+    setLoading(false);
+
+    // new session id → new conversation
+    const newId = crypto.randomUUID();
+    localStorage.setItem("talkio_session", newId);
+
     setMessages([INITIAL_GREETING]);
     setInput("");
     setCrisisLock(false);
     setMode("supportive");
     setShowClearConfirm(false);
   }
-  function isBlank(s: string) {
-  return !s || !s.trim();
-}
 
   async function sendMessage() {
     if (loading || crisisLock || isBlank(input)) return;
+
     const text = input.trim();
+    const userMsg: ChatMessage = { role: "user", content: text };
 
+    const nextMessages = [...messages, userMsg].slice(-MAX_MESSAGES);
 
+    setMessages(nextMessages);
     setInput("");
     setLoading(true);
 
-    // Build nextMessages from the latest state (avoids stale state bugs)
-    let nextMessages: ChatMessage[] = [];
-    setMessages((prev) => {
-      nextMessages = [...prev, { role: "user" as const, content: text }].slice(-MAX_MESSAGES);
-      return nextMessages;
-    });
+    const sessionId = getOrCreateSessionId();
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          sessionId,
           message: text,
           mode,
           history: nextMessages,
@@ -86,219 +124,102 @@ export default function ChatPage() {
       });
 
       const rawText = await res.text();
-      if (!rawText) {
-        throw new Error("Empty response from /api/chat");
-      }
-
       let data: any = {};
       try {
-        data = JSON.parse(rawText);
+        data = rawText ? JSON.parse(rawText) : {};
       } catch {
         data = {};
       }
 
-      if (!res.ok) {
-        throw new Error(String(data?.error ?? `API error ${res.status}`));
-      }
+      if (!res.ok) throw new Error(String(data?.error ?? `API error ${res.status}`));
 
-      // 🚨 Crisis reply
       if (data?.flagged === "crisis") {
-        const crisisText = String(data?.reply ?? "").trim();
-    
-        setMessages((prev) => {
-          const next = [
-            ...prev,
-            {
-              role: "assistant" as const,
-              content:
-                crisisText ||
-                "If you’re in danger, please contact local emergency services right now.",
-            },
-          ];
-          return next.slice(-MAX_MESSAGES);
-        });
-
+        setMessages((prev) =>
+          [...prev, { role: "assistant", content: String(data?.reply ?? "") }].slice(-MAX_MESSAGES)
+        );
         setCrisisLock(true);
-       
         return;
       }
 
-      // ✅ Normal reply
       const replyText = String(data?.reply ?? "").trim();
-      if (!replyText) {
-        throw new Error("Empty reply from /api/chat");
-      }
+      if (!replyText) throw new Error("Empty reply from /api/chat");
 
-      setMessages((prev) => {
-        const next = [...prev, { role: "assistant" as const, content: replyText }];
-        return next.slice(-MAX_MESSAGES);
-      });
+      setMessages((prev) =>
+        [...prev, { role: "assistant", content: replyText }].slice(-MAX_MESSAGES)
+      );
     } catch (err: any) {
-      const msg =
-        typeof err?.message === "string" && err.message
-          ? err.message
-          : "Sorry—something went wrong. Please try again.";
+  const raw = String(err?.message || "");
 
-      setMessages((prev) => {
-        const next = [...prev, { role: "assistant" as const, content: msg }];
-        return next.slice(-MAX_MESSAGES);
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
+  const msg =
+    raw.includes("429") || raw.toLowerCase().includes("quota")
+      ? "Oops — I’m at my daily message limit right now. Please try again later. 💛"
+      : "Sorry — something went wrong. Please try again.";
 
+  setMessages((prev) =>
+    [...prev, { role: "assistant", content: msg }].slice(-MAX_MESSAGES)
+  );
+} finally {
+  setLoading(false);
+}
   return (
-    <main className="mx-auto max-w-2xl p-4">
-      {/* Header */}
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Talkio</h1>
-          <p className="text-xs opacity-70">
-            Talkio only remembers the most recent messages in this chat.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Mode selector */}
-          <div className="flex items-center gap-2">
-            <label className="text-xs opacity-70">Mode</label>
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value as Mode)}
-              disabled={loading || crisisLock}
-              className="rounded border px-2 py-1 text-sm"
-            >
-              <option value="supportive">Supportive</option>
-              <option value="open_chat">Open Chat</option>
-            </select>
-          </div>
-
-          {/* Clear chat */}
-          <button
-            type="button"
-            onClick={() => setShowClearConfirm(true)}
-            className="rounded border px-3 py-1 text-sm disabled:opacity-50"
-            disabled={loading || crisisLock || messages.length <= 1}
-            title="Clears this conversation and resets context"
-          >
-            Clear chat
-          </button>
-        </div>
+  <main className="mx-auto max-w-2xl p-4">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Talkio</h1>
       </div>
 
-      {/* Disclaimer */}
-      <div className="mt-4 rounded-xl border p-3 text-xs text-gray-700">
-        <strong>Disclaimer:</strong> Talkio provides conversational support and information.
-        It is not therapy, medical advice, or a crisis service. If you’re in immediate danger,
-        contact local emergency services.
-      </div>
-
-      {/* 🔒 Chat paused banner */}
-      {crisisLock && (
-        <div
-          role="alert"
-          aria-live="assertive"
-          className="mt-4 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800"
-        >
-          <strong>Chat paused for safety.</strong>
-          <p className="mt-1 text-xs">
-            Talkio can’t continue this conversation right now. If you’re in danger, please
-            contact local emergency services or a trusted person. You can clear the chat to
-            start over when you’re ready.
-          </p>
-        </div>
-      )}
-
-      {/* Messages */}
-      <div className="mt-4 space-y-3">
-        {messages.map((m, i) => (
+      {/* Chat bubbles */}
+      <div className="flex-1 space-y-3 overflow-y-auto">
+        {messages.map((m, idx) => (
           <div
-            key={i}
-            className={
-              "rounded-xl p-3 text-sm whitespace-pre-wrap " +
-              (m.role === "user"
-                ? "bg-black text-white"
-                : "bg-gray-100 text-gray-900")
-            }
+            key={idx}
+            className={[
+              "max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow",
+              m.role === "user"
+                ? "ml-auto bg-black text-white shadow"
+                : "mr-auto bg-gray-100 text-gray-900 shadow",
+            ].join(" ")}
           >
             {m.content}
           </div>
         ))}
-
-        {/* ✅ Typing indicator */}
-{loading && !crisisLock && (
-  <div className="rounded-xl bg-gray-100 p-3 text-sm text-gray-900">
-    <span className="inline-flex items-center gap-1">
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-500 [animation-delay:-0.2s]" />
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-500 [animation-delay:-0.1s]" />
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-500" />
-    </span>
-  </div>
-)}
-        {/* ✅ Auto-scroll anchor */}
-        <div ref={bottomRef} />
       </div>
 
-      {/* Composer */}
-      <div className="mt-4 flex gap-2">
+      {/* Input row */}
+      <form
+        className="mt-4 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          sendMessage();
+        }}
+      >
         <input
           ref={inputRef}
-          suppressHydrationWarning
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              if (!loading && !crisisLock && !isBlank(input)) sendMessage();
-            }
-          }}
-          autoComplete="off"
-          className="flex-1 rounded-lg border px-3 py-2 text-sm"
-          placeholder={loading ? "Waiting for reply…" : "Type your message…"}
+          placeholder={crisisLock ? "Chat locked for safety." : "Type your message..."}
           disabled={loading || crisisLock}
+          className="flex-1 rounded-xl border px-3 py-2"
         />
         <button
-          suppressHydrationWarning
-          onClick={sendMessage}
-         disabled={loading || crisisLock || isBlank(input)}
-          className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
+          type="submit"
+          disabled={loading || crisisLock || !input.trim()}
+          className="rounded-xl bg-black px-4 py-2 text-white disabled:opacity-50"
         >
-          {loading ? "Thinking…" : "Send"}
+          {loading ? "..." : "Send"}
         </button>
-      </div>
+        <button
+          type="button"
+          onClick={clearChat}
+          disabled={loading || messages.length <= 1}
+          className="rounded-xl border px-4 py-2 disabled:opacity-50"
+        >
+          Clear
+        </button>
+      </form>
+    </div>
 
-      {/* Clear chat confirmation modal */}
-      {showClearConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded bg-white p-4 shadow">
-            <h2 className="text-base font-semibold">Clear this chat?</h2>
-            <p className="mt-1 text-sm opacity-80">
-              This clears your current conversation and resets context.
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded border px-3 py-1 text-sm"
-                onClick={() => setShowClearConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="rounded bg-black px-3 py-1 text-sm text-white"
-                onClick={clearChat}
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <p className="mt-6 text-center text-xs text-gray-500">
-        Talkio does not store long-term chat history. Conversations reset when cleared.
-      </p>
-    </main>
-  );
+    <div ref={bottomRef} />
+  </main>
+);
 }

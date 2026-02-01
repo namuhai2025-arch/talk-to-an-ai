@@ -215,10 +215,11 @@ export default function ChatPage() {
         >
           Clear
         </button>
-      </form>
+           </form>
     </div>
+  </div>
 
-    <div ref={bottomRef} />
-  </main>
+  <div ref={bottomRef} />
+</main>
 );
 }

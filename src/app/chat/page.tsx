@@ -160,9 +160,9 @@ export default function ChatPage() {
     }
   }
 
-  return (
+ return (
   <main className="mx-auto max-w-2xl p-4 min-h-screen flex flex-col">
-    <div className="flex-1 space-y-4">
+    <div className="space-y-4 flex-1">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Talkio</h1>
       </div>
@@ -182,8 +182,7 @@ export default function ChatPage() {
             {m.content}
           </div>
         ))}
-        <div ref={bottomRef} />
-      </div>
+      </div>   {/* ← THIS WAS MISSING */}
 
       {/* Input row */}
       <form
@@ -218,6 +217,8 @@ export default function ChatPage() {
         </button>
       </form>
     </div>
+
+    <div ref={bottomRef} />
   </main>
 );
 }

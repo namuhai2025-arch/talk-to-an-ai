@@ -9,7 +9,7 @@ type Mode = "supportive" | "open_chat";
 const INITIAL_GREETING: ChatMessage = {
   role: "assistant",
   content:
-    "Hi, I’m Talkio. We can chat about anything — ideas, experiences, questions, or whatever’s on your mind.",
+    "Hi, I’m Talkio 😊 What’s on your mind today — something fun, something heavy, or just a random thought?",
 };
 
 const MAX_MESSAGES = 10;
@@ -30,13 +30,17 @@ function getOrCreateSessionId() {
 }
 
 export default function ChatPage() {
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window === "undefined") return [INITIAL_GREETING];
 
     const sessionId = getOrCreateSessionId();
     const saved = localStorage.getItem(`talkio_messages_${sessionId}`);
+
     try {
-      return saved ? JSON.parse(saved) : [INITIAL_GREETING];
+      return saved ? (JSON.parse(saved) as ChatMessage[]) : [INITIAL_GREETING];
     } catch {
       return [INITIAL_GREETING];
     }
@@ -44,49 +48,41 @@ export default function ChatPage() {
 
   const [mode, setMode] = useState<Mode>(() => {
     if (typeof window === "undefined") return "supportive";
-
     const sessionId = getOrCreateSessionId();
-    return (localStorage.getItem(`talkio_mode_${sessionId}`) as Mode) || "supportive";
+    const saved = localStorage.getItem(`talkio_mode_${sessionId}`);
+    return (saved as Mode) || "supportive";
   });
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [crisisLock, setCrisisLock] = useState(false);
 
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
-
-  useEffect(() => {
-    if (!loading && !crisisLock) inputRef.current?.focus();
-  }, [loading, crisisLock, messages.length]);
-
-  useEffect(() => {
-    function handleEsc(e: KeyboardEvent) {
-      if (e.key === "Escape" && showClearConfirm) setShowClearConfirm(false);
-    }
-    window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
-  }, [showClearConfirm]);
-
+  // Persist messages per session
   useEffect(() => {
     const sessionId = getOrCreateSessionId();
     localStorage.setItem(`talkio_messages_${sessionId}`, JSON.stringify(messages));
   }, [messages]);
 
+  // Persist mode per session
   useEffect(() => {
     const sessionId = getOrCreateSessionId();
     localStorage.setItem(`talkio_mode_${sessionId}`, mode);
   }, [mode]);
 
+  // Autoscroll
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
+
+  // Autofocus input
+  useEffect(() => {
+    if (!loading && !crisisLock) inputRef.current?.focus();
+  }, [loading, crisisLock, messages.length]);
+
   function clearChat() {
     setLoading(false);
 
-    // new session id → new conversation
+    // New session id
     const newId = crypto.randomUUID();
     localStorage.setItem("talkio_session", newId);
 
@@ -94,7 +90,6 @@ export default function ChatPage() {
     setInput("");
     setCrisisLock(false);
     setMode("supportive");
-    setShowClearConfirm(false);
   }
 
   async function sendMessage() {
@@ -103,7 +98,7 @@ export default function ChatPage() {
     const text = input.trim();
     const userMsg: ChatMessage = { role: "user", content: text };
 
-    const nextMessages = [...messages, userMsg].slice(-MAX_MESSAGES);
+    const nextMessages: ChatMessage[] = [...messages, userMsg].slice(-MAX_MESSAGES);
 
     setMessages(nextMessages);
     setInput("");
@@ -124,18 +119,25 @@ export default function ChatPage() {
       });
 
       const rawText = await res.text();
+      if (!rawText) throw new Error("Empty response from /api/chat");
+
       let data: any = {};
       try {
-        data = rawText ? JSON.parse(rawText) : {};
+        data = JSON.parse(rawText);
       } catch {
         data = {};
       }
 
-      if (!res.ok) throw new Error(String(data?.error ?? `API error ${res.status}`));
+      if (!res.ok) {
+        throw new Error(String(data?.error ?? `API error ${res.status}`));
+      }
 
       if (data?.flagged === "crisis") {
+        const crisisText = String(data?.reply ?? "").trim();
         setMessages((prev) =>
-          [...prev, { role: "assistant", content: String(data?.reply ?? "") }].slice(-MAX_MESSAGES)
+          [...prev, { role: "assistant", content: crisisText || "Please contact local emergency services right now." }].slice(
+            -MAX_MESSAGES
+          )
         );
         setCrisisLock(true);
         return;
@@ -144,26 +146,23 @@ export default function ChatPage() {
       const replyText = String(data?.reply ?? "").trim();
       if (!replyText) throw new Error("Empty reply from /api/chat");
 
-      setMessages((prev) =>
-        [...prev, { role: "assistant", content: replyText }].slice(-MAX_MESSAGES)
-      );
+      setMessages((prev) => [...prev, { role: "assistant", content: replyText }].slice(-MAX_MESSAGES));
     } catch (err: any) {
-  const raw = String(err?.message || "");
+      const raw = String(err?.message || "");
+      const msg =
+        raw.includes("429") || raw.toLowerCase().includes("quota")
+          ? "Oops — I hit my daily message limit right now 😅 Please try again later."
+          : "Sorry — something went wrong. Please try again.";
 
-  const msg =
-    raw.includes("429") || raw.toLowerCase().includes("quota")
-      ? "Oops — I’m at my daily message limit right now. Please try again later. 💛"
-      : "Sorry — something went wrong. Please try again.";
+      setMessages((prev) => [...prev, { role: "assistant", content: msg }].slice(-MAX_MESSAGES));
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  setMessages((prev) =>
-    [...prev, { role: "assistant", content: msg }].slice(-MAX_MESSAGES)
-  );
-} finally {
-  setLoading(false);
-}
   return (
-  <main className="mx-auto max-w-2xl p-4">
-    <div className="space-y-4">
+  <main className="mx-auto max-w-2xl p-4 min-h-screen flex flex-col">
+    <div className="flex-1 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Talkio</h1>
       </div>
@@ -176,13 +175,14 @@ export default function ChatPage() {
             className={[
               "max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow",
               m.role === "user"
-                ? "ml-auto bg-black text-white shadow"
-                : "mr-auto bg-gray-100 text-gray-900 shadow",
+                ? "ml-auto bg-black text-white"
+                : "mr-auto bg-gray-100 text-gray-900",
             ].join(" ")}
           >
             {m.content}
           </div>
         ))}
+        <div ref={bottomRef} />
       </div>
 
       {/* Input row */}
@@ -218,8 +218,6 @@ export default function ChatPage() {
         </button>
       </form>
     </div>
-
-    <div ref={bottomRef} />
   </main>
 );
 }

@@ -19,7 +19,8 @@ Core vibe:
 - Keep it light when possible, serious when needed.
 
 Style:
-- 2–6 short sentences usually.
+- Hi, Hello or What's up replies if appropriate.
+- 1–6 short sentences usually.
 - No long lectures.
 - Ask at most ONE question at a time, but not all the time.
 - No markdown, no headings.
@@ -137,12 +138,6 @@ ${context || "(no prior messages)"}
 
 User: ${message}
 Talkio:`;
-
-Conversation so far:
-${context || "(no prior messages)"}
-
-User: ${message}
-Talkio:`.trim();
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({

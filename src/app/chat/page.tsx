@@ -127,62 +127,62 @@ export default function Page() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl p-4">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold">Talkio</h1>
-            <button
-              type="button"
-              onClick={clearChat}
-              disabled={loading || messages.length <= 1}
-              className="rounded-md border px-3 py-1 text-sm disabled:opacity-50"
-            >
-              Clear chat
-            </button>
-          </div>
-        </div>
+  <main className="mx-auto max-w-2xl p-4">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+  <h1 className="text-xl font-semibold">Talkio</h1>
 
-        <div className="flex-1 space-y-3 overflow-y-auto">
-          {messages.map((m, idx) => (
-            <div
-              key={idx}
-              className={[
-                "max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow",
-                m.role === "user"
-                  ? "ml-auto bg-black text-white"
-                  : "mr-auto bg-gray-100 text-gray-900",
-              ].join(" ")}
-            >
-              {m.content}
-            </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
+  <button
+    type="button"
+    onClick={clearChat}
+    disabled={loading || messages.length <= 1}
+    className="rounded-md border px-3 py-1 text-sm disabled:opacity-50"
+  >
+    Clear chat
+  </button>
+</div>
 
-        <form
-          className="mt-4 flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            sendMessage();
-          }}
-        >
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={crisisLock ? "Chat locked for safety." : "Type your message..."}
-            disabled={loading || crisisLock}
-            className="flex-1 rounded-xl border px-3 py-2"
-          />
-          <button
-            type="submit"
-            disabled={loading || crisisLock || !input.trim()}
-            className="rounded-xl bg-black px-4 py-2 text-white disabled:opacity-50"
+      <div className="flex-1 space-y-3 overflow-y-auto">
+        {messages.map((m, idx) => (
+          <div
+            key={idx}
+            className={[
+              "max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow",
+              m.role === "user"
+                ? "ml-auto bg-black text-white"
+                : "mr-auto bg-gray-100 text-gray-900",
+            ].join(" ")}
           >
-            {loading ? "..." : "Send"}
-          </button>
-        </form>
+            {m.content}
+          </div>
+        ))}
+        <div ref={bottomRef} />
       </div>
-    </main>
-  );
+
+      <form
+        className="mt-4 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          sendMessage();
+        }}
+      >
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={crisisLock ? "Chat locked for safety." : "Type your message..."}
+          disabled={loading || crisisLock}
+          className="flex-1 rounded-xl border px-3 py-2"
+        />
+        <button
+          type="submit"
+          disabled={loading || crisisLock || !input.trim()}
+          className="rounded-xl bg-black px-4 py-2 text-white disabled:opacity-50"
+        >
+          {loading ? "..." : "Send"}
+        </button>
+      </form>
+    </div>
+  </main>
+);
 }

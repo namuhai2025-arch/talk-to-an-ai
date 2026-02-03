@@ -1,4 +1,4 @@
-export const runtime = "nodejs";
+﻿export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
@@ -9,33 +9,226 @@ type ChatMessage = { role: ChatRole; content: string };
 
 const TALKIO_PERSONA = `
 You are Talkio: cheerful, lively, and cool — with calm emotional intelligence.
-You are supportive, but not overly “therapy-ish.”
+You are supportive, but not overly "therapy-ish".
 You are NOT a therapist, doctor, lawyer, or crisis service.
 
 Core vibe:
 - Positive, warm, upbeat — but never fake.
 - If the user is sad/angry/anxious, acknowledge it briefly, then help them move forward.
 - Encourage small next steps, simple reframes, or options.
-- Keep it light when possible, serious when needed.
 
-Style:
-- Hi, Hello or What's up replies if appropriate.
-- 1–6 short sentences usually.
-- No long lectures.
-- Ask at most ONE question at a time, but not all the time.
-- No markdown, no headings.
-- Avoid “As an AI…” and avoid overly formal empathy scripts.
+Language:
+- Always reply in the same language the user uses.
+- If the user mixes languages, mirror the mix naturally.
+
+Style rules:
+- Keep it concise and natural.
+- No markdown, emojis, bullet symbols, or headings.
+- No long disclaimers unless safety requires it.
 
 Boundaries & safety:
-- Don’t ask for personal identifying info.
+- Don't ask for personal identifying info.
 - Do not encourage dependence or exclusivity.
 - Avoid romantic/possessive language.
 - If user expresses self-harm intent or immediate danger, redirect to emergency services.
 `.trim();
 
-// --- Crisis guard (simple keyword version) ---
+// --- Tiny greeting detection + language-aware replies ---
+
+type Lang = "en" | "tl" | "es" | "ko" | "zh" | "hi" | "th" | "mixed";
+
+function detectLang(text: string): Lang {
+  const s = (text || "").trim();
+
+  if (!s) return "en";
+
+  // Strong script signals first
+  if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(s)) return "ko"; // Korean (Hangul)
+  if (/[\u0E00-\u0E7F]/.test(s)) return "th";   // Thai
+  if (/[\u0900-\u097F]/.test(s)) return "hi";   // Devanagari (Hindi)
+  if (/[\u4E00-\u9FFF]/.test(s)) return "zh";   // CJK Unified (Chinese)
+
+  const lower = s.toLowerCase();
+
+  // Light keyword heuristics for Latin-script languages
+  const tlHits =
+    /\b(kamusta|kumusta|po|opo|salamat|ingat|ano|bakit|saan|kailan|pwede|paano|gusto|medyo|wala|oo|hindi)\b/.test(lower);
+
+  const esHits =
+    /\b(hola|gracias|por favor|que tal|buenas|adios|cómo|como|estoy|estás|vale)\b/.test(lower);
+
+  const enHits =
+    /\b(hi|hello|hey|what's up|whats up|thanks|please|sorry|okay|ok|cool)\b/.test(lower);
+
+  const hits = [
+    tlHits ? "tl" : null,
+    esHits ? "es" : null,
+    enHits ? "en" : null,
+  ].filter(Boolean) as Lang[];
+
+  // If multiple “hit”, treat as mixed
+  const unique = Array.from(new Set(hits));
+  if (unique.length >= 2) return "mixed";
+
+  return unique[0] ?? "en";
+}
+
+function languageInstruction(lang: Lang): string {
+  switch (lang) {
+    case "tl":
+      return "Reply in Filipino/Tagalog (Taglish if the user is mixing English naturally).";
+    case "es":
+      return "Reply in Spanish.";
+    case "ko":
+      return "Reply in Korean.";
+    case "zh":
+      return "Reply in Chinese.";
+    case "hi":
+      return "Reply in Hindi.";
+    case "th":
+      return "Reply in Thai.";
+    case "mixed":
+      return "Mirror the user's code-switching (use the same mix of languages naturally).";
+    case "en":
+    default:
+      return "Reply in English.";
+  }
+}
+
+function normalizeTiny(text: string) {
+  return (text || "")
+    .trim()
+    .toLowerCase()
+    // keep letters/numbers/spaces/apostrophes across languages; remove emoji/punct
+    .replace(/[^\p{L}\p{N}\s']/gu, "")
+    // collapse spaces
+    .replace(/\s+/g, " ");
+}
+const TINY_REPLIES = {
+  hi: ["Hey!", "Hi!", "Yo!", "Sup!"],
+  hello: ["Hi!", "Hey!"],
+  hey: ["Hey!", "Yo!"],
+  yo: ["Yo!"],
+  sup: ["Sup!"],
+
+  kamusta: ["Kamusta!", "Oks naman! Ikaw?"],
+  kumusta: ["Kumusta!", "Okay naman. Ikaw?"],
+
+  hola: ["¡Hola!", "¿Qué tal?"],
+
+  "안녕": ["안녕!", "반가워!"],
+  "안녕하세요": ["안녕하세요!", "반가워요!"],
+
+  "你好": ["你好!", "最近怎么样？"],
+  "您好": ["您好!", "最近怎么样？"],
+
+  "नमस्ते": ["नमस्ते!", "कैसे हो?"],
+
+  "สวัสดี": ["สวัสดี!", "เป็นไงบ้าง?"],
+} as const;
+
+
+type TinyLang =
+  | "english"
+  | "filipino"
+  | "spanish"
+  | "korean"
+  | "chinese"
+  | "hindi"
+  | "thai";
+
+const TINY_BY_LANG: Record<TinyLang, Set<string>> = {
+  english: new Set([
+    "hi",
+    "hello",
+    "hey",
+    "yo",
+    "sup",
+    "hiya",
+    "hii",
+    "hiii",
+    "whats up",
+    "what's up",
+  ]),
+  filipino: new Set([
+    "kamusta",
+    "kumusta",
+    "musta",
+    "musta na",
+    "uy",
+  ]),
+  spanish: new Set([
+    "hola",
+    "buenas",
+    "buenas!",
+    "que tal",
+    "qué tal",
+  ]),
+  korean: new Set([
+    "안녕",
+    "안녕하세요",
+  ]),
+  chinese: new Set([
+    "你好",
+    "您好",
+    "嗨",
+  ]),
+  hindi: new Set([
+    "नमस्ते",
+    "हाय",
+    "हैलो",
+  ]),
+  thai: new Set([
+    "สวัสดี",
+    "หวัดดี",
+  ]),
+};
+
+function detectTinyLang(normalized: string): TinyLang {
+  // exact match
+  for (const lang of Object.keys(TINY_BY_LANG) as TinyLang[]) {
+    if (TINY_BY_LANG[lang].has(normalized)) return lang;
+  }
+
+  // allow 2-word greetings like: "hi talkio", "hey there", "hello bro"
+  const parts = normalized.split(" ").filter(Boolean);
+  if (
+    parts.length <= 2 &&
+    ["hi", "hello", "hey", "yo", "sup", "hiya"].includes(parts[0])
+  ) {
+    return "english";
+  }
+
+  return "english";
+}
+
+function isTinyGreeting(text: string) {
+  const t = normalizeTiny(text);
+  if (!t) return false;
+
+  // exact match in any language
+  for (const lang of Object.keys(TINY_BY_LANG) as TinyLang[]) {
+    if (TINY_BY_LANG[lang].has(t)) return true;
+  }
+
+  // allow 2-word English greeting
+  const parts = t.split(" ").filter(Boolean);
+  return (
+    parts.length <= 2 &&
+    ["hi", "hello", "hey", "yo", "sup", "hiya"].includes(parts[0])
+  );
+}
+
+function pickTinyReply(userText: string) {
+const t = normalizeTiny(userText);
+const fallback = ["Hey!", "Hi!", "Yo!", "Sup!"];
+const options = (TINY_REPLIES as Record<string, readonly string[]>)[t] ?? fallback;
+return options[Math.floor(Math.random() * options.length)];
+}
+
 function looksLikeCrisis(text: string) {
   const t = (text || "").toLowerCase();
+
   const high = [
     "kill myself",
     "killing myself",
@@ -53,13 +246,30 @@ function looksLikeCrisis(text: string) {
     "self-harm",
     "cut myself",
     "overdose",
+    "od",
     "jump off",
     "hang myself",
   ];
-  const imminent = ["right now", "tonight", "today", "goodbye", "last message"];
+
+  const imminent = [
+    "right now",
+    "tonight",
+    "today",
+    "i can't go on",
+    "cant go on",
+    "i can't do this",
+    "cant do this",
+    "goodbye",
+    "last message",
+  ];
+
   const highHit = high.some((p) => t.includes(p));
   const imminentHit = imminent.some((p) => t.includes(p));
-  return highHit || (imminentHit && (t.includes("die") || t.includes("suic") || t.includes("kill")));
+
+  return (
+    highHit ||
+    (imminentHit && (t.includes("die") || t.includes("suic") || t.includes("kill")))
+  );
 }
 
 function crisisReplyPH() {
@@ -75,11 +285,7 @@ function crisisReplyPH() {
 
 export async function POST(req: Request) {
   try {
-    const startedAt = Date.now();
     const body: any = await req.json().catch(() => ({}));
-   
-    const sessionId =
-      (typeof body?.sessionId === "string" && body.sessionId.trim()) || "unknown";
 
     const raw =
       (typeof body?.message === "string" && body.message) ||
@@ -93,7 +299,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid message" }, { status: 400 });
     }
 
-    const safeHistory = history
+    // 1) Tiny greeting shortcut
+    if (isTinyGreeting(message)) {
+  const t = normalizeTiny(message);
+  const replies = (TINY_REPLIES as any)[t] ?? ["Hey!", "Hi!", "Yo!", "Sup!"];
+  const pick = replies[Math.floor(Math.random() * replies.length)];
+  return NextResponse.json({ reply: pick });
+}
+
+    // 2) Safe history
+    const safeHistory: ChatMessage[] = history
       .filter(
         (m: any) =>
           m &&
@@ -102,23 +317,14 @@ export async function POST(req: Request) {
       )
       .slice(-10);
 
-    const historyText = safeHistory.map((m: any) => String(m.content)).join("\n");
+    const historyText = safeHistory.map((m) => String(m.content)).join("\n");
 
+    // 3) Crisis guard
     if (looksLikeCrisis(message) || looksLikeCrisis(historyText)) {
-      console.log(
-        JSON.stringify({
-          at: new Date().toISOString(),
-          event: "chat_request",
-          sessionId,
-          flagged: "crisis",
-          msgLen: message.length,
-          historyLen: safeHistory.length,
-          ms: Date.now() - startedAt,
-        })
-      );
       return NextResponse.json({ reply: crisisReplyPH(), flagged: "crisis" });
     }
 
+    // 4) LLM
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
@@ -128,16 +334,24 @@ export async function POST(req: Request) {
     }
 
     const context = safeHistory
-      .map((m: any) => `${m.role === "user" ? "User" : "Talkio"}: ${m.content}`)
+      .map((m) => `${m.role === "user" ? "User" : "Talkio"}: ${m.content}`)
       .join("\n");
 
-    const prompt = `${TALKIO_PERSONA}
+    const LANG_RULE =
+    "Always reply in the same language the user uses. If the user mixes languages, mirror the mix naturally. Keep the tone friendly, short, and clear.";
+
+    const prompt = `
+${TALKIO_PERSONA}
+
+Language rule: ${LANG_RULE}
 
 Conversation so far:
 ${context || "(no prior messages)"}
 
 User: ${message}
-Talkio:`;
+
+Talkio:
+`;
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
@@ -146,7 +360,7 @@ Talkio:`;
     });
 
     const result = await model.generateContent(prompt);
-    const reply = result.response.text() || "I’m here. What’s on your mind?";
+    const reply = result.response.text();
 
     return NextResponse.json({ reply });
   } catch (err: any) {

@@ -99,35 +99,51 @@ export default function Page() {
           sessionId,
         }),
       });
+      const rawText = await res.text();
 
-      const data = await res.json().catch(() => ({}));
-      const replyText = typeof data?.reply === "string" ? data.reply : "Sorry — something went wrong.";
+let data: any = {};
+try {
+  data = JSON.parse(rawText);
+} catch {
+  data = {};
+}
 
-      if (data?.flagged === "crisis") setCrisisLock(true);
+if (!res.ok) {
+  throw new Error(String(data?.error ?? rawText ?? `API error ${res.status}`));
+}
 
-      setMessages((prev) =>
-        [...prev, { role: "assistant" as ChatRole, content: replyText }
-].slice(-MAX_MESSAGES)
-      );
-    } catch {
-      const ROLE_USER: ChatRole = "user";
-      const ROLE_ASSISTANT: ChatRole = "assistant";
+const replyText =
+  typeof data?.reply === "string" ? data.reply : "Sorry — something went wrong.";
 
-      setMessages((prev) =>
-  [
-    ...prev,
-    { role: ROLE_ASSISTANT, content: "Sorry — something went wrong. Please try again." },
-  ].slice(-MAX_MESSAGES)
+if (data?.flagged === "crisis") setCrisisLock(true);
+
+setMessages((prev) =>
+  [...prev, { role: "assistant" as const, content: replyText }].slice(-MAX_MESSAGES)
 );
 
-    } finally {
+    } catch (err: any) {
+  const ROLE_ASSISTANT: ChatRole = "assistant";
+
+  setMessages((prev) =>
+    [
+      ...prev,
+      {
+        role: ROLE_ASSISTANT,
+        content: err?.message
+          ? `Error: ${err.message}`
+          : "Sorry — something went wrong. Please try again.",
+      },
+    ].slice(-MAX_MESSAGES)
+  );
+} finally {
+
       setLoading(false);
       inputRef.current?.focus();
     }
   }
 
   return (
-  <main className="mx-auto max-w-2xl p-4">
+  <main className="mx-auto max-w-2xl p-4 text-[14px] leading-[20px] font-normal antialiased">
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
   <h1 className="text-xl font-semibold">Talkio</h1>
@@ -142,19 +158,21 @@ export default function Page() {
   </button>
 </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto">
+      <div className="flex-1 space-y-3 overflow-y-auto text-base">
         {messages.map((m, idx) => (
           <div
-            key={idx}
-            className={[
-              "max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow",
-              m.role === "user"
-                ? "ml-auto bg-black text-white"
-                : "mr-auto bg-gray-100 text-gray-900",
-            ].join(" ")}
-          >
-            {m.content}
-          </div>
+  key={idx}
+  className={[
+  "max-w-[80%] rounded-2xl px-4 py-3 leading-relaxed shadow",
+  m.role === "user"
+    ? "ml-auto bg-black text-white"
+    : "mr-auto bg-gray-100 text-gray-900",
+].join(" ")}
+
+>
+  {m.content}
+</div>
+
         ))}
         <div ref={bottomRef} />
       </div>

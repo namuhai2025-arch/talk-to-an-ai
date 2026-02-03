@@ -226,51 +226,68 @@ const options = (TINY_REPLIES as Record<string, readonly string[]>)[t] ?? fallba
 return options[Math.floor(Math.random() * options.length)];
 }
 
-function looksLikeCrisis(text: string) {
-  const t = (text || "").toLowerCase();
+function normalizeForCrisis(input: string) {
+  return (input || "")
+    .toLowerCase()
+    .normalize("NFKC")
+    // keep letters/numbers/spaces/apostrophes only
+    .replace(/[^\p{L}\p{N}\s']/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  const high = [
+function normalizeForCrisis(input: string) {
+  return (input || "")
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[^\p{L}\p{N}\s']/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function looksLikeCrisis(text: string) {
+  const t = normalizeForCrisis(text);
+  if (!t) return false;
+
+  // Only VERY EXPLICIT phrases
+  const phrases = [
     "kill myself",
     "killing myself",
     "end my life",
     "take my life",
-    "suicide",
-    "commit suicide",
-    "want to die",
     "i want to die",
-    "i don't want to live",
-    "i dont want to live",
+    "want to die",
+    "dont want to live",
+    "don't want to live",
     "hurt myself",
     "harm myself",
     "self harm",
     "self-harm",
-    "cut myself",
+    "suicide",
+    "suicidal",
     "overdose",
-    "od",
-    "jump off",
-    "hang myself",
   ];
 
-  const imminent = [
-    "right now",
-    "tonight",
-    "today",
-    "i can't go on",
-    "cant go on",
-    "i can't do this",
-    "cant do this",
-    "goodbye",
-    "last message",
-  ];
+  for (const p of phrases) {
+    if (t.includes(p)) return true;
+  }
 
-  const highHit = high.some((p) => t.includes(p));
-  const imminentHit = imminent.some((p) => t.includes(p));
+  // Ambiguous words need context
+  const ambiguous = ["die", "dead", "kill"];
+  const context = ["myself", "me", "my life", "i will", "im going to", "i'm going to", "want to"];
 
-  return (
-    highHit ||
-    (imminentHit && (t.includes("die") || t.includes("suic") || t.includes("kill")))
+  const hasAmbiguous = ambiguous.some((w) =>
+    new RegExp(`\\b${w}\\b`, "i").test(t)
   );
+
+  if (hasAmbiguous) {
+    const hasContext = context.some((c) => t.includes(c));
+    if (hasContext) return true;
+  }
+
+  return false;
 }
+
 
 function crisisReplyPH() {
   return [
@@ -317,12 +334,14 @@ export async function POST(req: Request) {
       )
       .slice(-10);
 
-    const historyText = safeHistory.map((m) => String(m.content)).join("\n");
+    const userHistoryText = safeHistory
+  .filter((m) => m.role === "user")
+  .map((m) => String(m.content))
+  .join("\n");
 
     // 3) Crisis guard
-    if (looksLikeCrisis(message) || looksLikeCrisis(historyText)) {
-      return NextResponse.json({ reply: crisisReplyPH(), flagged: "crisis" });
-    }
+    if (looksLikeCrisis(message) || looksLikeCrisis(userHistoryText)) {
+  }
 
     // 4) LLM
     const apiKey = process.env.GEMINI_API_KEY;

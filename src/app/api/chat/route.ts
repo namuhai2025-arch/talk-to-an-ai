@@ -227,31 +227,58 @@ return options[Math.floor(Math.random() * options.length)];
 }
 
 function looksLikeCrisis(text: string) {
-  const t = (text || "").toLowerCase().trim();
+  const t = (text || "").toLowerCase();
 
-  const phrases = [
-    "kill myself",
-    "i want to die",
-    "end my life",
-    "suicide",
-    "hurt myself",
-    "self harm",
-    "take my life"
+  // VERY explicit, first-person self-harm intent.
+  // (This avoids false positives like "i am happy", "i am doing well", etc.)
+  const patterns: RegExp[] = [
+    /\bkill myself\b/i,
+    /\bkilling myself\b/i,
+    /\bend my life\b/i,
+    /\btake my life\b/i,
+    /\bi want to die\b/i,
+    /\bi wanna die\b/i,
+    /\bi don't want to live\b/i,
+    /\bi dont want to live\b/i,
+    /\bi will (?:kill|hurt|harm) myself\b/i,
+    /\bself[-\s]?harm\b/i,
+    /\bsuicid(?:e|al)\b/i,
+    /\boverdose\b/i,
   ];
 
-  return phrases.some((p) => t.includes(p));
+  return patterns.some((re) => re.test(t));
+}
+function crisisReplyPH() {
+  return [
+    "I’m really sorry you’re feeling this way. I can’t help with self-harm, but you don’t have to go through this alone.",
+    "",
+    "If you might be in immediate danger, please call 911 right now (Philippines) or go to the nearest ER.",
+    "You can also contact the National Center for Mental Health (NCMH) Crisis Hotline (24/7): 1553 (landline) or 0917-899-8727 / 0966-351-4518 / 0919-057-1553.",
+    "",
+    "If there’s someone you trust nearby, please reach out to them now and tell them you need support.",
+  ].join("\n");
+}
+function extractLastUserLine(text: string) {
+  const s = String(text || "").trim();
+  if (!s) return s;
+
+  const lines = s.split("\n").map(l => l.trim()).filter(Boolean);
+  const userLines = lines.filter(l => /^user\s*:/i.test(l));
+
+  if (userLines.length) {
+    return userLines[userLines.length - 1].replace(/^user\s*:\s*/i, "").trim();
+  }
+
+  return s;
 }
 
 export async function POST(req: Request) {
   try {
     const body: any = await req.json().catch(() => ({}));
 
-    const raw =
-      (typeof body?.message === "string" && body.message) ||
-      (typeof body?.prompt === "string" && body.prompt) ||
-      "";
+    const raw = typeof body?.message === "string" ? body.message : "";
+    const message = extractLastUserLine(raw);
 
-    const message = String(raw).trim();
     const history: ChatMessage[] = Array.isArray(body?.history) ? body.history : [];
 
     if (!message) {
@@ -260,32 +287,28 @@ export async function POST(req: Request) {
 
     // 1) Tiny greeting shortcut
     if (isTinyGreeting(message)) {
-  const t = normalizeTiny(message);
-  const replies = (TINY_REPLIES as any)[t] ?? ["Hey!", "Hi!", "Yo!", "Sup!"];
-  const pick = replies[Math.floor(Math.random() * replies.length)];
-  return NextResponse.json({ reply: pick });
-}
+      const t = normalizeTiny(message);
+      const replies = (TINY_REPLIES as any)[t] ?? ["Hey!", "Hi!", "Yo!", "Sup!"];
+      const pick = replies[Math.floor(Math.random() * replies.length)];
+      return NextResponse.json({ reply: pick });
+    }
 
-    // 2) Safe history
-    const safeHistory: ChatMessage[] = history
+    // 2) Crisis guard (MESSAGE ONLY)
+    if (looksLikeCrisis(message)) {
+      return NextResponse.json({ reply: crisisReplyPH(), flagged: "crisis" });
+    }
+
+    // 3) Safe context (no safeHistory variable needed)
+    const context = history
       .filter(
         (m: any) =>
           m &&
           (m.role === "user" || m.role === "assistant") &&
           typeof m.content === "string"
       )
-      .slice(-10);
-
-    const userHistoryText = safeHistory
-  .filter((m) => m.role === "user")
-  .map((m) => String(m.content))
-  .join("\n");
-
-    // 3) Crisis guard
-    if (looksLikeCrisis(message)) {
-  return NextResponse.json({ reply: crisisReplyPH(), flagged: "crisis" });
-}
-
+      .slice(-10)
+      .map((m: any) => `${m.role === "user" ? "User" : "Talkio"}: ${m.content}`)
+      .join("\n");
 
     // 4) LLM
     const apiKey = process.env.GEMINI_API_KEY;
@@ -296,12 +319,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const context = safeHistory
-      .map((m) => `${m.role === "user" ? "User" : "Talkio"}: ${m.content}`)
-      .join("\n");
-
     const LANG_RULE =
-    "Always reply in the same language the user uses. If the user mixes languages, mirror the mix naturally. Keep the tone friendly, short, and clear.";
+      "Always reply in the same language the user uses. If the user mixes languages, mirror the mix naturally. Keep the tone friendly, short, and clear.";
 
     const prompt = `
 ${TALKIO_PERSONA}

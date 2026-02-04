@@ -292,24 +292,13 @@ export async function POST(req: Request) {
       const pick = replies[Math.floor(Math.random() * replies.length)];
       return NextResponse.json({ reply: pick });
     }
-    // TEMP DEBUG (remove after)
-if (message.toLowerCase() === "debug") {
-  return NextResponse.json({
-    reply: "Debug ok.",
-    debug_received_message: message,
-    debug_body_message_type: typeof (body?.message),
-    debug_body_message_preview: String(body?.message ?? "").slice(0, 200),
-  });
-}
+
     // 2) Crisis guard (MESSAGE ONLY)
     if (looksLikeCrisis(message)) {
-  return NextResponse.json({
-    reply: crisisReplyPH(),
-    flagged: "crisis",
-    debug_received_message: message,
-  });
-}
-    // 3) Safe context (no safeHistory variable needed)
+      return NextResponse.json({ reply: crisisReplyPH(), flagged: "crisis" });
+    }
+
+    // 3) Safe context
     const context = history
       .filter(
         (m: any) =>

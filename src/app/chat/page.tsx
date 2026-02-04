@@ -89,6 +89,7 @@ export default function Page() {
 
     try {
       const sessionId = getOrCreateSessionId();
+      console.log("SENDING message:", text);
 
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -163,10 +164,10 @@ setMessages((prev) =>
           <div
   key={idx}
   className={[
-  "max-w-[80%] rounded-2xl px-4 py-3 leading-relaxed shadow",
+  "max-w-[80%] rounded-2xl px-4 py-3 leading-relaxed shadow-sm",
   m.role === "user"
-    ? "ml-auto bg-black text-white"
-    : "mr-auto bg-gray-100 text-gray-900",
+  ? "ml-auto bg-emerald-500 text-white"
+  : "mr-auto bg-stone-100 text-stone-900",
 ].join(" ")}
 
 >

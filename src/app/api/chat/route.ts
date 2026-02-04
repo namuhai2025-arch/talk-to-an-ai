@@ -226,78 +226,20 @@ const options = (TINY_REPLIES as Record<string, readonly string[]>)[t] ?? fallba
 return options[Math.floor(Math.random() * options.length)];
 }
 
-function normalizeForCrisis(input: string) {
-  return (input || "")
-    .toLowerCase()
-    .normalize("NFKC")
-    // keep letters/numbers/spaces/apostrophes only
-    .replace(/[^\p{L}\p{N}\s']/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function normalizeForCrisis(input: string) {
-  return (input || "")
-    .toLowerCase()
-    .normalize("NFKC")
-    .replace(/[^\p{L}\p{N}\s']/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function looksLikeCrisis(text: string) {
-  const t = normalizeForCrisis(text);
-  if (!t) return false;
+  const t = (text || "").toLowerCase().trim();
 
-  // Only VERY EXPLICIT phrases
   const phrases = [
     "kill myself",
-    "killing myself",
-    "end my life",
-    "take my life",
     "i want to die",
-    "want to die",
-    "dont want to live",
-    "don't want to live",
-    "hurt myself",
-    "harm myself",
-    "self harm",
-    "self-harm",
+    "end my life",
     "suicide",
-    "suicidal",
-    "overdose",
+    "hurt myself",
+    "self harm",
+    "take my life"
   ];
 
-  for (const p of phrases) {
-    if (t.includes(p)) return true;
-  }
-
-  // Ambiguous words need context
-  const ambiguous = ["die", "dead", "kill"];
-  const context = ["myself", "me", "my life", "i will", "im going to", "i'm going to", "want to"];
-
-  const hasAmbiguous = ambiguous.some((w) =>
-    new RegExp(`\\b${w}\\b`, "i").test(t)
-  );
-
-  if (hasAmbiguous) {
-    const hasContext = context.some((c) => t.includes(c));
-    if (hasContext) return true;
-  }
-
-  return false;
-}
-
-
-function crisisReplyPH() {
-  return [
-    "I’m really sorry you’re feeling this way. I can’t help with self-harm, but you don’t have to go through this alone.",
-    "",
-    "If you might be in immediate danger, please call 911 right now (Philippines) or go to the nearest ER.",
-    "You can also contact the National Center for Mental Health (NCMH) Crisis Hotline (24/7): 1553 (landline) or 0917-899-8727 / 0966-351-4518 / 0919-057-1553.",
-    "",
-    "If there’s someone you trust nearby, please reach out to them now and tell them you need support.",
-  ].join("\n");
+  return phrases.some((p) => t.includes(p));
 }
 
 export async function POST(req: Request) {
@@ -340,8 +282,10 @@ export async function POST(req: Request) {
   .join("\n");
 
     // 3) Crisis guard
-    if (looksLikeCrisis(message) || looksLikeCrisis(userHistoryText)) {
-  }
+    if (looksLikeCrisis(message)) {
+  return NextResponse.json({ reply: crisisReplyPH(), flagged: "crisis" });
+}
+
 
     // 4) LLM
     const apiKey = process.env.GEMINI_API_KEY;

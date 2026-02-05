@@ -29,6 +29,7 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [crisisLock, setCrisisLock] = useState(false);
   const [input, setInput] = useState("");
+  const [showSafety, setShowSafety] = useState(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window === "undefined") return [INITIAL_GREETING];
@@ -57,8 +58,30 @@ export default function Page() {
     }
   });
 
+  // Save messages locally (per session)
   useEffect(() => {
-    if (typeof window === "undefined") return;
+  if (typeof window === "undefined") return;
+
+  const sessionId = getOrCreateSessionId();
+  localStorage.setItem(
+    `talkio_messages_${sessionId}`,
+    JSON.stringify(messages)
+  );
+}, [messages]);
+
+  // Show Safety / Disclaimer once on first launch
+  useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const acknowledged = localStorage.getItem("talkio_safety_acknowledged");
+  if (!acknowledged) setShowSafety(true);
+}, []);
+
+  // Keep scroll pinned to bottom
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
     const sessionId = getOrCreateSessionId();
     localStorage.setItem(`talkio_messages_${sessionId}`, JSON.stringify(messages));
   }, [messages]);
@@ -125,17 +148,33 @@ setMessages((prev) =>
     } catch (err: any) {
   const ROLE_ASSISTANT: ChatRole = "assistant";
 
+  const isRateLimit =
+    err?.message?.includes("429") ||
+    err?.message?.includes("Too Many Requests");
+
+  const msg = String(err?.message ?? "");
+  const isRateLimit =
+  msg.includes("429") ||
+  msg.toLowerCase().includes("too many requests") ||
+  msg.toLowerCase().includes("quota");
+
+  const friendlyMessage = isRateLimit
+    ? "I’m still here 💛 I just need a short moment before I can reply again. Please try again in a bit."
+    : "Something went wrong on my end. Please try again.";
+    
+  console.error("Chat error:", err);
+
   setMessages((prev) =>
     [
       ...prev,
       {
         role: ROLE_ASSISTANT,
-        content: err?.message
-          ? `Error: ${err.message}`
-          : "Sorry — something went wrong. Please try again.",
+        content: friendlyMessage,
       },
     ].slice(-MAX_MESSAGES)
   );
+}
+
 } finally {
 
       setLoading(false);
@@ -145,6 +184,39 @@ setMessages((prev) =>
 
   return (
   <main className="mx-auto max-w-2xl p-4 text-[14px] leading-[20px] font-normal antialiased">
+  {showSafety && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="max-w-md rounded-xl bg-white p-6 text-sm leading-relaxed shadow-lg">
+          <h2 className="mb-3 text-lg font-semibold">Safety & Disclaimer</h2>
+
+          <p className="mb-2">
+            Talkio is an AI conversation tool designed for casual conversation and emotional support.
+            It is not a therapist, doctor, or emergency service.
+          </p>
+
+          <p className="mb-2">
+            If you are in distress or feel unsafe, please seek help from local emergency services
+            or a qualified professional.
+          </p>
+
+          <p className="mb-4">
+            By continuing, you understand and agree to use Talkio at your own discretion.
+          </p>
+
+          <button
+            type="button"
+            className="w-full rounded-lg bg-black px-4 py-2 text-white"
+            onClick={() => {
+              localStorage.setItem("talkio_safety_acknowledged", "true");
+              setShowSafety(false);
+            }}
+          >
+            I understand
+          </button>
+        </div>
+      </div>
+    )}
+
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
   <h1 className="text-xl font-semibold">Talkio</h1>
@@ -166,7 +238,7 @@ setMessages((prev) =>
   className={[
   "max-w-[80%] rounded-2xl px-4 py-3 leading-relaxed shadow-sm",
   m.role === "user"
-  ? "ml-auto bg-emerald-500 text-white"
+  ? "ml-auto bg-emerald-400 text-white"
   : "mr-auto bg-stone-100 text-stone-900",
 ].join(" ")}
 

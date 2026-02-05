@@ -59,7 +59,7 @@ export default function Page() {
   });
 
   // Save messages locally (per session)
-  useEffect(() => {
+useEffect(() => {
   if (typeof window === "undefined") return;
 
   const sessionId = getOrCreateSessionId();
@@ -69,26 +69,19 @@ export default function Page() {
   );
 }, [messages]);
 
-  // Show Safety / Disclaimer once on first launch
-  useEffect(() => {
+// Show Safety / Disclaimer once on first launch (per device)
+useEffect(() => {
   if (typeof window === "undefined") return;
 
   const acknowledged = localStorage.getItem("talkio_safety_acknowledged");
   if (!acknowledged) setShowSafety(true);
 }, []);
 
-  // Keep scroll pinned to bottom
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+// Keep scroll pinned to bottom
+useEffect(() => {
+  bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+}, [messages, loading]);
 
-    const sessionId = getOrCreateSessionId();
-    localStorage.setItem(`talkio_messages_${sessionId}`, JSON.stringify(messages));
-  }, [messages]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
 
   function clearChat() {
     setCrisisLock(false);
@@ -148,20 +141,16 @@ setMessages((prev) =>
     } catch (err: any) {
   const ROLE_ASSISTANT: ChatRole = "assistant";
 
-  const isRateLimit =
-    err?.message?.includes("429") ||
-    err?.message?.includes("Too Many Requests");
-
   const msg = String(err?.message ?? "");
   const isRateLimit =
-  msg.includes("429") ||
-  msg.toLowerCase().includes("too many requests") ||
-  msg.toLowerCase().includes("quota");
+    msg.includes("429") ||
+    msg.toLowerCase().includes("too many requests") ||
+    msg.toLowerCase().includes("quota");
 
   const friendlyMessage = isRateLimit
-    ? "I’m still here 💛 I just need a short moment before I can reply again. Please try again in a bit."
+    ? "I’m still here. I just need a short moment before I can reply again. Please try again in a bit."
     : "Something went wrong on my end. Please try again.";
-    
+
   console.error("Chat error:", err);
 
   setMessages((prev) =>
@@ -173,15 +162,12 @@ setMessages((prev) =>
       },
     ].slice(-MAX_MESSAGES)
   );
-}
-
 } finally {
+  setLoading(false);
+  inputRef.current?.focus();
+} 
 
-      setLoading(false);
-      inputRef.current?.focus();
-    }
-  }
-
+  
   return (
   <main className="mx-auto max-w-2xl p-4 text-[14px] leading-[20px] font-normal antialiased">
   {showSafety && (
@@ -274,6 +260,7 @@ setMessages((prev) =>
         </button>
       </form>
     </div>
-  </main>
+ </main>
 );
+}
 }

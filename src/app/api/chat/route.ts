@@ -1,14 +1,7 @@
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
 
 type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; content: string };
@@ -46,9 +39,18 @@ Boundaries & safety:
 - If user expresses self-harm intent or immediate danger, redirect to emergency services.
 `.trim();
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: corsHeaders });
+}
+
 function looksLikeCrisis(text: string) {
   const t = (text || "").toLowerCase();
-
   const patterns: RegExp[] = [
     /\bkill myself\b/i,
     /\bkilling myself\b/i,
@@ -63,7 +65,6 @@ function looksLikeCrisis(text: string) {
     /\bsuicid(?:e|al)\b/i,
     /\boverdose\b/i,
   ];
-
   return patterns.some((re) => re.test(t));
 }
 
@@ -78,28 +79,26 @@ function crisisReplyPH() {
   ].join("\n");
 }
 
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: corsHeaders,
-  });
-}
- {
+export async function POST(req: Request) {
   try {
     const body: any = await req.json().catch(() => ({}));
     const message = typeof body?.message === "string" ? body.message.trim() : "";
     const history: ChatMessage[] = Array.isArray(body?.history) ? body.history : [];
 
     if (!message) {
-      return NextResponse.json({ error: "Invalid message" }, { status: 400, headers: corsHeaders, });
+      return NextResponse.json(
+        { error: "Invalid message" },
+        { status: 400, headers: corsHeaders }
+      );
     }
 
-    // Crisis guard
     if (looksLikeCrisis(message)) {
-      return NextResponse.json({ reply: crisisReplyPH(), flagged: "crisis" } { headers: corsHeaders });
+      return NextResponse.json(
+        { reply: crisisReplyPH(), flagged: "crisis" },
+        { headers: corsHeaders }
+      );
     }
 
-    // Safe context
     const context = history
       .filter(
         (m: any) =>
@@ -114,8 +113,8 @@ export async function OPTIONS() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Missing GEMINI_API_KEY in .env.local / Vercel env" },
-        { status: 500, headers: corsHeaders, }
+        { error: "Missing GEMINI_API_KEY in .env.local" },
+        { status: 500, headers: corsHeaders }
       );
     }
 
@@ -128,7 +127,7 @@ ${context || "(no prior messages)"}
 User: ${message}
 
 Talkio:
-`;
+`.trim();
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
@@ -139,13 +138,12 @@ Talkio:
     const result = await model.generateContent(prompt);
     const reply = result.response.text();
 
-    return NextResponse.json({ reply, { headers: corsHeaders } });
+    return NextResponse.json({ reply }, { headers: corsHeaders });
   } catch (err: any) {
     console.error("Chat API error:", err);
     return NextResponse.json(
       { error: err?.message || "Server error" },
-      { status: 500,
-    headers: corsHeaders, }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

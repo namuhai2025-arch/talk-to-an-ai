@@ -141,8 +141,6 @@ export default function Page() {
         msg.toLowerCase().includes("quota");
 
       const friendlyMessage = "ERR: " + msg;
-        ? "I’m still here. I just need a short moment before I can reply again. Please try again in a bit."
-        : "Something went wrong on my end. Please try again.";
 
       console.error("Chat error:", err);
 

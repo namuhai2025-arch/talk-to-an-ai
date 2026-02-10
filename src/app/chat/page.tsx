@@ -84,74 +84,90 @@ export default function Page() {
     setInput("");
     inputRef.current?.focus();
   }
+async function sendMessage() {
+  const text = input.trim();
+  if (!text || loading || crisisLock) return;
 
-  async function sendMessage() {
-    const text = input.trim();
-    if (!text || loading || crisisLock) return;
+  setLoading(true);
+  setInput("");
 
-    setLoading(true);
-    setInput("");
+  const next: ChatMessage[] = [
+    ...messages,
+    { role: "user" as const, content: text },
+  ].slice(-MAX_MESSAGES);
 
-    const next: ChatMessage[] = [
-      ...messages,
-      { role: "user" as const, content: text },
-    ].slice(-MAX_MESSAGES);
+  setMessages(next);
 
-    setMessages(next);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
+  try {
+    const sessionId = getOrCreateSessionId();
+
+    const res = await fetch("https://talk-to-an-ai.vercel.app/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: text,
+        history: next,
+        sessionId,
+      }),
+      signal: controller.signal,
+    });
+
+    const rawText = await res.text();
+
+    let data: any = {};
     try {
-      const sessionId = getOrCreateSessionId();
-
-      const res = await fetch("https://talk-to-an-ai.vercel.app/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          history: next,
-          sessionId,
-        }),
-      });
-
-      const rawText = await res.text();
-
-      let data: any = {};
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        data = {};
-      }
-
-      if (!res.ok) {
-        throw new Error(String(data?.error ?? rawText ?? `API error ${res.status}`));
-      }
-
-      const replyText =
-        typeof data?.reply === "string" ? data.reply : "Sorry — something went wrong.";
-
-      if (data?.flagged === "crisis") setCrisisLock(true);
-
-      setMessages((prev) =>
-        [...prev, { role: "assistant" as const, content: replyText }].slice(-MAX_MESSAGES)
-      );
-    } catch (err: any) {
-      const msg = String(err?.message ?? "");
-      const isRateLimit =
-        msg.includes("429") ||
-        msg.toLowerCase().includes("too many requests") ||
-        msg.toLowerCase().includes("quota");
-
-      const friendlyMessage = "ERR: " + msg;
-
-      console.error("Chat error:", err);
-
-      setMessages((prev) =>
-        [...prev, { role: "assistant" as const, content: friendlyMessage }].slice(-MAX_MESSAGES)
-      );
-    } finally {
-      setLoading(false);
-      inputRef.current?.focus();
+      data = JSON.parse(rawText);
+    } catch {
+      data = {};
     }
+
+    if (!res.ok) {
+      throw new Error(String(data?.error ?? rawText ?? `API error ${res.status}`));
+    }
+
+    const replyText =
+      typeof data?.reply === "string"
+        ? data.reply
+        : "Something went wrong on my end. Please try again.";
+
+    if (data?.flagged === "crisis") setCrisisLock(true);
+
+    setMessages((prev) =>
+      [...prev, { role: "assistant" as const, content: replyText }].slice(-MAX_MESSAGES)
+    );
+  } catch (err: any) {
+    console.error("sendMessage error:", err);
+
+    const msg = String(err?.message ?? "");
+    const isAbort =
+      err?.name === "AbortError" || msg.toLowerCase().includes("abort");
+
+    const isRateLimit =
+      msg.includes("429") ||
+      msg.toLowerCase().includes("too many requests") ||
+      msg.toLowerCase().includes("quota");
+
+    const friendlyMessage = isAbort
+      ? "Connection is slow right now. Please try sending again."
+      : isRateLimit
+      ? "I’m still here. I just need a short moment before I can reply again."
+      : "Something went wrong on my end. Please try again.";
+
+    setMessages((prev) =>
+      [
+        ...prev,
+        { role: "assistant" as const, content: friendlyMessage },
+      ].slice(-MAX_MESSAGES)
+    );
+  } finally {
+    clearTimeout(timeoutId);
+    setLoading(false);
+    inputRef.current?.focus();
   }
+}
 
   // ✅ RETURN MUST BE HERE (outside sendMessage)
   return (

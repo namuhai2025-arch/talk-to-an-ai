@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 
-const nextConfig = {
-  output: "export",
-  images: { unoptimized: true },
+const isCapacitor = process.env.CAPACITOR_BUILD === "1";
+
+const nextConfig: NextConfig = {
+  output: isCapacitor ? "export" : undefined, // ✅ export only for Android build
+  images: { unoptimized: true },              // usually needed for export
 };
-module.exports = nextConfig;
 
-
+export default nextConfig;

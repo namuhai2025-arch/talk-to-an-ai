@@ -62,7 +62,10 @@ export default function Page() {
     if (typeof window === "undefined") return;
 
     const sessionId = getOrCreateSessionId();
-    localStorage.setItem(`talkio_messages_${sessionId}`, JSON.stringify(messages));
+    localStorage.setItem(
+      `talkio_messages_${sessionId}`,
+      JSON.stringify(messages)
+    );
   }, [messages]);
 
   // Show Safety / Disclaimer once on first launch (per device)
@@ -84,92 +87,96 @@ export default function Page() {
     setInput("");
     inputRef.current?.focus();
   }
-async function sendMessage() {
-  const text = input.trim();
-  if (!text || loading || crisisLock) return;
 
-  setLoading(true);
-  setInput("");
+  async function sendMessage() {
+    const text = input.trim();
+    if (!text || loading || crisisLock) return;
 
-  const next: ChatMessage[] = [
-    ...messages,
-    { role: "user" as const, content: text },
-  ].slice(-MAX_MESSAGES);
+    setLoading(true);
+    setInput("");
 
-  setMessages(next);
+    const next: ChatMessage[] = [
+      ...messages,
+      { role: "user" as const, content: text },
+    ].slice(-MAX_MESSAGES);
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    setMessages(next);
 
-  try {
-    const sessionId = getOrCreateSessionId();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-    const res = await fetch("https://talk-to-an-ai.vercel.app/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: text,
-        history: next,
-        sessionId,
-      }),
-      signal: controller.signal,
-    });
-
-    const rawText = await res.text();
-
-    let data: any = {};
     try {
-      data = JSON.parse(rawText);
-    } catch {
-      data = {};
-    }
+      const sessionId = getOrCreateSessionId();
 
-    if (!res.ok) {
-      throw new Error(String(data?.error ?? rawText ?? `API error ${res.status}`));
-    }
+      // ✅ IMPORTANT: Use relative URL so it works on talkiochat.com
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          history: next,
+          sessionId,
+        }),
+        signal: controller.signal,
+      });
 
-    const replyText =
-      typeof data?.reply === "string"
-        ? data.reply
+      const rawText = await res.text();
+
+      let data: any = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          String(data?.error ?? rawText ?? `API error ${res.status}`)
+        );
+      }
+
+      const replyText =
+        typeof data?.reply === "string"
+          ? data.reply
+          : "Something went wrong on my end. Please try again.";
+
+      if (data?.flagged === "crisis") setCrisisLock(true);
+
+      setMessages((prev) =>
+        [...prev, { role: "assistant" as const, content: replyText }].slice(
+          -MAX_MESSAGES
+        )
+      );
+    } catch (err: any) {
+      console.error("sendMessage error:", err);
+
+      const msg = String(err?.message ?? "");
+      const isAbort =
+        err?.name === "AbortError" || msg.toLowerCase().includes("abort");
+
+      const isRateLimit =
+        msg.includes("429") ||
+        msg.toLowerCase().includes("too many requests") ||
+        msg.toLowerCase().includes("quota");
+
+      const friendlyMessage = isAbort
+        ? "Connection is slow right now. Please try sending again."
+        : isRateLimit
+        ? "I’m still here. I just need a short moment before I can reply again."
         : "Something went wrong on my end. Please try again.";
 
-    if (data?.flagged === "crisis") setCrisisLock(true);
-
-    setMessages((prev) =>
-      [...prev, { role: "assistant" as const, content: replyText }].slice(-MAX_MESSAGES)
-    );
-  } catch (err: any) {
-    console.error("sendMessage error:", err);
-
-    const msg = String(err?.message ?? "");
-    const isAbort =
-      err?.name === "AbortError" || msg.toLowerCase().includes("abort");
-
-    const isRateLimit =
-      msg.includes("429") ||
-      msg.toLowerCase().includes("too many requests") ||
-      msg.toLowerCase().includes("quota");
-
-    const friendlyMessage = isAbort
-      ? "Connection is slow right now. Please try sending again."
-      : isRateLimit
-      ? "I’m still here. I just need a short moment before I can reply again."
-      : "Something went wrong on my end. Please try again.";
-
-    setMessages((prev) =>
-      [
-        ...prev,
-        { role: "assistant" as const, content: friendlyMessage },
-      ].slice(-MAX_MESSAGES)
-    );
-  } finally {
-    clearTimeout(timeoutId);
-    setLoading(false);
-    inputRef.current?.focus();
+      setMessages((prev) =>
+        [...prev, { role: "assistant" as const, content: friendlyMessage }].slice(
+          -MAX_MESSAGES
+        )
+      );
+    } finally {
+      clearTimeout(timeoutId);
+      setLoading(false);
+      inputRef.current?.focus();
+    }
   }
-}
 
-  // ✅ RETURN MUST BE HERE (outside sendMessage)
   return (
     <main className="mx-auto max-w-2xl p-4 text-[14px] leading-[20px] font-normal antialiased">
       {showSafety && (
@@ -178,17 +185,19 @@ async function sendMessage() {
             <h2 className="mb-3 text-lg font-semibold">Safety & Disclaimer</h2>
 
             <p className="mb-2">
-              Talkio is an AI conversation tool designed for casual conversation and emotional
-              support. It is not a therapist, doctor, or emergency service.
+              Talkio is an AI conversation tool designed for casual conversation
+              and emotional support. It is not a therapist, doctor, or emergency
+              service.
             </p>
 
             <p className="mb-2">
-              If you are in distress or feel unsafe, please seek help from local emergency services
-              or a qualified professional.
+              If you are in distress or feel unsafe, please seek help from local
+              emergency services or a qualified professional.
             </p>
 
             <p className="mb-4">
-              By continuing, you understand and agree to use Talkio at your own discretion.
+              By continuing, you understand and agree to use Talkio at your own
+              discretion.
             </p>
 
             <button

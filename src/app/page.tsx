@@ -24,13 +24,17 @@ function getOrCreateSessionId() {
 
 export default function Page() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [crisisLock, setCrisisLock] = useState(false);
   const [input, setInput] = useState("");
   const [showSafety, setShowSafety] = useState(false);
 
+  function autoResize(el: HTMLTextAreaElement) {
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
+}
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window === "undefined") return [INITIAL_GREETING];
 
@@ -233,7 +237,7 @@ export default function Page() {
             <div
               key={idx}
               className={[
-                "max-w-[80%] rounded-2xl px-4 py-3 leading-relaxed shadow-sm",
+                "max-w-[80%] rounded-2xl px-4 py-3 leading-relaxed shadow-sm whitespace-pre-wrap break-words",
                 m.role === "user"
                   ? "ml-auto bg-emerald-400 text-white"
                   : "mr-auto bg-stone-100 text-stone-900",
@@ -246,20 +250,33 @@ export default function Page() {
         </div>
 
         <form
-          className="mt-4 flex gap-2"
+          className="mt-4 flex items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             sendMessage();
           }}
         >
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={crisisLock ? "Chat locked for safety." : "Type your message..."}
-            disabled={loading || crisisLock}
-            className="flex-1 rounded-xl border px-3 py-2"
-          />
+    <textarea
+  ref={inputRef as any}
+  value={input}
+  onChange={(e) => {
+    setInput(e.target.value);
+    // optional auto-grow
+    e.target.style.height = "auto";
+    e.target.style.height = e.target.scrollHeight + "px";
+  }}
+  placeholder={crisisLock ? "Chat locked for safety." : "Type your message..."}
+  disabled={loading || crisisLock}
+  rows={2}
+  className="flex-1 w-full resize-none rounded-xl border px-3 py-2 leading-5 whitespace-pre-wrap break-words"
+  style={{ maxHeight: 120, overflowY: "auto" }}
+  onKeyDown={(e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }}
+/>
           <button
             type="submit"
             disabled={loading || crisisLock || !input.trim()}

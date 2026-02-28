@@ -31,10 +31,6 @@ export default function Page() {
   const [input, setInput] = useState("");
   const [showSafety, setShowSafety] = useState(false);
 
-  function autoResize(el: HTMLTextAreaElement) {
-  el.style.height = "auto";
-  el.style.height = el.scrollHeight + "px";
-}
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window === "undefined") return [INITIAL_GREETING];
 
@@ -182,7 +178,15 @@ export default function Page() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl p-4 text-[14px] leading-[20px] font-normal antialiased">
+    <main
+      className="mx-auto max-w-2xl flex flex-col min-h-[100dvh] p-4 text-[14px] leading-[20px] font-normal antialiased"
+      /* Safe-area padding on top and bottom */
+      style={{
+        paddingTop: `calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 1rem)`,
+        paddingBottom: `calc(var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 1rem)`,
+      }}
+    >
+      {/* Safety disclaimer overlay */}
       {showSafety && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="max-w-md rounded-xl bg-white p-6 text-sm leading-relaxed shadow-lg">
@@ -218,7 +222,9 @@ export default function Page() {
         </div>
       )}
 
-      <div className="space-y-4">
+      {/* Main chat UI */}
+      <div className="flex flex-col flex-1 space-y-4">
+        {/* Header */}
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-xl font-semibold">Talkio</h1>
 
@@ -232,6 +238,7 @@ export default function Page() {
           </button>
         </div>
 
+        {/* Message list grows to fill available space */}
         <div className="flex-1 space-y-3 overflow-y-auto text-base">
           {messages.map((m, idx) => (
             <div
@@ -249,34 +256,35 @@ export default function Page() {
           <div ref={bottomRef} />
         </div>
 
+        {/* Input form pinned to bottom */}
         <form
-          className="mt-4 flex items-end gap-2"
+          className="flex items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             sendMessage();
           }}
         >
-    <textarea
-  ref={inputRef as any}
-  value={input}
-  onChange={(e) => {
-    setInput(e.target.value);
-    // optional auto-grow
-    e.target.style.height = "auto";
-    e.target.style.height = e.target.scrollHeight + "px";
-  }}
-  placeholder={crisisLock ? "Chat locked for safety." : "Type your message..."}
-  disabled={loading || crisisLock}
-  rows={2}
-  className="flex-1 w-full resize-none rounded-xl border px-3 py-2 leading-5 whitespace-pre-wrap break-words"
-  style={{ maxHeight: 120, overflowY: "auto" }}
-  onKeyDown={(e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }}
-/>
+          <textarea
+            ref={inputRef as any}
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // optional auto-grow
+              e.target.style.height = "auto";
+              e.target.style.height = e.target.scrollHeight + "px";
+            }}
+            placeholder={crisisLock ? "Chat locked for safety." : "Type your message..."}
+            disabled={loading || crisisLock}
+            rows={2}
+            className="flex-1 w-full resize-none rounded-xl border px-3 py-2 leading-5 whitespace-pre-wrap break-words"
+            style={{ maxHeight: 120, overflowY: "auto" }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+          />
           <button
             type="submit"
             disabled={loading || crisisLock || !input.trim()}

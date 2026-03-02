@@ -279,7 +279,7 @@ async function sendMessage() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                sendMessage();
+                (e.target as HTMLTextAreaElement).form?.requestSubmit();
               }
             }}
           />

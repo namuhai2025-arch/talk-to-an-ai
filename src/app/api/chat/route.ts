@@ -1,45 +1,31 @@
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { corsEmpty, corsJson } from "./_cors";
-
+import { Redis } from "@upstash/redis";
 
 type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; content: string };
 
-const TALKIO_PERSONA = `
-You are Talkio: cheerful, lively, and cool — with calm emotional intelligence.
-You are supportive, but not overly "therapy-ish".
-You are NOT a therapist, doctor, lawyer, or crisis service.
+const redis = Redis.fromEnv();
 
-Core vibe:
-- Positive, warm, upbeat — but never fake, human.
-- If the user is sad/angry/anxious, acknowledge it briefly, then help them move forward.
-- Encourage small next steps, simple reframes, or options.
+const DAILY_LIMIT = 30;
+const PER_MINUTE_LIMIT = 10;
 
-Tone rules:
-- Sound natural, like chatting with a friend.
-- Keep responses short and easy to read.
-- Avoid formal or clinical language.
-- Avoid repeating the same phrases again and again.
-- No bullet points, no lectures.
-
-Language:
-- Always reply in the same language the user uses.
-- If the user mixes languages, mirror the mix naturally.
-
-Style rules:
-- Keep it concise and natural.
-- No markdown, emojis, bullet symbols, or headings.
-- No long disclaimers unless safety requires it.
-
-Boundaries & safety:
-- Don't ask for personal identifying info.
-- Do not encourage dependence or exclusivity.
-- Avoid romantic/possessive language.
-- If user expresses self-harm intent or immediate danger, redirect to emergency services.
-`.trim();
+function secondsUntilUtcMidnight() {
+  const now = new Date();
+  const midnight = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      0,
+      0,
+      0
+    )
+  );
+  return Math.max(1, Math.floor((midnight.getTime() - now.getTime()) / 1000));
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,26 +67,98 @@ function crisisReplyPH() {
   ].join("\n");
 }
 
+const TALKIO_PERSONA = `
+You are Talkio: cheerful, lively, and cool — with calm emotional intelligence.
+You are supportive, but not overly "therapy-ish".
+You are NOT a therapist, doctor, lawyer, or crisis service.
+
+Core vibe:
+- Positive, warm, upbeat — but never fake, human.
+- If the user is sad/angry/anxious, acknowledge it briefly, then help them move forward.
+- Encourage small next steps, simple reframes, or options.
+
+Tone rules:
+- Sound natural, like chatting with a friend.
+- Keep responses short and easy to read.
+- Avoid formal or clinical language.
+- Avoid repeating the same phrases again and again.
+- No bullet points, no lectures.
+
+Language:
+- Always reply in the same language the user uses.
+- If the user mixes languages, mirror the mix naturally.
+
+Style rules:
+- Keep it concise and natural.
+- No markdown, emojis, bullet symbols, or headings.
+- No long disclaimers unless safety requires it.
+
+Boundaries & safety:
+- Don't ask for personal identifying info.
+- Do not encourage dependence or exclusivity.
+- Avoid romantic/possessive language.
+- If user expresses self-harm intent or immediate danger, redirect to emergency services.
+`.trim();
+
 export async function POST(req: Request) {
   try {
     const body: any = await req.json().catch(() => ({}));
     const message = typeof body?.message === "string" ? body.message.trim() : "";
     const history: ChatMessage[] = Array.isArray(body?.history) ? body.history : [];
 
+    const sessionId =
+      typeof body?.sessionId === "string" && body.sessionId.trim()
+        ? body.sessionId.trim()
+        : "anonymous";
+
     if (!message) {
-      return corsJson (
-        { error: "Invalid message" },
-        { status: 400, headers: corsHeaders }
-      );
+      return corsJson({ error: "Invalid message", reply: "Please type a message." }, { status: 400, headers: corsHeaders });
     }
 
+    // 1) Crisis check first (so crisis does NOT consume quota)
     if (looksLikeCrisis(message)) {
-      return corsJson (
-        { reply: crisisReplyPH(), flagged: "crisis" },
-        { headers: corsHeaders }
+      return corsJson({ reply: crisisReplyPH(), flagged: "crisis" }, { headers: corsHeaders });
+    }
+
+    // 2) Quota check (per-minute + daily) using Redis
+    const today = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
+    const minuteBucket = Math.floor(Date.now() / 60000);
+
+    const dailyKey = `talkio:quota:day:${sessionId}:${today}`;
+    const minuteKey = `talkio:quota:min:${sessionId}:${minuteBucket}`;
+
+    const [dayCount, minCount] = await Promise.all([
+      redis.incr(dailyKey),
+      redis.incr(minuteKey),
+    ]);
+
+    // set TTL only on first increment
+    const expireOps: Promise<any>[] = [];
+    if (dayCount === 1) expireOps.push(redis.expire(dailyKey, secondsUntilUtcMidnight()));
+    if (minCount === 1) expireOps.push(redis.expire(minuteKey, 70)); // ~1 minute window
+    if (expireOps.length) await Promise.all(expireOps);
+
+    if (minCount > PER_MINUTE_LIMIT) {
+      return corsJson(
+        {
+          error: "Too many messages",
+          reply: "You're sending messages too fast. Please wait a moment and try again.",
+        },
+        { status: 429, headers: corsHeaders }
       );
     }
 
+    if (dayCount > DAILY_LIMIT) {
+      return corsJson(
+        {
+          error: "Daily message limit reached",
+          reply: "You've reached today's 30-message limit. Please come back tomorrow 💛",
+        },
+        { status: 429, headers: corsHeaders }
+      );
+    }
+
+    // 3) Build context
     const context = history
       .filter(
         (m: any) =>
@@ -114,8 +172,8 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return corsJson (
-        { error: "Missing GEMINI_API_KEY in .env.local" },
+      return corsJson(
+        { error: "Missing GEMINI_API_KEY in environment", reply: "Server is missing API key." },
         { status: 500, headers: corsHeaders }
       );
     }
@@ -140,11 +198,11 @@ Talkio:
     const result = await model.generateContent(prompt);
     const reply = result.response.text();
 
-    return corsJson ({ reply }, { headers: corsHeaders });
+    return corsJson({ reply }, { headers: corsHeaders });
   } catch (err: any) {
     console.error("Chat API error:", err);
-    return corsJson (
-      { error: err?.message || "Server error" },
+    return corsJson(
+      { error: err?.message || "Server error", reply: "Something went wrong on my end. Please try again." },
       { status: 500, headers: corsHeaders }
     );
   }

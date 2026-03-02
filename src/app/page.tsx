@@ -88,94 +88,92 @@ export default function Page() {
     inputRef.current?.focus();
   }
 
-  async function sendMessage() {
-    const text = input.trim();
-    if (!text || loading || crisisLock) return;
+async function sendMessage() {
+  const text = input.trim();
+  if (!text || loading || crisisLock) return;
 
-    setLoading(true);
-    setInput("");
+  setLoading(true);
+  setInput("");
 
-    const next: ChatMessage[] = [
-      ...messages,
-      { role: "user" as const, content: text },
-    ].slice(-MAX_MESSAGES);
+  const next: ChatMessage[] = [
+    ...messages,
+    { role: "user" as const, content: text },
+  ].slice(-MAX_MESSAGES);
 
-    setMessages(next);
+  setMessages(next);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
+  try {
+    const sessionId = getOrCreateSessionId();
+
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: text,
+        history: next,
+        sessionId,
+      }),
+      signal: controller.signal,
+    });
+
+    const rawText = await res.text();
+
+    let data: any = {};
     try {
-      const sessionId = getOrCreateSessionId();
+      data = JSON.parse(rawText);
+    } catch {
+      data = {};
+    }
 
-      // ✅ IMPORTANT: Use relative URL so it works on talkiochat.com
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          history: next,
-          sessionId,
-        }),
-        signal: controller.signal,
-      });
-
-      const rawText = await res.text();
-
-      let data: any = {};
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        data = {};
-      }
-
-      if (!res.ok) {
-        throw new Error(
-          String(data?.error ?? rawText ?? `API error ${res.status}`)
-        );
-      }
-
-      const replyText =
+    if (!res.ok) {
+      // Show server message if available
+      const errMsg =
         typeof data?.reply === "string"
           ? data.reply
-          : "Something went wrong on my end. Please try again.";
+          : typeof data?.error === "string"
+          ? data.error
+          : rawText || `API error ${res.status}`;
+      throw new Error(errMsg);
+    }
 
-      if (data?.flagged === "crisis") setCrisisLock(true);
-
-      setMessages((prev) =>
-        [...prev, { role: "assistant" as const, content: replyText }].slice(
-          -MAX_MESSAGES
-        )
-      );
-    } catch (err: any) {
-      console.error("sendMessage error:", err);
-
-      const msg = String(err?.message ?? "");
-      const isAbort =
-        err?.name === "AbortError" || msg.toLowerCase().includes("abort");
-
-      const isRateLimit =
-        msg.includes("429") ||
-        msg.toLowerCase().includes("too many requests") ||
-        msg.toLowerCase().includes("quota");
-
-      const friendlyMessage = isAbort
-        ? "Connection is slow right now. Please try sending again."
-        : isRateLimit
-        ? "I’m still here. I just need a short moment before I can reply again."
+    const replyText =
+      typeof data?.reply === "string"
+        ? data.reply
         : "Something went wrong on my end. Please try again.";
 
-      setMessages((prev) =>
-        [...prev, { role: "assistant" as const, content: friendlyMessage }].slice(
-          -MAX_MESSAGES
-        )
-      );
-    } finally {
-      clearTimeout(timeoutId);
-      setLoading(false);
-      inputRef.current?.focus();
-    }
+    if (data?.flagged === "crisis") setCrisisLock(true);
+
+    setMessages((prev) =>
+      [...prev, { role: "assistant" as const, content: replyText }].slice(
+        -MAX_MESSAGES
+      )
+    );
+  } catch (err: any) {
+    console.error("sendMessage error:", err);
+
+    const msg = String(err?.message ?? "");
+    const isAbort =
+      err?.name === "AbortError" || msg.toLowerCase().includes("abort");
+
+    // This will now show your quota reply nicely (because we throw it above)
+    const friendlyMessage = isAbort
+      ? "Connection is slow right now. Please try sending again."
+      : msg || "Something went wrong on my end. Please try again.";
+
+    setMessages((prev) =>
+      [...prev, { role: "assistant" as const, content: friendlyMessage }].slice(
+        -MAX_MESSAGES
+      )
+    );
+  } finally {
+    clearTimeout(timeoutId);
+    setLoading(false);
+    inputRef.current?.focus();
   }
+}
 
   return (
     <main

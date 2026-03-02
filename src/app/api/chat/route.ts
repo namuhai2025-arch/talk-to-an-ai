@@ -7,8 +7,6 @@ import { Redis } from "@upstash/redis";
 type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; content: string };
 
-const redis = Redis.fromEnv();
-
 const DAILY_LIMIT = 30;
 const PER_MINUTE_LIMIT = 10;
 
@@ -120,6 +118,8 @@ export async function POST(req: Request) {
       return corsJson({ reply: crisisReplyPH(), flagged: "crisis" }, { headers: corsHeaders });
     }
 
+    const redis = Redis.fromEnv();
+    
     // 2) Quota check (per-minute + daily) using Redis
     const today = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
     const minuteBucket = Math.floor(Date.now() / 60000);

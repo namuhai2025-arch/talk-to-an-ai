@@ -152,7 +152,7 @@ export async function POST(req: Request) {
       return corsJson(
         {
           error: "Daily message limit reached",
-          reply: "You've reached today's 30-message limit. Please come back tomorrow 💛",
+          reply: "You've reached today's 25-message limit. Please come back tomorrow 💛",
         },
         { status: 429, headers: corsHeaders }
       );

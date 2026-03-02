@@ -7,7 +7,7 @@ import { Redis } from "@upstash/redis";
 type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; content: string };
 
-const DAILY_LIMIT = 30;
+const DAILY_LIMIT = 25;
 const PER_MINUTE_LIMIT = 10;
 
 function secondsUntilUtcMidnight() {
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     }
 
     const redis = Redis.fromEnv();
-    
+
     // 2) Quota check (per-minute + daily) using Redis
     const today = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
     const minuteBucket = Math.floor(Date.now() / 60000);

@@ -7,7 +7,7 @@ import { Redis } from "@upstash/redis";
 type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; content: string };
 
-const DAILY_LIMIT = 25;
+const DAILY_LIMIT = 18;
 const PER_MINUTE_LIMIT = 10;
 
 function secondsUntilUtcMidnight() {
@@ -152,7 +152,7 @@ export async function POST(req: Request) {
       return corsJson(
         {
           error: "Daily message limit reached",
-          reply: "You've reached today's 25-message limit. Please come back tomorrow 💛",
+          reply: "I hit today’s free limit 💜 Please come back tomorrow. 💛",
         },
         { status: 429, headers: corsHeaders }
       );
@@ -195,15 +195,28 @@ Talkio:
       generationConfig: { temperature: 0.7 },
     });
 
-    const result = await model.generateContent(prompt);
-    const reply = result.response.text();
+    catch (err: any) {
+  const message = String(err?.message || "");
 
-    return corsJson({ reply }, { headers: corsHeaders });
-  } catch (err: any) {
-    console.error("Chat API error:", err);
+  // 🟣 Gemini FREE TIER QUOTA HIT
+  if (message.includes("429") || message.includes("quota")) {
     return corsJson(
-      { error: err?.message || "Server error", reply: "Something went wrong on my end. Please try again." },
-      { status: 500, headers: corsHeaders }
+      {
+        error: "Gemini quota reached",
+        reply:
+          "We’ve reached today’s free capacity. Please come back tomorrow 💜",
+      },
+      { status: 429, headers: corsHeaders }
     );
   }
+
+  // 🔴 Any other error
+  return corsJson(
+    {
+      error: "Server error",
+      reply:
+        "Something went wrong on my end. Please try again.",
+    },
+    { status: 500, headers: corsHeaders }
+  );
 }

@@ -129,15 +129,18 @@ async function sendMessage() {
     }
 
     if (!res.ok) {
-      // Show server message if available
-      const errMsg =
-        typeof data?.reply === "string"
-          ? data.reply
-          : typeof data?.error === "string"
-          ? data.error
-          : rawText || `API error ${res.status}`;
-      throw new Error(errMsg);
-    }
+  const reply =
+    typeof data?.reply === "string" && data.reply.trim()
+      ? data.reply
+      : "I hit today’s free limit 💜 Please come back tomorrow. 💛";
+
+  setMessages((prev) => [
+    ...prev,
+    { role: "assistant", content: reply },
+  ]);
+
+  return;
+}
 
     const replyText =
       typeof data?.reply === "string"

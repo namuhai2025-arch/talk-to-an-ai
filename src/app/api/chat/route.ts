@@ -99,7 +99,6 @@ Boundaries & safety:
 `.trim();
 
 export async function POST(req: Request) {
-  try {
     const body: any = await req.json().catch(() => ({}));
     const message = typeof body?.message === "string" ? body.message.trim() : "";
     const history: ChatMessage[] = Array.isArray(body?.history) ? body.history : [];
@@ -189,37 +188,39 @@ User: ${message}
 Talkio:
 `.trim();
 
-try {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    generationConfig: { temperature: 0.7 },
-  });
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      generationConfig: { temperature: 0.7 },
+    });
 
-  const result = await model.generateContent(prompt);
-  const reply = result.response.text();
+    const result = await model.generateContent(prompt);
+    const reply = result.response.text();
 
-  return corsJson(
-    { reply },
-    { status: 200, headers: corsHeaders }
-  );
+    return corsJson({ reply }, { status: 200, headers: corsHeaders });
+  } catch (err: any) {
+    const message = String(err?.message || "").toLowerCase();
 
-} catch (err: any) {
-  const message = String(err?.message || "");
+    // 💜 Gemini FREE TIER QUOTA HIT (429)
+    if (message.includes("429") || message.includes("quota")) {
+      return corsJson(
+        {
+          error: "Gemini quota reached",
+          reply:
+            "We hit today’s free capacity. I’m really sorry 😔 Please come back tomorrow 💜",
+        },
+        { status: 429, headers: corsHeaders }
+      );
+    }
 
-  if (message.includes("429") || message.includes("quota")) {
+    // Any other server error
     return corsJson(
       {
-        error: "Gemini quota reached",
-        reply: "We’ve reached today’s free capacity. Please come back tomorrow 💜",
+        error: "Server error",
+        reply: "Something went wrong on my end. Please try again.",
       },
-      { status: 429, headers: corsHeaders }
+      { status: 500, headers: corsHeaders }
     );
   }
-
-  return corsJson(
-    { error: "Server error", reply: "Something went wrong on my end. Please try again." },
-    { status: 500, headers: corsHeaders }
-  );
-}
 }

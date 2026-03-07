@@ -128,11 +128,6 @@ function saveMemory(mem: TalkioMemory) {
   } catch {}
 }
 
-type TalkioMemory = {
-  mood?: string;          // e.g. "stressed", "sad", "anxious", "okay"
-  updatedAt?: number;     // epoch ms
-};
-
 // Simple heuristic (cheap + fast). Improve later.
 function inferMood(text: string): string | "" {
   const t = (text || "").toLowerCase();

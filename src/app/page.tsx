@@ -165,6 +165,8 @@ export default function Page() {
   const [showSafety, setShowSafety] = useState(false);
   const [conversationTitle, setConversationTitle] = useState<string>("New conversation");
 
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
   function saveNickname(name: string) {
     const clean = name.trim();
     setDisplayName(clean);
@@ -462,6 +464,26 @@ function saveMemory(data: any) {
       paddingBottom: `calc(var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 1rem)`
     }}
   >
+    {showUpgradeModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="max-w-md rounded-xl bg-white p-6 text-sm shadow-lg">
+      <h2 className="mb-2 text-lg font-semibold">Talkio Pro</h2>
+
+      <p className="mb-4 text-stone-700">
+        Unlimited chats will be available with Talkio Pro.
+        For now, free messages reset tomorrow.
+      </p>
+
+      <button
+        type="button"
+        className="w-full rounded-lg bg-black px-4 py-2 text-white"
+        onClick={() => setShowUpgradeModal(false)}
+      >
+        Got it
+      </button>
+    </div>
+  </div>
+)}
       {/* Safety disclaimer overlay */}
       {showSafety && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -628,7 +650,7 @@ function saveMemory(data: any) {
 
             <button
   type="button"
-  onClick={() => alert("Upgrade flow coming soon.")}
+  onClick={() => setShowUpgradeModal(true)}
   className="rounded-lg bg-green-500 hover:bg-green-600 px-3 py-2 text-white"
 >
   Keep chatting now

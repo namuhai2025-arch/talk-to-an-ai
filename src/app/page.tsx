@@ -663,7 +663,7 @@ function saveMemory(data: any) {
           ? "Chat locked for safety."
           : "Type your message..."
       }
-      disabled={loading || crisisLock || isLimitReached || !input.trim()}
+      disabled={loading || crisisLock || isLimitReached}
       rows={2}
       className="flex-1 w-full resize-none rounded-xl border px-3 py-2 leading-5 whitespace-pre-wrap break-words"
       style={{ maxHeight: 120, overflowY: "auto" }}
@@ -677,7 +677,7 @@ function saveMemory(data: any) {
 
     <button
       type="submit"
-      disabled={loading || crisisLock || !input.trim()}
+      disabled={loading || crisisLock || isLimitReached || !input.trim()}
       className="rounded-xl bg-black px-4 py-2 text-white disabled:opacity-50"
     >
       {loading ? "..." : "Send"}

@@ -476,7 +476,7 @@ function saveMemory(data: any) {
 
       <button
         type="button"
-        className="w-full rounded-lg bg-black px-4 py-2 text-white"
+        className="w-full rounded-lg bg-green-500 px-4 py-2 text-white hover:bg-green-600"
         onClick={() => setShowUpgradeModal(false)}
       >
         Got it

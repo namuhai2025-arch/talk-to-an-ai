@@ -540,17 +540,19 @@ function saveMemory(data: any) {
           <h1 className="text-xl font-semibold">Talkio</h1>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="rounded-md border px-3 py-1 text-sm"
-              onClick={() => {
-                const current = displayName || "";
-                const nick = window.prompt("Nickname (optional):", current);
-                if (nick !== null) saveNickname(nick);
-              }}
-            >
-              Nickname
-            </button>
+            {!displayName && (
+  <button
+    type="button"
+    className="rounded-md border px-3 py-1 text-sm"
+    onClick={() => {
+      const current = displayName || "";
+      const nick = window.prompt("Nickname (optional):", current);
+      if (nick !== null) saveNickname(nick);
+    }}
+  >
+    Nickname
+  </button>
+)}
 
             <button
               type="button"
@@ -630,12 +632,12 @@ function saveMemory(data: any) {
             </div>
 
             <button
-              type="button"
-              onClick={() => alert("Upgrade flow coming soon.")}
-              className="rounded-lg bg-black px-3 py-2 text-white"
-            >
-              Keep chatting now
-            </button>
+  type="button"
+  onClick={() => alert("Upgrade flow coming soon.")}
+  className="rounded-lg bg-green-500 hover:bg-green-600 px-3 py-2 text-white"
+>
+  Keep chatting now
+</button>
           </div>
         )}
         

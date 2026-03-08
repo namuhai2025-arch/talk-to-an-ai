@@ -164,8 +164,21 @@ export default function Page() {
   const [input, setInput] = useState("");
   const [showSafety, setShowSafety] = useState(false);
   const [conversationTitle, setConversationTitle] = useState<string>("New conversation");
-  
 
+  function saveNickname(name: string) {
+    const clean = name.trim();
+    setDisplayName(clean);
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("talkio_nickname", clean);
+    }
+  }
+
+  function handleSaveNickname() {
+    saveNickname(displayName);
+    setShowNamePrompt(false);
+  }
+ 
   // Load nickname once
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -179,17 +192,7 @@ export default function Page() {
     }
   }, []);
 
-  function saveNickname(nick: string) {
-    const clean = (nick || "").trim();
-    setDisplayName(clean);
-
-    if (typeof window !== "undefined") {
-      if (clean) localStorage.setItem("talkio_nickname", clean);
-      else localStorage.removeItem("talkio_nickname");
-    }
-  }
-
- useEffect(() => {
+  useEffect(() => {
   if (typeof window === "undefined") return;
 
   const saved = localStorage.getItem("talkio_memory");
@@ -521,10 +524,7 @@ function saveMemory(data: any) {
               <button
                 type="button"
                 className="flex-1 rounded-lg bg-black px-3 py-2 text-white"
-                onClick={() => {
-                  saveNickname(displayName);
-                  setShowNamePrompt(false);
-                }}
+                onClick={handleSaveNickname}                
               >
                 Save
               </button>
@@ -544,16 +544,11 @@ function saveMemory(data: any) {
   <button
     type="button"
     className="rounded-md border px-3 py-1 text-sm"
-    onClick={() => {
-      const current = displayName || "";
-      const nick = window.prompt("Nickname (optional):", current);
-      if (nick !== null) saveNickname(nick);
-    }}
+    onClick={() => setShowNamePrompt(true)}
   >
     Nickname
   </button>
 )}
-
             <button
               type="button"
               onClick={clearChat}

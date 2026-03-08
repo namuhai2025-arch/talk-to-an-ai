@@ -349,17 +349,12 @@ const moodLine = moodHint
         (m.role === "user" || m.role === "assistant") &&
         typeof m.content === "string"
     )
-    .slice(-6)
+    .slice(-16)
     .map((m: any) => `${m.role === "user" ? "User" : "Talkio"}: ${m.content}`)
     .join("\n");
 
-    const MAX_CONTEXT_CHARS = 1200;
-
-const contextShort =
-  context.length > MAX_CONTEXT_CHARS
-    ? context.slice(-MAX_CONTEXT_CHARS)
-    : context;
-
+    const contextShort = context;
+    
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -401,7 +396,7 @@ Talkio:
   const out = result.response.text()?.trim() || "…";
 
   console.log("Talkio reply size (chars):", out.length);
-  console.log("Talkio contextShort chars:", contextShort.length);
+  console.log("Talkio reply:", JSON.stringify(out));
 
   return reply({ reply: out }, 200);
   } catch (err: any) {

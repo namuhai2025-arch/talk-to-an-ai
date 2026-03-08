@@ -391,7 +391,7 @@ Talkio:
     generationConfig: {
       temperature: 0.75,
       topP: 0.9,
-      maxOutputTokens: 512,
+      maxOutputTokens: 768,
     },
   });
 

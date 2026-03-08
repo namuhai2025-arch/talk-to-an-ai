@@ -393,7 +393,8 @@ Talkio:
   console.log("Talkio prompt size (chars):", prompt.length);
 
   const result = await model.generateContent(prompt);
-  const out = result.response.text()?.trim() || "…";
+  const response = await result.response;
+  const out = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "…";
 
   console.log("Talkio reply size (chars):", out.length);
   console.log("Talkio reply:", JSON.stringify(out));

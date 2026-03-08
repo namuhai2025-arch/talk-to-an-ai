@@ -6,7 +6,7 @@ type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; content: string };
 
 // Keep this as “last N messages kept in UI history”
-const MAX_MESSAGES = 10;
+const MAX_MESSAGES = 30;
 
 function bubbleClass(role: "user" | "assistant") {
   return [

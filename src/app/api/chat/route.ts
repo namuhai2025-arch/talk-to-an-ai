@@ -445,7 +445,7 @@ Talkio:
       return reply(
         {
           error: "Gemini quota reached",
-          reply: "We hit today’s free capacity. Please come back tomorrow.",
+          reply: "Talkio is experiencing heavy traffic right now. Please try again in a moment.",
         },
         429
       );

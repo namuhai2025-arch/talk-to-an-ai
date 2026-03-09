@@ -55,6 +55,23 @@ function detectIntentAndMood(text: string) {
   return { intent, mood };
 }
 
+function getOrCreateAnonymousId() {
+  if (typeof window === "undefined") return "";
+
+  let id = localStorage.getItem("talkio_anonymous_id");
+
+  if (!id) {
+    id =
+      "anon_" +
+      Math.random().toString(36).slice(2) +
+      Date.now().toString(36);
+
+    localStorage.setItem("talkio_anonymous_id", id);
+  }
+
+  return id;
+}
+
 function bubbleTail(role: "user" | "assistant") {
   return role === "user"
     ? "after:content-[''] after:absolute after:-right-2 after:bottom-2 after:w-3 after:h-3 after:bg-emerald-400 after:rounded-sm after:rotate-45"
@@ -166,6 +183,7 @@ export default function Page() {
   const [conversationTitle, setConversationTitle] = useState<string>("New conversation");
 
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [anonymousId, setAnonymousId] = useState("");
 
   function saveNickname(name: string) {
     const clean = name.trim();
@@ -246,6 +264,10 @@ function saveMemory(data: any) {
   } catch {
     setMessages([buildGreeting(displayName)]);
   }
+}, []);
+
+  useEffect(() => {
+  setAnonymousId(getOrCreateAnonymousId());
 }, []);
 
   useEffect(() => {
@@ -353,16 +375,18 @@ function saveMemory(data: any) {
 
   try {
     const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        message: text,
-        history: next,
-        memory: nextMemory,
-      }),
-      signal: controller.signal,
-    });
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+    anonymousId,
+    accountUserId: null,
+    message: text,
+    history: next,
+    memory: nextMemory,
+  }),
+  signal: controller.signal,
+});
 
     const rawText = await res.text();
 

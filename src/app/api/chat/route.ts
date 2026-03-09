@@ -234,13 +234,27 @@ const safeMessage = message.slice(0, 1200);
 
 const history: ChatMessage[] = Array.isArray(body?.history) ? body.history : [];
 
+const anonymousId =
+  typeof body?.anonymousId === "string" ? body.anonymousId : null;
+
+const accountUserId =
+  typeof body?.accountUserId === "string" ? body.accountUserId : null;
+
+const safeAnonymousId =
+  typeof anonymousId === "string" ? anonymousId.slice(0, 100) : null;
+
+const safeAccountUserId =
+  typeof accountUserId === "string" ? accountUserId.slice(0, 100) : null;
+
+const effectiveUserId =
+  safeAccountUserId || safeAnonymousId || "unknown_user";
+
 const memory =
   typeof body?.memory === "object" && body.memory ? body.memory : {};
 
 const moodHintRaw = typeof memory?.mood === "string" ? memory.mood : "";
 const moodHint = moodHintRaw.slice(0, 120);
 const intentHint = typeof memory?.intent === "string" ? memory.intent : "";
-
 const metaLine =
   moodHint || intentHint
     ? `User context (device): mood=${moodHint || "unknown"}, intent=${intentHint || "chat"}\n`
@@ -257,8 +271,31 @@ const moodLine = moodHint
 
   const redis = Redis.fromEnv();
 
-  // 2) Rate limits (session + IP/UA)
+  const FREE_DAILY_LIMIT = 30;
+  const DAILY_TTL_SECONDS = 60 * 60 * 24;
+
   const today = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
+  const userDailyKey = `talkio:msg:${effectiveUserId}:${today}`;
+
+  const count = await redis.incr(userDailyKey);
+
+if (count === 1) {
+  await redis.expire(userDailyKey, DAILY_TTL_SECONDS);
+}
+
+if (count > FREE_DAILY_LIMIT) {
+  return reply(
+    {
+      error: "Daily message limit reached",
+      reply:
+        "You've reached today's free message limit. Talkio Pro unlocks unlimited chats, or you can come back tomorrow when messages reset.",
+    },
+    429
+  );
+}
+
+  // 2) Rate limits (session + IP/UA)
+  
   const minuteBucket = Math.floor(Date.now() / 60000);
 
   const dailyKey = `talkio:quota:day:${sessionId}:${today}`;
@@ -380,6 +417,7 @@ Talkio:
 
   try {
   const genAI = new GoogleGenerativeAI(apiKey);
+  
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
     systemInstruction: TALKIO_PERSONA,

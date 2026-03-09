@@ -555,26 +555,26 @@ function saveMemory(data: any) {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Enter a nickname"
-              className="mb-3 w-full rounded-lg border px-3 py-2"
+              className="mb-3 w-full rounded-lg border px-3 py-2 focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none"
             />
 
             <div className="flex gap-2">
-              <button
-                type="button"
-                className="flex-1 rounded-lg border px-3 py-2"
-                onClick={() => setShowNamePrompt(false)}
-              >
-                Skip
-              </button>
+  <button
+    type="button"
+    className="flex-1 rounded-lg border border-green-500 px-3 py-2 text-green-600 hover:bg-green-50"
+    onClick={() => setShowNamePrompt(false)}
+  >
+    Skip
+  </button>
 
-              <button
-                type="button"
-                className="flex-1 rounded-lg bg-black px-3 py-2 text-white"
-                onClick={handleSaveNickname}                
-              >
-                Save
-              </button>
-            </div>
+  <button
+    type="button"
+    className="flex-1 rounded-lg bg-green-500 px-3 py-2 text-white hover:bg-green-600"
+    onClick={handleSaveNickname}
+  >
+    Save
+  </button>
+</div>            
           </div>
         </div>
       )}

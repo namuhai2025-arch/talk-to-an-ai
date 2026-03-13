@@ -3,7 +3,11 @@
 import React, { useEffect, useRef, useState } from "react";
 
 type ChatRole = "user" | "assistant";
-type ChatMessage = { role: ChatRole; content: string };
+type ChatMessage = {
+  role: ChatRole;
+  content: string;
+  timestamp: number;
+  };
 
 // Keep this as “last N messages kept in UI history”
 const MAX_MESSAGES = 30;
@@ -424,11 +428,14 @@ function addEmoji(emoji: string) {
       const delay = 600 + Math.random() * 300;
       await new Promise((r) => setTimeout(r, delay));
 
-      setMessages((prev) =>
-        [...prev, { role: "assistant" as const, content: msg }].slice(
-          -MAX_MESSAGES
-        )
-      );
+      setMessages((prev) => [
+  ...prev,
+  {
+    role: "assistant",
+    content: replyText,
+    timestamp: Date.now(),
+  },
+]);
 
       const err = String(data?.error || "");
       if (
@@ -632,22 +639,34 @@ function addEmoji(emoji: string) {
 
         {/* Message list grows to fill available space */}
         <div className="flex-1 space-y-3 overflow-y-auto overflow-x-hidden text-base">
-  {messages.map((m, idx) => (
+  {messages.map((m, i) => (
+  <div key={i} className="flex flex-col mb-3">
+    
     <div
-      key={idx}
-      className={[
-        "max-w-[80%] rounded-2xl px-4 py-3 leading-relaxed shadow-sm whitespace-pre-wrap break-words",
-        "animate-[pop_0.15s_ease-out]",
+      className={
         m.role === "user"
-          ? "ml-auto bg-emerald-400 text-white"
-          : "mr-auto bg-stone-100 border border-stone-200 text-stone-900",
-      ].join(" ")}
+          ? "self-end bg-green-500 text-white rounded-xl px-4 py-2 max-w-[80%]"
+          : "self-start bg-gray-200 text-black rounded-xl px-4 py-2 max-w-[80%]"
+      }
     >
-      <div className="whitespace-pre-wrap break-words">
-        {String(m.content ?? "")}
-      </div>
+      {m.content}
     </div>
-  ))}
+
+    <div
+      className={
+        m.role === "user"
+          ? "self-end text-xs text-gray-400 mt-1"
+          : "self-start text-xs text-gray-400 mt-1"
+      }
+    >
+      {new Date(m.timestamp).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      })}
+    </div>
+
+  </div>
+))}
 
   {loading && (
     <div className="mr-auto bg-stone-100 border border-stone-200 max-w-[80%] rounded-2xl px-4 py-3">

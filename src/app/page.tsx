@@ -266,6 +266,22 @@ function saveMemory(data: any) {
   }
 }, []);
 
+const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+const EMOJIS = ["🙂", "😊", "😄", "😅", "😂", "🥲", "😍", "😢", "😡", "👍", "❤️", "✨"];
+
+function addEmoji(emoji: string) {
+  setInput((prev) => prev + emoji);
+
+  requestAnimationFrame(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+      inputRef.current.style.height = inputRef.current.scrollHeight + "px";
+      inputRef.current.focus();
+    }
+  });
+}
+
   useEffect(() => {
   setAnonymousId(getOrCreateAnonymousId());
 }, []);
@@ -682,50 +698,79 @@ function saveMemory(data: any) {
           </div>
         )}
         
-        {/* Input form pinned to bottom */}
-        {!isLimitReached && (
-  <form
-    className="flex items-end gap-2"
-    onSubmit={(e) => {
-      e.preventDefault();
-      sendMessage();
-    }}
-  >
-    <textarea
-      ref={inputRef as any}
-      value={input}
-      onChange={(e) => {
-        setInput(e.target.value);
-        e.target.style.height = "auto";
-        e.target.style.height = e.target.scrollHeight + "px";
-      }}
-      placeholder={
-        crisisLock
-          ? "Chat locked for safety."
-          : "Type your message..."
-      }
-      disabled={loading || crisisLock || isLimitReached}
-      rows={2}
-      className="flex-1 w-full resize-none rounded-xl border px-3 py-2 leading-5 whitespace-pre-wrap break-words"
-      style={{ maxHeight: 120, overflowY: "auto" }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          (e.target as HTMLTextAreaElement).form?.requestSubmit();
-        }
-      }}
-    />
-
-    <button
-      type="submit"
-      disabled={loading || crisisLock || isLimitReached || !input.trim()}
-      className="rounded-xl bg-black px-4 py-2 text-white disabled:opacity-50"
-    >
-      {loading ? "..." : "Send"}
-    </button>
-  </form>
-)}
+ {/* Input form pinned to bottom */}
+{!isLimitReached && (
+  <div className="space-y-2">
+    {showEmojiPicker && (
+      <div className="flex flex-wrap gap-2 rounded-xl border bg-white p-3 shadow-sm">
+        {EMOJIS.map((emoji) => (
+          <button
+            key={emoji}
+            type="button"
+            className="rounded-md px-2 py-1 text-xl hover:bg-stone-100"
+            onClick={() => addEmoji(emoji)}
+          >
+            {emoji}
+          </button>
+        ))}
       </div>
-    </main>
-  );
+    )}
+
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        sendMessage();
+        setShowEmojiPicker(false);
+      }}
+    >
+      <div className="relative flex-1">
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+            e.target.style.height = "auto";
+            e.target.style.height = e.target.scrollHeight + "px";
+          }}
+          placeholder={
+            crisisLock
+              ? "Chat locked for safety."
+              : "Type your message..."
+          }
+          disabled={loading || crisisLock || isLimitReached}
+          rows={1}
+          className="w-full resize-none rounded-full border px-4 py-2 pr-16 leading-5 outline-none"
+          style={{ maxHeight: 120, overflowY: "auto" }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              (e.target as HTMLTextAreaElement).form?.requestSubmit();
+            }
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={() => setShowEmojiPicker((prev) => !prev)}
+          className="absolute right-4 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg opacity-70 hover:bg-stone-100 hover:opacity-100"
+          disabled={loading || crisisLock || isLimitReached}
+        >
+          😊
+        </button>
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading || crisisLock || isLimitReached || !input.trim()}
+        className="rounded-full bg-emerald-500 px-5 py-2 text-white hover:bg-emerald-600 disabled:opacity-50"
+      >
+        {loading ? "..." : "Send"}
+      </button>
+    </form>
+  </div>
+)}
+    </div>
+  </main>
+);
 }

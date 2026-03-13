@@ -641,7 +641,7 @@ function addEmoji(emoji: string) {
         <div className="flex-1 space-y-3 overflow-y-auto overflow-x-hidden text-base">
   {messages.map((m, i) => (
   <div key={i} className="flex flex-col mb-3">
-    
+
     <div
       className={
         m.role === "user"

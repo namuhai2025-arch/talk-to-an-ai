@@ -170,7 +170,7 @@ export default function Page() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [memory, setMemory] = useState<TalkioMemory>({});
-
+  
   const [loading, setLoading] = useState(false);
   const [crisisLock, setCrisisLock] = useState(false);
   const [isLimitReached, setIsLimitReached] = useState(false);
@@ -184,6 +184,8 @@ export default function Page() {
 
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [anonymousId, setAnonymousId] = useState("");
+
+
 
   function saveNickname(name: string) {
     const clean = name.trim();

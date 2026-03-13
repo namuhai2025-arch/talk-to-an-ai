@@ -16,6 +16,11 @@ const IP_MINUTE_CAP = 30;
 const FREE_MODEL = "gemini-2.5-flash";
 const PREMIUM_MODEL = "gemini-2.5-flash";
 
+const MAX_CONTEXT_MESSAGES = 6;
+const MAX_SUMMARY_LENGTH = 800;
+const SUMMARY_UPDATE_EVERY_MESSAGES = 6;
+const SUMMARY_MODEL = FREE_MODEL;
+
 const INTERNAL_APP_KEY = process.env.INTERNAL_APP_KEY;
 
 function secondsUntilUtcMidnight() {
@@ -106,6 +111,96 @@ function getLimitsForTier(userTier) {
   };
 }
 
+function getConversationSummary(memory) {
+  const raw =
+    typeof memory?.conversationSummary === "string"
+      ? memory.conversationSummary
+      : "";
+
+  return raw.slice(0, MAX_SUMMARY_LENGTH).trim();
+}
+
+function getSummaryBaseCount(memory) {
+  return typeof memory?.summaryBaseCount === "number"
+    ? memory.summaryBaseCount
+    : 0;
+}
+
+function shouldRefreshSummary(memory, completedMessageCount) {
+  const baseCount = getSummaryBaseCount(memory);
+  return completedMessageCount - baseCount >= SUMMARY_UPDATE_EVERY_MESSAGES;
+}
+
+function formatMessagesForPrompt(messages) {
+  return messages
+    .filter(
+      (m) =>
+        m &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string"
+    )
+    .map((m) => `${m.role === "user" ? "User" : "Talkio"}: ${m.content}`)
+    .join("\n");
+}
+
+async function generateUpdatedSummary({
+  ai,
+  memory,
+  history,
+  userMessage,
+  assistantReply,
+}) {
+  const existingSummary = getConversationSummary(memory);
+
+  const summaryHistory = history
+    .filter(
+      (m) =>
+        m &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string"
+    )
+    .slice(-10);
+
+  const completedTurn = [
+    ...summaryHistory,
+    { role: "user", content: userMessage },
+    { role: "assistant", content: assistantReply },
+  ];
+
+  const transcript = formatMessagesForPrompt(completedTurn);
+
+  const summaryPrompt = `
+Update the rolling conversation summary for a warm, supportive chat app.
+
+Rules:
+- Keep the summary short and useful for future replies.
+- Focus on ongoing topics, emotional tone, user preferences, and notable context.
+- Preserve language style notes if relevant, such as mixed language, dialect, or casual tone.
+- Do not use bullet points.
+- Plain text only.
+- Maximum ${MAX_SUMMARY_LENGTH} characters.
+
+Existing summary:
+${existingSummary || "(none)"}
+
+Recent conversation to merge:
+${transcript || "(none)"}
+
+Updated summary:
+`.trim();
+
+  const summaryResponse = await ai.models.generateContent({
+    model: SUMMARY_MODEL,
+    contents: summaryPrompt,
+  });
+
+  const nextSummary = (summaryResponse.text || "")
+    .slice(0, MAX_SUMMARY_LENGTH)
+    .trim();
+
+  return nextSummary || existingSummary;
+}
+
 const TALKIO_SYSTEM_PROMPT_V1 = `
 You are Talkio: a warm, calm, friendly, and emotionally intelligent AI companion.
 
@@ -136,22 +231,27 @@ Avoid robotic, clinical, formal, or scripted wording.
 Do not use bullet points, headings, or markdown in normal chat.
 Do not use emojis unless the user clearly uses them first.
 
-LANGUAGE AND CULTURAL AWARENESS
+LANGUAGE MIRRORING AND CULTURAL AWARENESS
 
-Always reply in the same language the user uses.
-If the user mixes languages, mirror the mix naturally.
-Talkio naturally adapts to the user's language style and tone.
-If the user speaks casually, uses slang, mixes languages, or uses cultural expressions, Talkio may mirror that style in a natural and moderate way.
-Mirroring should feel subtle and natural, not exaggerated or forced.
-Talkio should prioritize understanding the user's intent, tone, and emotion rather than interpreting phrases literally.
+Language mirroring is a high priority for Talkio.
+Talkio should closely mirror the user's actual language pattern, not just the general topic language.
+If the user writes in a specific language, dialect, slang, or mixed-language style, Talkio should reply in the same style and at a similar level of formality.
+This applies to regional languages, dialects, and conversational styles from any country. Examples may include Cebuano, Bisaya, Tagalog, Taglish, Spanish-English mixes, Hindi-English mixes, Arabic dialects, African English variants, Singlish, regional slang, internet slang, or other local conversational styles. These examples are not exhaustive.
+If the user is clearly speaking mainly in a non-English language or dialect, Talkio should reply mainly in that same language or dialect.
+If the user mixes languages, Talkio should mirror the mix naturally and maintain a similar conversational rhythm.
+Talkio should not unnecessarily translate the user's message into more polished, more formal, or more English-heavy wording unless the user clearly shifts their language first.
+If the user uses short, casual, or local phrasing, Talkio should respond in a similarly natural and familiar way.
+The goal is not perfect grammar. The goal is to sound natural, culturally aware, and emotionally aligned with how the user is already speaking.
+Talkio should feel like someone who naturally understands and speaks within the user’s conversational world, not like a translator or a formal assistant.
 
-Talkio is capable of recognizing and understanding casual local expressions, slang, and informal language used by the user.
-These may include cultural phrases, playful expressions, internet slang, or regional ways of speaking.
-When users use local expressions, Talkio should understand the tone and meaning and respond naturally without confusion.
-Examples include phrases like "charot", "sana all", "ayieee", "haha", "lol", "oi", and "grabe".
-These examples are not exhaustive.
-Talkio does not need to imitate slang excessively, but may mirror the user's tone naturally when appropriate.
-The goal is for Talkio to feel culturally aware and conversational across different countries and languages.
+IMMEDIATE LANGUAGE MATCH
+
+Before replying, first identify the dominant language, dialect, or mixed-language style used in the user's latest message.
+Talkio should prioritize matching the language style of the user's most recent message.
+If the user's latest message is mostly in a local language or dialect, Talkio should reply mostly in that same language or dialect.
+If the user mixes languages, Talkio should mirror that same mixture naturally.
+Do not shift the response into more formal language, more polished grammar, or more English unless the user clearly changes their language style.
+When uncertain, prefer mirroring the user's wording style more closely rather than making it more neutral.
 
 PLAYFUL TONE
 
@@ -347,11 +447,26 @@ exports.generateTalkioReply = onRequest({ cors: true }, async (req, res) => {
     const effectiveUserId = accountUserId || anonymousId || fp;
 
     const memory =
-      typeof body?.memory === "object" && body.memory ? body.memory : {};
+    typeof body?.memory === "object" && body.memory ? body.memory : {};
 
     const moodHintRaw = typeof memory?.mood === "string" ? memory.mood : "";
     const moodHint = moodHintRaw.slice(0, 120);
     const intentHint = typeof memory?.intent === "string" ? memory.intent : "";
+
+    const conversationSummary = getConversationSummary(memory);
+
+    const metaLine =
+    moodHint || intentHint
+    ? `User context (device): mood=${moodHint || "unknown"}, intent=${intentHint || "chat"}\n`
+    : "";
+
+    const moodLine = moodHint
+    ? `User emotional context (from this device): ${moodHint}\n`
+    : "";
+
+    const conversationSummary = conversationSummaryRaw
+    .slice(0, MAX_SUMMARY_LENGTH)
+    .trim();
 
     const metaLine =
       moodHint || intentHint
@@ -443,21 +558,23 @@ exports.generateTalkioReply = onRequest({ cors: true }, async (req, res) => {
       await Promise.all(expireOps);
     }
 
-    const context = history
-      .filter(
-        (m) =>
-          m &&
-          (m.role === "user" || m.role === "assistant") &&
-          typeof m.content === "string"
-      )
-      .slice(-16)
-      .map((m) => `${m.role === "user" ? "User" : "Talkio"}: ${m.content}`)
-      .join("\n");
+    const recentHistory = history
+  .filter(
+    (m) =>
+      m &&
+      (m.role === "user" || m.role === "assistant") &&
+      typeof m.content === "string"
+  )
+  .slice(-MAX_CONTEXT_MESSAGES);
 
-    const prompt = `
+  const context = formatMessagesForPrompt(recentHistory);
+
+const prompt = `
 ${metaLine || ""}${moodLine || ""}
+Conversation summary:
+${conversationSummary || "(none)"}
 
-Conversation so far:
+Recent conversation:
 ${context || "(no prior messages)"}
 
 User: ${safeMessage}
@@ -467,19 +584,55 @@ Talkio:
 
     const selectedModel = pickModel(body);
 
-    const response = await ai.models.generateContent({
-      model: selectedModel,
-      contents: `${TALKIO_SYSTEM_PROMPT_V1}\n\n${prompt}`,
+const response = await ai.models.generateContent({
+  model: selectedModel,
+  contents: `${TALKIO_SYSTEM_PROMPT_V1}\n\n${prompt}`,
+});
+
+let reply = response.text;
+
+if (!reply || reply.trim().length === 0) {
+  reply = "Something went wrong on my end. Please try sending your message again.";
+}
+
+let updatedMemory = { ...memory };
+
+const completedMessageCount =
+  history.filter(
+    (m) =>
+      m &&
+      (m.role === "user" || m.role === "assistant") &&
+      typeof m.content === "string"
+  ).length + 2;
+
+if (shouldRefreshSummary(memory, completedMessageCount)) {
+  try {
+    const nextSummary = await generateUpdatedSummary({
+      ai,
+      memory,
+      history,
+      userMessage: safeMessage,
+      assistantReply: reply,
     });
 
-    const reply =
-      response.text || "Something went wrong on my end. Please try again.";
+    updatedMemory = {
+      ...memory,
+      conversationSummary: nextSummary,
+      summaryBaseCount: completedMessageCount,
+      summaryUpdatedAt: Date.now(),
+    };
+  } catch (summaryError) {
+    logger.warn("Summary update failed", summaryError);
+  }
+}
 
-    res.status(200).json({
-      reply,
-      model: selectedModel,
-      source: "firebase",
-    });
+res.status(200).json({
+  reply,
+  model: selectedModel,
+  source: "firebase",
+  memory: updatedMemory,
+});
+
   } catch (error) {
     logger.error("generateTalkioReply failed", error);
     res.status(500).json({

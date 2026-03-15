@@ -34,10 +34,11 @@ export async function OPTIONS(req: Request) {
 
 export async function POST(req: Request) {
   const cookieSid = parseCookie(req, "talkio_sid");
+  const sessionId = cookieSid || newSessionId();
   let setCookieHeader: string | null = null;
 
   if (!cookieSid) {
-    setCookieHeader = buildSetCookie(newSessionId());
+    setCookieHeader = buildSetCookie(sessionId);
   }
 
   const reply = (data: any, status = 200) => {
@@ -55,19 +56,29 @@ export async function POST(req: Request) {
       typeof body?.message === "string" ? body.message.trim() : "";
 
     if (!message) {
-      return reply({
-        error: "Invalid message",
-        reply: "Please type a message.",
-      }, 400);
+      return reply(
+        {
+          error: "Invalid message",
+          reply: "Please type a message.",
+        },
+        400
+      );
     }
 
     const payload = {
       message,
       history: Array.isArray(body?.history) ? body.history : [],
-      anonymousId: body?.anonymousId || null,
-      accountUserId: body?.accountUserId || null,
-      memory: body?.memory || {},
-      userTier: body?.userTier || "free",
+      sessionId,
+      anonymousId:
+        typeof body?.anonymousId === "string" ? body.anonymousId : null,
+      accountUserId:
+        typeof body?.accountUserId === "string" ? body.accountUserId : null,
+      memory:
+        body?.memory && typeof body.memory === "object" ? body.memory : {},
+      userTier:
+        typeof body?.userTier === "string" && body.userTier.trim()
+          ? body.userTier
+          : "free",
     };
 
     const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
@@ -80,18 +91,47 @@ export async function POST(req: Request) {
       cache: "no-store",
     });
 
-    const data = await firebaseRes.json();
+    const rawText = await firebaseRes.text();
+    console.log("Firebase status:", firebaseRes.status);
+    console.log("Firebase raw response:", rawText);
+
+    let data: any;
+
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      data = {
+        error: "Invalid upstream response",
+        reply: "Something went wrong on my end. Please try again.",
+        upstreamStatus: firebaseRes.status,
+        upstreamBody: rawText,
+      };
+    }
+
+    if (!firebaseRes.ok) {
+      return reply(
+        {
+          error: data?.error || "Firebase upstream error",
+          reply:
+            data?.reply ||
+            "The chat server returned an error. Please try again.",
+          upstreamStatus: firebaseRes.status,
+          upstreamBody: rawText,
+        },
+        firebaseRes.status
+      );
+    }
 
     return reply(data, firebaseRes.status);
-  } catch (error) {
-    console.error("Chat route error:", error);
+  } catch (error: any) {
+  console.error("Chat route error:", error);
 
-    return reply(
-      {
-        error: "Server error",
-        reply: "Something went wrong on my end. Please try again.",
-      },
-      500
-    );
-  }
+  return reply(
+    {
+      error: "Server error",
+      reply: "ROUTE_CATCH_V2",
+      details: error?.message || String(error),
+    },
+    500
+  );
 }

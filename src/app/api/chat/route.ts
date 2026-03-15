@@ -123,15 +123,16 @@ export async function POST(req: Request) {
     }
 
     return reply(data, firebaseRes.status);
-  } catch (error: any) {
-  console.error("Chat route error:", error);
+   } catch (error: any) {
+    console.error("Chat route error:", error);
 
-  return reply(
-    {
-      error: "Server error",
-      reply: "ROUTE_CATCH_V2",
-      details: error?.message || String(error),
-    },
-    500
-  );
+    return reply(
+      {
+        error: "Server error",
+        reply: "ROUTE_CATCH_V2",
+        details: error?.message || String(error),
+      },
+      500
+    );
+  }
 }

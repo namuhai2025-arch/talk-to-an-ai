@@ -65,6 +65,22 @@ export async function POST(req: Request) {
       );
     }
 
+    const now = new Date();
+
+    const localTime = now.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+
+    const localDate = now.toLocaleDateString();
+
+    const localWeekday = now.toLocaleDateString(undefined, {
+      weekday: "long",
+    });
+
+    const timeZone =
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown";
+
     const payload = {
       message,
       history: Array.isArray(body?.history) ? body.history : [],
@@ -79,6 +95,11 @@ export async function POST(req: Request) {
         typeof body?.userTier === "string" && body.userTier.trim()
           ? body.userTier
           : "free",
+
+      localTime,
+      localDate,
+      localWeekday,
+      timeZone,
     };
 
     const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
@@ -109,19 +130,20 @@ export async function POST(req: Request) {
     }
 
     if (!firebaseRes.ok) {
-  return reply(
-    {
-      error: data?.error || "Firebase upstream error",
-      reply: data?.reply || "Firebase error",
-      upstreamStatus: firebaseRes.status,
-      upstreamBody: rawText,
-      firebaseDetails: data?.details || null
-    },
-    firebaseRes.status
-  );
-}
+      return reply(
+        {
+          error: data?.error || "Firebase upstream error",
+          reply: data?.reply || "Firebase error",
+          upstreamStatus: firebaseRes.status,
+          upstreamBody: rawText,
+          firebaseDetails: data?.details || null,
+        },
+        firebaseRes.status
+      );
+    }
+
     return reply(data, firebaseRes.status);
-   } catch (error: any) {
+  } catch (error: any) {
     console.error("Chat route error:", error);
 
     return reply(

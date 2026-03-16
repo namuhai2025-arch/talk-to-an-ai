@@ -16,6 +16,24 @@ const defaultTalkioUserProfile = {
   commonTriggers: [],
   comfortStyle: ["gentle humor", "light reassurance"],
   lastOpenLoop: null,
+
+  preferredTone: "warm_light",
+  preferredReplyLength: "short",
+  likesHumorWhenSad: false,
+  likesDirectAdvice: false,
+  commonEmotionalStates: [],
+  frequentTimePattern: "",
+  supportStyle: ["gentle reassurance"],
+  relationshipStyle: "soft companion",
+
+  openLoops: [],
+  recentRelationalContext: {
+    lastEmotionalTone: "",
+    lastSupportNeed: "",
+    lastConversationVibe: "",
+    lastCheckInWorthyTopic: "",
+  },
+
   updatedAt: null,
 };
 
@@ -140,6 +158,35 @@ User profile:
       : "none"
   }
 - lastOpenLoop: ${profile.lastOpenLoop || "none"}
+- preferredTone: ${profile.preferredTone || "unknown"}
+- preferredReplyLength: ${profile.preferredReplyLength || "unknown"}
+- likesHumorWhenSad: ${String(profile.likesHumorWhenSad)}
+- likesDirectAdvice: ${String(profile.likesDirectAdvice)}
+- commonEmotionalStates: ${
+    Array.isArray(profile.commonEmotionalStates) &&
+    profile.commonEmotionalStates.length
+      ? profile.commonEmotionalStates.join(", ")
+      : "none"
+  }
+- frequentTimePattern: ${profile.frequentTimePattern || "unknown"}
+- supportStyle: ${
+    Array.isArray(profile.supportStyle) && profile.supportStyle.length
+      ? profile.supportStyle.join(", ")
+      : "none"
+  }
+- relationshipStyle: ${profile.relationshipStyle || "unknown"}
+- openLoops: ${
+    Array.isArray(profile.openLoops) && profile.openLoops.length
+      ? profile.openLoops
+          .map((loop) => `${loop.topic}: ${loop.summary}`)
+          .join(" | ")
+      : "none"
+  }
+- recentRelationalContext: ${
+    profile.recentRelationalContext
+      ? `tone=${profile.recentRelationalContext.lastEmotionalTone || "unknown"}, supportNeed=${profile.recentRelationalContext.lastSupportNeed || "unknown"}, vibe=${profile.recentRelationalContext.lastConversationVibe || "unknown"}, followUp=${profile.recentRelationalContext.lastCheckInWorthyTopic || "none"}`
+      : "none"
+  }
 
 Recent emotional days:
 ${recentDaysSummary || "- none"}

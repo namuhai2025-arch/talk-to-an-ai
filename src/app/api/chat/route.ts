@@ -109,19 +109,17 @@ export async function POST(req: Request) {
     }
 
     if (!firebaseRes.ok) {
-      return reply(
-        {
-          error: data?.error || "Firebase upstream error",
-          reply:
-            data?.reply ||
-            "The chat server returned an error. Please try again.",
-          upstreamStatus: firebaseRes.status,
-          upstreamBody: rawText,
-        },
-        firebaseRes.status
-      );
-    }
-
+  return reply(
+    {
+      error: data?.error || "Firebase upstream error",
+      reply: data?.reply || "Firebase error",
+      upstreamStatus: firebaseRes.status,
+      upstreamBody: rawText,
+      firebaseDetails: data?.details || null
+    },
+    firebaseRes.status
+  );
+}
     return reply(data, firebaseRes.status);
    } catch (error: any) {
     console.error("Chat route error:", error);

@@ -441,138 +441,139 @@ export default function Page() {
     }
   }
 
-  return (
-    <main
-      className="mx-auto max-w-2xl flex flex-col min-h-[100dvh] p-4 overflow-x-hidden"
-      style={{
-        paddingTop: `calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 1rem)`,
-        paddingBottom: `calc(var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 1rem)`,
-      }}
-    >
-      {showUpgradeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-w-md rounded-xl bg-white p-6 text-sm shadow-lg">
-            <h2 className="mb-2 text-lg font-semibold">Talkio Pro</h2>
+ return (
+  <main
+    className="mx-auto flex h-dvh max-w-2xl flex-col overflow-hidden bg-white text-stone-900"
+    style={{
+      paddingTop: `calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 0.75rem)`,
+      paddingBottom: `calc(var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 0.5rem)`,
+    }}
+  >
+    {showUpgradeModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="max-w-md rounded-2xl bg-white p-6 text-sm shadow-lg">
+          <h2 className="mb-2 text-lg font-semibold">Talkio Pro</h2>
 
-            <p className="mb-4 text-stone-700">
-              Unlimited chats will be available with Talkio Pro.
-              For now, free messages reset tomorrow.
-            </p>
-
-            <button
-              type="button"
-              className="w-full rounded-lg bg-green-500 px-4 py-2 text-white hover:bg-green-600"
-              onClick={() => setShowUpgradeModal(false)}
-            >
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showSafety && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-w-md rounded-xl bg-white p-6 text-sm leading-relaxed shadow-lg">
-            <h2 className="mb-3 text-lg font-semibold">Safety & Disclaimer</h2>
-
-            <p className="mb-2">
-              Talkio is an AI conversation tool designed for casual conversation
-              and emotional support. It is not a therapist, doctor, or emergency
-              service.
-            </p>
-
-            <p className="mb-2">
-              If you are in distress or feel unsafe, please seek help from local
-              emergency services or a qualified professional.
-            </p>
-
-            <p className="mb-4">
-              By continuing, you understand and agree to use Talkio at your own
-              discretion.
-            </p>
-
-            <button
-              type="button"
-              className="w-full rounded-lg bg-green-500 px-4 py-2 text-white hover:bg-green-600"
-              onClick={() => {
-                localStorage.setItem("talkio_safety_acknowledged", "true");
-                setShowSafety(false);
-              }}
-            >
-              I understand
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showNamePrompt && !showSafety && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-w-md rounded-xl bg-white p-6 text-sm shadow-lg">
-            <h2 className="mb-2 text-lg font-semibold">Quick thing</h2>
-            <p className="mb-3 text-stone-700">
-              What nickname should I call you?
-            </p>
-
-            <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Enter a nickname"
-              className="mb-3 w-full rounded-lg border px-3 py-2 focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none"
-            />
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="flex-1 rounded-lg border border-green-500 px-3 py-2 text-green-600 hover:bg-green-50"
-                onClick={() => setShowNamePrompt(false)}
-              >
-                Skip
-              </button>
-
-              <button
-                type="button"
-                className="flex-1 rounded-lg bg-green-500 px-3 py-2 text-white hover:bg-green-600"
-                onClick={handleSaveNickname}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <h1 className="text-xl font-semibold">Talkio</h1>
-
-        <div className="flex items-center gap-2">
-          {!displayName && (
-            <button
-              type="button"
-              className="rounded-md border px-3 py-1 text-sm"
-              onClick={() => setShowNamePrompt(true)}
-            >
-              Nickname
-            </button>
-          )}
+          <p className="mb-4 text-stone-700">
+            Unlimited chats will be available with Talkio Pro.
+            For now, free messages reset tomorrow.
+          </p>
 
           <button
             type="button"
-            onClick={clearChat}
-            disabled={loading || messages.length <= 1}
-            className="rounded-md border px-3 py-1 text-sm disabled:opacity-50"
+            className="w-full rounded-xl bg-emerald-500 px-4 py-2.5 text-white hover:bg-emerald-600"
+            onClick={() => setShowUpgradeModal(false)}
           >
-            Clear chat
+            Got it
           </button>
         </div>
       </div>
+    )}
 
-      {conversationTitle !== "New conversation" && (
-        <div className="text-xs text-stone-500 px-1 mb-2">
-          {conversationTitle}
+    {showSafety && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="max-w-md rounded-2xl bg-white p-6 text-sm leading-relaxed shadow-lg">
+          <h2 className="mb-3 text-lg font-semibold">Safety & Disclaimer</h2>
+
+          <p className="mb-2">
+            Talkio is an AI conversation tool designed for casual conversation
+            and emotional support. It is not a therapist, doctor, or emergency
+            service.
+          </p>
+
+          <p className="mb-2">
+            If you are in distress or feel unsafe, please seek help from local
+            emergency services or a qualified professional.
+          </p>
+
+          <p className="mb-4">
+            By continuing, you understand and agree to use Talkio at your own
+            discretion.
+          </p>
+
+          <button
+            type="button"
+            className="w-full rounded-xl bg-emerald-500 px-4 py-2.5 text-white hover:bg-emerald-600"
+            onClick={() => {
+              localStorage.setItem("talkio_safety_acknowledged", "true");
+              setShowSafety(false);
+            }}
+          >
+            I understand
+          </button>
         </div>
-      )}
+      </div>
+    )}
 
-      <div className="flex-1 space-y-3 overflow-y-auto overflow-x-hidden text-base">
+    {showNamePrompt && !showSafety && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="max-w-md rounded-2xl bg-white p-6 text-sm shadow-lg">
+          <h2 className="mb-2 text-lg font-semibold">Quick thing</h2>
+          <p className="mb-3 text-stone-700">
+            What nickname should I call you?
+          </p>
+
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Enter a nickname"
+            className="mb-3 w-full rounded-xl border px-3 py-2.5 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+          />
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="flex-1 rounded-xl border border-emerald-500 px-3 py-2.5 text-emerald-600 hover:bg-emerald-50"
+              onClick={() => setShowNamePrompt(false)}
+            >
+              Skip
+            </button>
+
+            <button
+              type="button"
+              className="flex-1 rounded-xl bg-emerald-500 px-3 py-2.5 text-white hover:bg-emerald-600"
+              onClick={handleSaveNickname}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <div className="flex items-center justify-between gap-2 px-4 pb-3">
+      <h1 className="text-2xl font-semibold tracking-tight">Talkio</h1>
+
+      <div className="flex items-center gap-2">
+        {!displayName && (
+          <button
+            type="button"
+            className="rounded-xl border px-3 py-2 text-sm"
+            onClick={() => setShowNamePrompt(true)}
+          >
+            Nickname
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={clearChat}
+          disabled={loading || messages.length <= 1}
+          className="rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
+        >
+          Clear chat
+        </button>
+      </div>
+    </div>
+
+    {conversationTitle !== "New conversation" && (
+      <div className="px-4 pb-2 text-xs text-stone-500">
+        {conversationTitle}
+      </div>
+    )}
+
+    <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3">
+      <div className="mx-auto flex max-w-2xl flex-col gap-3">
         {messages.map((m, i) => {
           const prev = messages[i - 1];
           const next = messages[i + 1];
@@ -583,29 +584,33 @@ export default function Page() {
 
           let bubbleClass =
             m.role === "user"
-              ? "self-end bg-green-500 text-white px-4 py-2 max-w-[80%]"
-              : "self-start bg-gray-200 text-black px-4 py-2 max-w-[80%]";
+              ? "self-end max-w-[82%] bg-emerald-500 px-4 py-3 text-white shadow-sm"
+              : "self-start max-w-[82%] bg-stone-100 px-4 py-3 text-stone-900 shadow-sm";
 
           if (m.role === "user") {
-            bubbleClass += " rounded-2xl";
+            bubbleClass += " rounded-[22px] rounded-br-xl";
             if (sameAsPrev) bubbleClass += " rounded-tr-md";
             if (sameAsNext) bubbleClass += " rounded-br-md";
           } else {
-            bubbleClass += " rounded-2xl";
+            bubbleClass += " rounded-[22px] rounded-bl-xl";
             if (sameAsPrev) bubbleClass += " rounded-tl-md";
             if (sameAsNext) bubbleClass += " rounded-bl-md";
           }
 
           return (
-            <div key={i} className="flex flex-col mb-1">
-              <div className={bubbleClass}>{m.content}</div>
+            <div key={i} className="flex flex-col">
+              <div className={bubbleClass}>
+                <div className="whitespace-pre-wrap break-words text-[16px] leading-7">
+                  {m.content}
+                </div>
+              </div>
 
               {showTimestamp && (
                 <div
                   className={
                     m.role === "user"
-                      ? "self-end text-xs text-gray-400 mt-1"
-                      : "self-start text-xs text-gray-400 mt-1"
+                      ? "mt-1 self-end px-2 text-[12px] text-stone-400"
+                      : "mt-1 self-start px-2 text-[12px] text-stone-400"
                   }
                 >
                   {new Date(m.timestamp ?? Date.now()).toLocaleTimeString([], {
@@ -619,7 +624,7 @@ export default function Page() {
         })}
 
         {showTyping && (
-          <div className="mr-auto bg-stone-100 border border-stone-200 max-w-[80%] rounded-2xl px-4 py-3">
+          <div className="mr-auto max-w-[82%] rounded-[22px] rounded-bl-xl border border-stone-200 bg-stone-100 px-4 py-3 shadow-sm">
             <div className="flex gap-1">
               <span className="h-2 w-2 rounded-full bg-stone-400 animate-bounce [animation-delay:-0.3s]" />
               <span className="h-2 w-2 rounded-full bg-stone-400 animate-bounce [animation-delay:-0.15s]" />
@@ -628,113 +633,114 @@ export default function Page() {
           </div>
         )}
 
+        {messages.length === 1 && !loading && !crisisLock && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {["I'm stressed", "I can't sleep", "Just bored", "Something happened today"].map(
+              (prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  className="rounded-full border px-3 py-1.5 text-sm hover:bg-stone-100"
+                  onClick={() => sendMessage(prompt)}
+                >
+                  {prompt}
+                </button>
+              )
+            )}
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </div>
+    </div>
 
-      {messages.length === 1 && !loading && !crisisLock && (
-        <div className="flex flex-wrap gap-2 pt-2">
-          {["I'm stressed", "I can't sleep", "Just bored", "Something happened today"].map(
-            (prompt) => (
-              <button
-                key={prompt}
-                type="button"
-                className="rounded-full border px-3 py-1 text-sm hover:bg-stone-100"
-                onClick={() => sendMessage(prompt)}
-              >
-                {prompt}
-              </button>
-            )
-          )}
+    {isLimitReached && !crisisLock && (
+      <div className="mx-3 mb-3 flex items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-sm">
+        <div className="text-stone-700">
+          You’ve reached today’s free limit.
+          <br />
+          Keep chatting now with Talkio Pro.
         </div>
-      )}
 
-      {isLimitReached && !crisisLock && (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm">
-          <div className="text-stone-700">
-            You’ve reached today’s free limit.
-            <br />
-            Keep chatting now with Talkio Pro.
+        <button
+          type="button"
+          onClick={() => setShowUpgradeModal(true)}
+          className="rounded-xl bg-emerald-500 px-3 py-2 text-white hover:bg-emerald-600"
+        >
+          Keep chatting now
+        </button>
+      </div>
+    )}
+
+    {!isLimitReached && (
+      <div className="border-t bg-white px-3 pt-2">
+        {showEmojiPicker && (
+          <div className="mb-2 flex flex-wrap gap-2 rounded-2xl border bg-white p-3 shadow-sm">
+            {EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                className="rounded-md px-2 py-1 text-xl hover:bg-stone-100"
+                onClick={() => addEmoji(emoji)}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <form
+          className="flex items-end gap-2 pb-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            sendMessage();
+            setShowEmojiPicker(false);
+          }}
+        >
+          <div className="relative flex-1">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = e.target.scrollHeight + "px";
+              }}
+              placeholder={
+                crisisLock ? "Chat locked for safety." : "Type your message..."
+              }
+              disabled={loading || crisisLock || isLimitReached}
+              rows={1}
+              className="min-h-[50px] max-h-[120px] w-full resize-none rounded-[28px] border border-stone-300 px-4 py-3 pr-14 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-400"
+              style={{ overflowY: "auto" }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  (e.target as HTMLTextAreaElement).form?.requestSubmit();
+                }
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowEmojiPicker((prev) => !prev)}
+              className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg opacity-70 hover:bg-stone-100 hover:opacity-100"
+              disabled={loading || crisisLock || isLimitReached}
+            >
+              😊
+            </button>
           </div>
 
           <button
-            type="button"
-            onClick={() => setShowUpgradeModal(true)}
-            className="rounded-lg bg-green-500 hover:bg-green-600 px-3 py-2 text-white"
+            type="submit"
+            disabled={loading || crisisLock || isLimitReached || !input.trim()}
+            className="h-[50px] rounded-full bg-emerald-400 px-5 text-white hover:bg-emerald-500 disabled:opacity-50"
           >
-            Keep chatting now
+            {loading ? "..." : "Send"}
           </button>
-        </div>
-      )}
-
-      {!isLimitReached && (
-        <div className="space-y-2 mt-3">
-          {showEmojiPicker && (
-            <div className="flex flex-wrap gap-2 rounded-xl border bg-white p-3 shadow-sm">
-              {EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  className="rounded-md px-2 py-1 text-xl hover:bg-stone-100"
-                  onClick={() => addEmoji(emoji)}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <form
-            className="flex items-center gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              sendMessage();
-              setShowEmojiPicker(false);
-            }}
-          >
-            <div className="relative flex-1">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  e.target.style.height = "auto";
-                  e.target.style.height = e.target.scrollHeight + "px";
-                }}
-                placeholder={
-                  crisisLock ? "Chat locked for safety." : "Type your message..."
-                }
-                disabled={loading || crisisLock || isLimitReached}
-                rows={1}
-                className="w-full resize-none rounded-full border px-4 py-2 pr-16 leading-5 outline-none"
-                style={{ maxHeight: 120, overflowY: "auto" }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    (e.target as HTMLTextAreaElement).form?.requestSubmit();
-                  }
-                }}
-              />
-
-              <button
-                type="button"
-                onClick={() => setShowEmojiPicker((prev) => !prev)}
-                className="absolute right-4 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg opacity-70 hover:bg-stone-100 hover:opacity-100"
-                disabled={loading || crisisLock || isLimitReached}
-              >
-                😊
-              </button>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || crisisLock || isLimitReached || !input.trim()}
-              className="rounded-full bg-emerald-500 px-5 py-2 text-white hover:bg-emerald-600 disabled:opacity-50"
-            >
-              {loading ? "..." : "Send"}
-            </button>
-          </form>
-        </div>
-      )}
-    </main>
-  );
+        </form>
+      </div>
+    )}
+  </main>
+);
 }

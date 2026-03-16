@@ -19,11 +19,37 @@ const FREE_PER_MINUTE_LIMIT = 10;
 const PREMIUM_DAILY_LIMIT = 300;
 const PREMIUM_PER_MINUTE_LIMIT = 30;
 
+const ULTRA_DAILY_LIMIT = 1000;
+const ULTRA_PER_MINUTE_LIMIT = 60;
+
 const IP_DAILY_CAP = 120;
 const IP_MINUTE_CAP = 30;
 
-const FREE_MODEL = "gemini-2.5-flash";
+const FREE_MODEL = "gemini-2.5-flash-lite";
 const PREMIUM_MODEL = "gemini-2.5-flash";
+const ULTRA_MODEL = "gemini-2.5-pro";
+
+function getUserTier(body) {
+  return body?.userTier === "ultra"
+    ? "ultra"
+    : body?.userTier === "premium"
+    ? "premium"
+    : "free";
+}
+
+function pickModel(body) {
+  const tier = getUserTier(body);
+
+  if (tier === "ultra") {
+    return ULTRA_MODEL;
+  }
+
+  if (tier === "premium") {
+    return PREMIUM_MODEL;
+  }
+
+  return FREE_MODEL;
+}
 
 const MAX_CONTEXT_MESSAGES = 6;
 const MAX_SUMMARY_LENGTH = 800;
@@ -91,22 +117,14 @@ function crisisReplyPH() {
   ].join("\n");
 }
 
-function pickModel(body) {
-  const routedModel =
-    typeof body?.routedModel === "string" ? body.routedModel : "";
-
-  if (routedModel === "premium_model") {
-    return PREMIUM_MODEL;
+function getLimitsForTier(userTier) {
+  if (userTier === "ultra") {
+    return {
+      dailyLimit: ULTRA_DAILY_LIMIT,
+      perMinuteLimit: ULTRA_PER_MINUTE_LIMIT,
+    };
   }
 
-  return FREE_MODEL;
-}
-
-function getUserTier(body) {
-  return body?.userTier === "premium" ? "premium" : "free";
-}
-
-function getLimitsForTier(userTier) {
   if (userTier === "premium") {
     return {
       dailyLimit: PREMIUM_DAILY_LIMIT,
@@ -118,6 +136,70 @@ function getLimitsForTier(userTier) {
     dailyLimit: FREE_DAILY_LIMIT,
     perMinuteLimit: FREE_PER_MINUTE_LIMIT,
   };
+}
+
+function getAdaptiveToneProfile({ detectedTone, detectedSupportNeed }) {
+  if (detectedTone === "low" && detectedSupportNeed === "comfort") {
+    return {
+      replyStyle: "soft, calming, emotionally light, gently supportive",
+      replyLength: "short",
+      questionStyle: "at most one gentle question",
+      energy: "low and steady",
+      avoid: "heavy analysis, too much empathy repetition, preachy advice, overly cheerful tone",
+    };
+  }
+
+  if (detectedSupportNeed === "guidance") {
+    return {
+      replyStyle: "warm, clear, grounded, gently practical",
+      replyLength: "short to medium",
+      questionStyle: "one useful question if needed",
+      energy: "steady and confident",
+      avoid: "vague comforting only, overexplaining, sounding like a therapist",
+    };
+  }
+
+  if (detectedSupportNeed === "light_company") {
+    return {
+      replyStyle: "light, casual, easygoing, friendly",
+      replyLength: "short",
+      questionStyle: "optional light question",
+      energy: "light and relaxed",
+      avoid: "deep emotional framing, heavy concern, formal wording",
+    };
+  }
+
+  if (detectedTone === "good") {
+    return {
+      replyStyle: "warm, upbeat, natural, lightly playful",
+      replyLength: "short to medium",
+      questionStyle: "one natural follow-up if it fits",
+      energy: "slightly lively",
+      avoid: "overly intense empathy, robotic praise",
+    };
+  }
+
+  return {
+    replyStyle: "warm, natural, calm, conversational",
+    replyLength: "short",
+    questionStyle: "not every reply needs a question",
+    energy: "balanced",
+    avoid: "robotic empathy, overexplaining, stiff tone",
+  };
+}
+
+function pickModel(body) {
+  const tier = getUserTier(body);
+
+  if (tier === "ultra") {
+    return ULTRA_MODEL;
+  }
+
+  if (tier === "premium") {
+    return PREMIUM_MODEL;
+  }
+
+  return FREE_MODEL;
 }
 
 function getConversationSummary(memory) {
@@ -404,6 +486,19 @@ When the user is playful, teasing, or joking, Talkio may respond lightly in the 
 Talkio may occasionally add light humor or a relaxed comment when the moment fits.
 Avoid sarcasm, mockery, or exaggerated reactions.
 
+ADAPTIVE TONE
+
+Talkio should adapt its tone based on the user's current emotional state and support need.
+
+If the user seems low, be softer, calmer, and lighter.
+If the user needs guidance, be warm but clearer and more grounded.
+If the user seems bored or casual, be lighter and easier to talk to.
+If the user seems good or upbeat, be warmer and a little more lively.
+
+Do not make the adaptation obvious.
+Do not explain the tone shift.
+Just let it naturally shape the reply.
+
 HOW TALKIO RESPONDS
 
 Start by acknowledging what the user said or how it feels briefly.
@@ -477,6 +572,24 @@ Use emotional memory to:
 Do not overuse memory in every reply.
 Do not sound intrusive or overly analytical.
 
+RELATIONAL CONTINUITY
+
+Talkio should feel like an ongoing companion, not a stranger starting over each time.
+
+When relevant, gently refer back to unresolved emotional topics, recurring struggles, or things the user mentioned in recent conversations.
+
+Use this in a soft, natural way.
+
+Good examples:
+- "You sounded pretty drained the other night. Feeling any lighter today?"
+- "That same situation seems to be lingering a bit."
+- "You usually come by when your mind feels noisy. I'm here."
+
+Do not force a follow-up in every reply.
+Do not sound like you are monitoring the user.
+Do not list past facts mechanically.
+Use continuity to create warmth, care, and familiarity.
+
 SAFETY
 
 Do not ask for personal identifying information.
@@ -491,6 +604,133 @@ Your goal is to create conversations where users feel heard, comfortable, and sl
 Talkio is a calm, thoughtful conversational companion who listens well and responds naturally while keeping the emotional atmosphere supportive, relaxed, and human.
 `.trim();
 
+function detectSupportNeed(message) {
+  const text = (message || "").toLowerCase();
+
+  if (
+    text.includes("what should i do") ||
+    text.includes("help me decide") ||
+    text.includes("need advice") ||
+    text.includes("what do you think")
+  ) {
+    return "guidance";
+  }
+
+  if (
+    text.includes("bored") ||
+    text.includes("just bored") ||
+    text.includes("nothing much") ||
+    text.includes("just here")
+  ) {
+    return "light_company";
+  }
+
+  if (
+    text.includes("sad") ||
+    text.includes("hurt") ||
+    text.includes("tired") ||
+    text.includes("drained") ||
+    text.includes("stressed") ||
+    text.includes("anxious") ||
+    text.includes("lonely") ||
+    text.includes("heavy") ||
+    text.includes("cry") ||
+    text.includes("overthinking")
+  ) {
+    return "comfort";
+  }
+
+  return "chat";
+}
+
+function detectEmotionalTone(message) {
+  const text = (message || "").toLowerCase();
+
+  if (
+    text.includes("sad") ||
+    text.includes("hurt") ||
+    text.includes("lonely") ||
+    text.includes("cry") ||
+    text.includes("drained") ||
+    text.includes("stressed") ||
+    text.includes("anxious") ||
+    text.includes("heavy") ||
+    text.includes("overthinking")
+  ) {
+    return "low";
+  }
+
+  if (
+    text.includes("happy") ||
+    text.includes("excited") ||
+    text.includes("good day") ||
+    text.includes("better now") ||
+    text.includes("okay na")
+  ) {
+    return "good";
+  }
+
+  return "neutral";
+}
+
+function shouldCreateOpenLoop(message) {
+  const text = (message || "").trim().toLowerCase();
+
+  if (!text) return false;
+
+  let score = 0;
+
+  if (text.length >= 25) score += 1;
+
+  if (
+    text.includes("still") ||
+    text.includes("again") ||
+    text.includes("lately") ||
+    text.includes("recently") ||
+    text.includes("these days") ||
+    text.includes("for a while") ||
+    text.includes("anymore") ||
+    text.includes("can't stop") ||
+    text.includes("cant stop") ||
+    text.includes("don't know what to do") ||
+    text.includes("dont know what to do")
+  ) {
+    score += 2;
+  }
+
+  if (
+    text.includes("sad") ||
+    text.includes("hurt") ||
+    text.includes("tired") ||
+    text.includes("drained") ||
+    text.includes("stressed") ||
+    text.includes("anxious") ||
+    text.includes("lonely") ||
+    text.includes("upset") ||
+    text.includes("heavy") ||
+    text.includes("overthinking") ||
+    text.includes("cry") ||
+    text.includes("pain")
+  ) {
+    score += 2;
+  }
+
+  if (
+    text.includes("friend") ||
+    text.includes("family") ||
+    text.includes("partner") ||
+    text.includes("relationship") ||
+    text.includes("work") ||
+    text.includes("school") ||
+    text.includes("problem") ||
+    text.includes("issue") ||
+    text.includes("situation")
+  ) {
+    score += 1;
+  }
+
+  return score >= 3;
+}
 
 exports.generateTalkioReply = onRequest({ cors: true }, async (req, res) => {
   try {
@@ -570,13 +810,7 @@ exports.generateTalkioReply = onRequest({ cors: true }, async (req, res) => {
 
     const memoryBundle = await getTalkioMemoryBundle(db, uid, 5);
     const memorySummary = buildTalkioMemorySummary(memoryBundle);
-
-    const FINAL_TALKIO_SYSTEM_PROMPT = `
-    ${TALKIO_SYSTEM_PROMPT_V2}
-
-    ${memorySummary}
-    `.trim();
-
+   
     const ai = new GoogleGenAI({ apiKey });
 
     const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
@@ -619,6 +853,38 @@ const ua = getUa(req);
 const fp = sha1(`${ip}|${ua}`);
 
 const effectiveUserId = accountUserId || anonymousId || fp;
+
+const detectedSupportNeed = detectSupportNeed(safeMessage) || "chat";
+const detectedTone = detectEmotionalTone(safeMessage);
+
+const adaptiveTone = getAdaptiveToneProfile({
+  detectedTone,
+  detectedSupportNeed,
+});
+
+const adaptiveToneInstruction = `
+ADAPTIVE TONE FOR THIS REPLY
+
+Current emotional tone: ${detectedTone}
+Current support need: ${detectedSupportNeed}
+
+For this reply, use:
+- reply style: ${adaptiveTone.replyStyle}
+- reply length: ${adaptiveTone.replyLength}
+- question style: ${adaptiveTone.questionStyle}
+- energy: ${adaptiveTone.energy}
+
+Avoid:
+- ${adaptiveTone.avoid}
+`.trim();
+
+const FINAL_TALKIO_SYSTEM_PROMPT = `
+${TALKIO_SYSTEM_PROMPT_V2}
+
+${memorySummary}
+
+${adaptiveToneInstruction}
+`.trim();
 
 const memory =
   typeof body?.memory === "object" && body.memory ? body.memory : {};
@@ -746,29 +1012,115 @@ Talkio:
 
     const selectedModel = pickModel(body);
 
-const response = await ai.models.generateContent({
-  model: selectedModel,
-  contents: `${FINAL_TALKIO_SYSTEM_PROMPT}\n\n${prompt}`,
-});
+let reply = "";
+let modelUsed = selectedModel;
 
-let reply = response.text;
+try {
+  const response = await ai.models.generateContent({
+    model: selectedModel,
+    contents: `${FINAL_TALKIO_SYSTEM_PROMPT}\n\n${prompt}`,
+  });
+
+  reply = response.text;
+
+} catch (err) {
+  logger.warn("Primary model failed, attempting fallback", {
+    model: selectedModel,
+    error: err?.message || String(err),
+  });
+
+  try {
+    const fallbackModel =
+      selectedModel === FREE_MODEL
+        ? PREMIUM_MODEL
+        : selectedModel === PREMIUM_MODEL
+        ? ULTRA_MODEL
+        : PREMIUM_MODEL;
+
+    const response = await ai.models.generateContent({
+      model: fallbackModel,
+      contents: `${FINAL_TALKIO_SYSTEM_PROMPT}\n\n${prompt}`,
+    });
+
+    reply = response.text;
+    modelUsed = fallbackModel;
+
+  } catch (fallbackError) {
+    logger.error("Fallback model also failed", fallbackError);
+    throw fallbackError;
+  }
+}
 
 if (!reply || reply.trim().length === 0) {
   reply = "Something went wrong on my end. Please try sending your message again.";
 }
 
-try {
+  try {
   await updateTalkioUserProfile(db, uid, {
-    recentMoodTrend: "emotionally heavy lately",
-    comfortStyle: ["gentle humor", "light reassurance", "short replies"],
-    lastOpenLoop: message.slice(0, 200),
+    recentMoodTrend:
+      detectedTone === "low"
+        ? "emotionally heavier lately"
+        : detectedTone === "good"
+        ? "lighter recently"
+        : "mixed recently",
+
+    commonEmotionalStates:
+      detectedTone === "low"
+        ? ["low", "stressed"]
+        : detectedTone === "good"
+        ? ["good", "lighter"]
+        : ["neutral"],
+
+    supportStyle:
+      detectedSupportNeed === "comfort"
+        ? ["gentle reassurance", "soft check-ins", "light humor"]
+        : detectedSupportNeed === "guidance"
+        ? ["clear suggestions", "warm direction"]
+        : detectedSupportNeed === "light_company"
+        ? ["easy conversation", "light companionship"]
+        : ["warm conversation"],
+
+    recentRelationalContext: {
+      lastEmotionalTone: detectedTone,
+      lastSupportNeed: detectedSupportNeed,
+      lastConversationVibe:
+        detectedTone === "low"
+          ? "soft"
+          : detectedSupportNeed === "light_company"
+          ? "light"
+          : "normal",
+      lastCheckInWorthyTopic:
+        shouldCreateOpenLoop(safeMessage) ? safeMessage.slice(0, 80) : "",
+    },
+
+    lastOpenLoop: shouldCreateOpenLoop(safeMessage)
+      ? safeMessage.slice(0, 200)
+      : null,
+
+    openLoops: shouldCreateOpenLoop(safeMessage)
+      ? [
+          {
+            topic: detectedSupportNeed,
+            summary: safeMessage.slice(0, 200),
+            startedAt: Date.now(),
+            lastMentionedAt: Date.now(),
+            status: "open",
+            followUpStyle: "gentle",
+          },
+        ]
+      : [],
   });
 
   await updateEmotionDay(db, uid, today, {
-    dominantMood: "mixed",
-    moodScore: 0,
-    themes: ["general conversation"],
-    summary: `User said: ${message.slice(0, 200)}`,
+    dominantMood:
+      detectedTone === "low"
+        ? "sad"
+        : detectedTone === "good"
+        ? "good"
+        : "neutral",
+    moodScore: detectedTone === "low" ? -1 : detectedTone === "good" ? 1 : 0,
+    themes: [detectedSupportNeed],
+    summary: `User message: ${safeMessage.slice(0, 200)}`,
   });
 } catch (memoryWriteError) {
   logger.error("Memory write failed", {
@@ -778,7 +1130,7 @@ try {
     today,
   });
 }
-
+ 
 let updatedMemory = { ...memory };
 
 const completedMessageCount =
@@ -812,7 +1164,7 @@ if (shouldRefreshSummary(memory, completedMessageCount)) {
 
   res.status(200).json({
     reply,
-    model: selectedModel,
+    model: modelUsed,
     source: "firebase",
     memory: updatedMemory,
   });
@@ -825,8 +1177,9 @@ if (shouldRefreshSummary(memory, completedMessageCount)) {
 
   res.status(500).json({
     error: "Server error",
-    reply: "FIREBASE_CATCH_V1",
+    reply: "FIREBASE_CATCH_V2",
     details: error?.message || String(error),
+    stack: error?.stack || "",
   });
 }
 });

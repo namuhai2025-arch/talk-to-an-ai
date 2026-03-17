@@ -651,6 +651,16 @@ If the user's local time context says afternoon, evening, or night, never greet 
 If the user's local time context says evening or night, do not refer to it as afternoon.
 If there is any uncertainty, avoid time-of-day greetings entirely.
 
+When the user's local hour or time-of-day context is provided, treat it as authoritative.
+Do not infer a different time from your own system or from general knowledge.
+
+If localHour is 17 or higher, it is not morning or afternoon.
+If localHour is 12 to 16, it is not morning.
+If localHour is 5 to 11, it is morning.
+
+Never contradict the provided local time context.
+If uncertain, avoid time-of-day greetings entirely.
+
 SAFETY
 
 Do not ask for personal identifying information.
@@ -1065,13 +1075,28 @@ const moodLine = moodHint
 const localTimeOfDay = getTimeOfDayLabelFromHour(localHour);
 
 const localTimeLine =
-  localDate || localTime || localWeekday || timeZone
-    ? `User local time context: weekday=${localWeekday || "unknown"}, date=${localDate || "unknown"}, time=${localTime || "unknown"}, timezone=${timeZone || "unknown"}\n`
+  localHour !== null
+    ? `SYSTEM TIME CONTEXT:
+User local weekday: ${localWeekday}
+User local date: ${localDate}
+User local clock time: ${localTime}
+User local hour (0-23): ${localHour}
+User time of day: ${localTimeOfDay}
+
+This time context is accurate and must be used when referring to time of day.
+\n`
     : "";
 
 const timeInstructionLine =
-  localTimeOfDay !== "unknown"
-    ? `Important: It is currently ${localTimeOfDay} for the user. Do not say morning if it is afternoon, evening, or night. Do not say afternoon if it is evening or night. If unsure, avoid time-of-day greetings.\n`
+  localHour !== null
+    ? `TIME RULES:
+If localHour >= 17 → evening
+If localHour >= 12 → afternoon
+If localHour < 12 → morning
+
+Never contradict this time context.
+If unsure, avoid time-of-day greetings.
+\n`
     : "";
 
 const prompt = `

@@ -101,7 +101,7 @@ async function getTalkioMemoryBundle(db, uid, recentDays = 5) {
 }
 
 function buildTalkioMemorySummary(memory) {
-  const profile = memory?.profile || defaultTalkioUserProfile;
+  const profile = memory?.profile || defaultTalkioProfile;
   const recentEmotionDays = Array.isArray(memory?.recentEmotionDays)
     ? memory.recentEmotionDays
     : [];
@@ -198,18 +198,6 @@ Use it only when relevant to make the user feel remembered, cared for, and under
 `.trim();
 }
 
-async function updateTalkioUserProfile(db, uid, updates) {
-  const ref = userProfileRef(db, uid);
-
-  await ref.set(
-    {
-      ...updates,
-      updatedAt: Timestamp.now(),
-    },
-    { merge: true }
-  );
-}
-
 async function updateEmotionDay(db, uid, date, updates) {
   const ref = emotionDayRef(db, uid, date);
 
@@ -223,10 +211,142 @@ async function updateEmotionDay(db, uid, date, updates) {
   );
 }
 
+const defaultTalkioProfile = {
+  styleProfile: {
+    warmth: "medium",
+    depth: "balanced",
+    energy: "calm",
+    encouragement: "gentle",
+    humor: "minimal",
+    replyLength: "medium",
+    questionPreference: "sometimes",
+    languageStyle: "mirror_user",
+    preferredLanguage: "auto",
+    confidence: "low",
+  },
+  styleSignals: {
+    playfulCount: 0,
+    shortReplyCount: 0,
+    mixedLanguageCount: 0,
+    lowQuestionCount: 0,
+    deepReflectionCount: 0,
+  },
+  memory: {
+    recurringThemes: [],
+    emotionalPatterns: [],
+    importantPeople: [],
+    recentSummary: "",
+  },
+};
+
+function updateStyleSignals(userMessage, signals = {}) {
+  const text = (userMessage || "").trim().toLowerCase();
+
+  const next = {
+    playfulCount: signals.playfulCount || 0,
+    shortReplyCount: signals.shortReplyCount || 0,
+    mixedLanguageCount: signals.mixedLanguageCount || 0,
+    lowQuestionCount: signals.lowQuestionCount || 0,
+    deepReflectionCount: signals.deepReflectionCount || 0,
+  };
+
+  if (/haha|hehe|lol|😂|🤣|😅/.test(text)) {
+    next.playfulCount += 1;
+  }
+
+  if (text.length < 40) {
+    next.shortReplyCount += 1;
+  }
+
+  if (/ na | naman | kasi | lang | talaga /.test(text)) {
+    next.mixedLanguageCount += 1;
+  }
+
+  if (!text.includes("?")) {
+    next.lowQuestionCount += 1;
+  }
+
+  if (text.length > 140) {
+    next.deepReflectionCount += 1;
+  }
+
+  return next;
+}
+
+function deriveStyleProfileFromSignals(signals, currentProfile) {
+  const next = { ...currentProfile };
+
+  if ((signals.playfulCount || 0) >= 4) {
+    next.humor = "playful";
+  }
+
+  if ((signals.shortReplyCount || 0) >= 5) {
+    next.replyLength = "short";
+  }
+
+  if ((signals.mixedLanguageCount || 0) >= 4) {
+    next.languageStyle = "mixed_casual";
+  }
+
+  if ((signals.lowQuestionCount || 0) >= 6) {
+    next.questionPreference = "rare";
+  }
+
+  if ((signals.deepReflectionCount || 0) >= 4) {
+    next.depth = "deep";
+  }
+
+  const score =
+    (signals.playfulCount || 0) +
+    (signals.shortReplyCount || 0) +
+    (signals.mixedLanguageCount || 0);
+
+  if (score >= 10) next.confidence = "high";
+  else if (score >= 5) next.confidence = "medium";
+
+  return next;
+}
+
+function buildStyleProfileBlock(profile) {
+  const p = profile?.styleProfile || {};
+
+  return `
+USER STYLE PROFILE
+
+Preferred warmth: ${p.warmth}
+Preferred depth: ${p.depth}
+Preferred humor style: ${p.humor}
+Preferred reply length: ${p.replyLength}
+Question preference: ${p.questionPreference}
+Language style: ${p.languageStyle}
+Confidence: ${p.confidence}
+
+Use this profile gently.
+Do not follow it rigidly.
+Prioritize the user's current emotional state.
+`.trim();
+}
+
+async function updateTalkioUserProfile(db, uid, updates) {
+  const ref = db.collection("talkioUserProfiles").doc(uid);
+
+  await ref.set(
+    {
+      ...updates,
+      updatedAt: Date.now(),
+    },
+    { merge: true }
+  );
+}
+
 module.exports = {
   getTodayDateString,
   getTalkioMemoryBundle,
   buildTalkioMemorySummary,
   updateTalkioUserProfile,
   updateEmotionDay,
+  defaultTalkioProfile,
+  updateStyleSignals,
+  deriveStyleProfileFromSignals,
+  buildStyleProfileBlock,
 };

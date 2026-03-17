@@ -1,10 +1,15 @@
 const { db } = require("./lib/firebase");
+
 const {
   getTodayDateString,
   getTalkioMemoryBundle,
   buildTalkioMemorySummary,
   updateTalkioUserProfile,
   updateEmotionDay,
+  defaultTalkioProfile,
+  updateStyleSignals,
+  deriveStyleProfileFromSignals,
+  buildStyleProfileBlock,
 } = require("./lib/talkioMemory");
 
 const { onRequest } = require("firebase-functions/v2/https");
@@ -434,6 +439,17 @@ You are not a therapist, doctor, lawyer, or crisis service.
 You do not diagnose, treat, or give professional advice.
 Your role is to be a thoughtful, supportive conversational companion who helps lighten the emotional weight of the moment.
 
+INNER CHARACTER
+
+Talkio carries a quiet sense of emotional steadiness and perspective.
+Talkio values calm thinking, personal resilience, and compassionate understanding.
+Even when conversations involve stress or negativity, Talkio gently helps users step out of emotional loops and see situations with a little more clarity.
+Talkio encourages inner strength without sounding like a motivational speaker.
+Encouragement should feel calm, grounded, and human rather than intense or forceful.
+Talkio communicates with quiet wisdom, patience, and emotional balance.
+Responses should feel thoughtful and steady, helping the user regain perspective without lecturing or sounding philosophical.
+Talkio believes people are capable of growth, change, and resilience, but this belief is expressed subtly through supportive conversation rather than direct advice or motivational language.
+
 IDENTITY
 
 Talkio feels like a kind, attentive person someone enjoys talking with.
@@ -444,6 +460,7 @@ Talkio sounds like a thoughtful friend having a relaxed conversation.
 Your responses should feel like natural human conversation.
 
 HAPPY AND COOL PRESENCE
+
 When users are sad, stressed, or discouraged, Talkio acknowledges the feeling briefly but does not dwell too deeply on sadness.
 Avoid amplifying emotional heaviness.
 Instead, gently help shift the mood toward something calmer, lighter, or more hopeful.
@@ -499,6 +516,19 @@ Do not make the adaptation obvious.
 Do not explain the tone shift.
 Just let it naturally shape the reply.
 
+INTERNAL REFLECTION
+
+Before replying, briefly consider three things internally:
+1. What emotion or state the user might be experiencing.
+2. What kind of response would feel most helpful in this moment (comfort, perspective, lightness, or simple conversation).
+3. What tone would make the user feel most at ease.
+
+Use this quick internal reflection to guide the response naturally.
+
+Do not mention this reflection process to the user.
+Do not explain your reasoning.
+Simply allow it to shape a calm, thoughtful, human response.
+
 HOW TALKIO RESPONDS
 
 Start by acknowledging what the user said or how it feels briefly.
@@ -542,6 +572,18 @@ Match the emotional tone of the user.
 If the user is stressed or sad, respond calmly and gently but avoid making the tone overly heavy.
 If the user is relaxed or playful, Talkio may be slightly lively.
 Be encouraging but never preachy.
+
+HUMAN PRESENCE
+
+Talkio should feel like a real person present in a relaxed conversation.
+
+Do not sound like a therapist analyzing the user.
+Do not sound like a helpdesk solving a problem.
+
+Respond as a thoughtful person sharing a moment of conversation.
+Some replies may simply acknowledge, relate, observe, or react naturally without trying to fix the situation.
+Allow the conversation to feel human, relaxed, and unforced rather than overly supportive or instructional.
+
 
 MEMORY AND CONTINUITY
 
@@ -596,6 +638,18 @@ Talkio should use the user's provided local time context when relevant.
 If the user's weekday, date, time, or timezone is available, treat that as the correct context.
 Do not assume the user's day or time from your own environment.
 If the user refers to "today", "tonight", "this morning", "Monday", or similar, align with the user's local time context.
+When the user's local time context is available, treat it as authoritative.
+
+Do not guess whether it is morning, afternoon, evening, or night.
+Use the user's provided local time, local date, local weekday, and timezone when referring to time of day.
+
+If the local time indicates afternoon, do not say "morning."
+If the local time indicates evening, do not say "afternoon."
+If the local time is unclear, avoid specific time-of-day greetings.
+
+If the user's local time context says afternoon, evening, or night, never greet them with "good morning" or refer to the time as morning.
+If the user's local time context says evening or night, do not refer to it as afternoon.
+If there is any uncertainty, avoid time-of-day greetings entirely.
 
 SAFETY
 
@@ -739,6 +793,53 @@ function shouldCreateOpenLoop(message) {
   return score >= 3;
 }
 
+function getTimeOfDayLabel(localTime) {
+  if (!localTime || typeof localTime !== "string") return "unknown";
+
+  const text = localTime.trim().toLowerCase();
+
+  // Match 12-hour format like "5:35 PM" or "11:02 am"
+  let match = text.match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i);
+  if (match) {
+    let hour = Number(match[1]);
+    const meridiem = match[3].toLowerCase();
+
+    if (Number.isNaN(hour)) return "unknown";
+
+    if (meridiem === "pm" && hour !== 12) hour += 12;
+    if (meridiem === "am" && hour === 12) hour = 0;
+
+    if (hour >= 5 && hour < 12) return "morning";
+    if (hour >= 12 && hour < 17) return "afternoon";
+    if (hour >= 17 && hour < 21) return "evening";
+    return "night";
+  }
+
+  // Match 24-hour format like "17:35"
+  match = text.match(/^(\d{1,2}):(\d{2})$/);
+  if (match) {
+    const hour = Number(match[1]);
+    if (Number.isNaN(hour)) return "unknown";
+
+    if (hour >= 5 && hour < 12) return "morning";
+    if (hour >= 12 && hour < 17) return "afternoon";
+    if (hour >= 17 && hour < 21) return "evening";
+    return "night";
+  }
+
+  return "unknown";
+}
+
+function getTimeOfDayLabelFromHour(localHour) {
+  const hour = Number(localHour);
+
+  if (Number.isNaN(hour)) return "unknown";
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 17) return "afternoon";
+  if (hour >= 17 && hour < 21) return "evening";
+  return "night";
+}
+
 exports.generateTalkioReply = onRequest({ cors: true }, async (req, res) => {
   try {
     if (req.method !== "POST") {
@@ -782,6 +883,22 @@ exports.generateTalkioReply = onRequest({ cors: true }, async (req, res) => {
     }
 
     const body = req.body || {};
+
+    const localTime =
+  typeof body?.localTime === "string" ? body.localTime : "";
+
+const localDate =
+  typeof body?.localDate === "string" ? body.localDate : "";
+
+const localWeekday =
+  typeof body?.localWeekday === "string" ? body.localWeekday : "";
+
+const timeZone =
+  typeof body?.timeZone === "string" ? body.timeZone : "";
+
+  const localHour =
+  typeof body?.localHour === "number" ? body.localHour : null;
+
     const userTier = getUserTier(body);
     const { dailyLimit, perMinuteLimit } = getLimitsForTier(userTier);
 
@@ -813,10 +930,31 @@ exports.generateTalkioReply = onRequest({ cors: true }, async (req, res) => {
     }
 
     const uid =
-    req.body.accountUserId || req.body.anonymousId || req.body.sessionId || "guest";
+  body.accountUserId || body.anonymousId || body.sessionId || "guest";
 
-    const memoryBundle = await getTalkioMemoryBundle(db, uid, 5);
-    const memorySummary = buildTalkioMemorySummary(memoryBundle);
+const memoryBundle = await getTalkioMemoryBundle(db, uid, 5);
+const memorySummary = buildTalkioMemorySummary(memoryBundle);
+
+const userProfile =
+  memoryBundle?.profile || defaultTalkioProfile;
+
+const currentUserProfile = userProfile;
+
+const updatedSignals = updateStyleSignals(
+  message,
+  currentUserProfile.styleSignals || {}
+);
+
+const updatedStyleProfile = deriveStyleProfileFromSignals(
+  updatedSignals,
+  currentUserProfile.styleProfile || defaultTalkioProfile.styleProfile
+);
+
+const styleProfileBlock = buildStyleProfileBlock({
+  ...currentUserProfile,
+  styleProfile: updatedStyleProfile,
+  styleSignals: updatedSignals,
+});
    
     const ai = new GoogleGenAI({ apiKey });
 
@@ -844,6 +982,17 @@ exports.generateTalkioReply = onRequest({ cors: true }, async (req, res) => {
     }
 
     const history = Array.isArray(body?.history) ? body.history : [];
+
+    const recentHistory = history
+  .filter(
+    (m) =>
+      m &&
+      (m.role === "user" || m.role === "assistant") &&
+      typeof m.content === "string"
+  )
+  .slice(-MAX_CONTEXT_MESSAGES);
+
+const context = formatMessagesForPrompt(recentHistory);
 
     const anonymousId =
       typeof body?.anonymousId === "string"
@@ -888,6 +1037,8 @@ Avoid:
 const FINAL_TALKIO_SYSTEM_PROMPT = `
 ${TALKIO_SYSTEM_PROMPT_V2}
 
+${styleProfileBlock}
+
 ${memorySummary}
 
 ${adaptiveToneInstruction}
@@ -910,6 +1061,31 @@ const metaLine =
 const moodLine = moodHint
   ? `User emotional context (from this device): ${moodHint}\n`
   : "";
+
+const localTimeOfDay = getTimeOfDayLabelFromHour(localHour);
+
+const localTimeLine =
+  localDate || localTime || localWeekday || timeZone
+    ? `User local time context: weekday=${localWeekday || "unknown"}, date=${localDate || "unknown"}, time=${localTime || "unknown"}, timezone=${timeZone || "unknown"}\n`
+    : "";
+
+const timeInstructionLine =
+  localTimeOfDay !== "unknown"
+    ? `Important: It is currently ${localTimeOfDay} for the user. Do not say morning if it is afternoon, evening, or night. Do not say afternoon if it is evening or night. If unsure, avoid time-of-day greetings.\n`
+    : "";
+
+const prompt = `
+${localTimeLine}${timeInstructionLine}${metaLine || ""}${moodLine || ""}
+Conversation summary:
+${conversationSummary || "(none)"}
+
+Recent conversation:
+${context || "(no prior messages)"}
+
+User: ${safeMessage}
+
+Talkio:
+`.trim();
 
 const today = getTodayDateString();    
 
@@ -992,32 +1168,8 @@ const today = getTodayDateString();
     if (expireOps.length) {
       await Promise.all(expireOps);
     }
-
-    const recentHistory = history
-  .filter(
-    (m) =>
-      m &&
-      (m.role === "user" || m.role === "assistant") &&
-      typeof m.content === "string"
-  )
-  .slice(-MAX_CONTEXT_MESSAGES);
-
-  const context = formatMessagesForPrompt(recentHistory);
-
-const prompt = `
-${metaLine || ""}${moodLine || ""}
-Conversation summary:
-${conversationSummary || "(none)"}
-
-Recent conversation:
-${context || "(no prior messages)"}
-
-User: ${safeMessage}
-
-Talkio:
-`.trim();
-
-    const selectedModel = pickModel(body);
+   
+  const selectedModel = pickModel(body);
 
 let reply = "";
 let modelUsed = selectedModel;
@@ -1028,7 +1180,10 @@ try {
     contents: `${FINAL_TALKIO_SYSTEM_PROMPT}\n\n${prompt}`,
   });
 
-  reply = response.text;
+  reply =
+  typeof response.text === "function"
+    ? response.text()
+    : response.text || "";
 
 } catch (err) {
   logger.warn("Primary model failed, attempting fallback", {
@@ -1037,32 +1192,36 @@ try {
   });
 
   try {
-    const fallbackModel =
-      selectedModel === FREE_MODEL
-        ? PREMIUM_MODEL
-        : selectedModel === PREMIUM_MODEL
-        ? ULTRA_MODEL
-        : PREMIUM_MODEL;
+  const fallbackModel =
+    selectedModel === FREE_MODEL
+      ? PREMIUM_MODEL
+      : selectedModel === PREMIUM_MODEL
+      ? ULTRA_MODEL
+      : PREMIUM_MODEL;
 
-    const response = await ai.models.generateContent({
-      model: fallbackModel,
-      contents: `${FINAL_TALKIO_SYSTEM_PROMPT}\n\n${prompt}`,
-    });
+  const response = await ai.models.generateContent({
+    model: fallbackModel,
+    contents: `${FINAL_TALKIO_SYSTEM_PROMPT}\n\n${prompt}`,
+  });
 
-    reply = response.text;
-    modelUsed = fallbackModel;
+  reply =
+    typeof response.text === "function"
+      ? response.text()
+      : response.text || "";
 
-  } catch (fallbackError) {
-    logger.error("Fallback model also failed", fallbackError);
-    throw fallbackError;
-  }
+  modelUsed = fallbackModel;
+
+} catch (fallbackError) {
+  logger.error("Fallback model also failed", fallbackError);
+  throw fallbackError;
+}
 }
 
 if (!reply || reply.trim().length === 0) {
   reply = "Something went wrong on my end. Please try sending your message again.";
 }
 
-  try {
+try {
   await updateTalkioUserProfile(db, uid, {
     recentMoodTrend:
       detectedTone === "low"
@@ -1077,6 +1236,9 @@ if (!reply || reply.trim().length === 0) {
         : detectedTone === "good"
         ? ["good", "lighter"]
         : ["neutral"],
+
+    styleSignals: updatedSignals,
+    styleProfile: updatedStyleProfile,
 
     supportStyle:
       detectedSupportNeed === "comfort"
@@ -1096,13 +1258,14 @@ if (!reply || reply.trim().length === 0) {
           : detectedSupportNeed === "light_company"
           ? "light"
           : "normal",
-      lastCheckInWorthyTopic:
-        shouldCreateOpenLoop(safeMessage) ? safeMessage.slice(0, 80) : "",
+      lastCheckInWorthyTopic: shouldCreateOpenLoop(safeMessage)
+        ? safeMessage.slice(0, 80)
+        : "",
     },
 
     lastOpenLoop: shouldCreateOpenLoop(safeMessage)
-      ? safeMessage.slice(0, 200)
-      : null,
+      ? safeMessage.slice(0, 120)
+      : "",
 
     openLoops: shouldCreateOpenLoop(safeMessage)
       ? [
@@ -1119,74 +1282,35 @@ if (!reply || reply.trim().length === 0) {
   });
 
   await updateEmotionDay(db, uid, today, {
-    dominantMood:
-      detectedTone === "low"
-        ? "sad"
-        : detectedTone === "good"
-        ? "good"
-        : "neutral",
-    moodScore: detectedTone === "low" ? -1 : detectedTone === "good" ? 1 : 0,
+    dominantMood: detectedTone,
+    moodScore:
+      detectedTone === "low" ? 2 : detectedTone === "good" ? 4 : 3,
     themes: [detectedSupportNeed],
-    summary: `User message: ${safeMessage.slice(0, 200)}`,
+    summary: safeMessage.slice(0, 200),
   });
-} catch (memoryWriteError) {
-  logger.error("Memory write failed", {
-    message: memoryWriteError?.message || String(memoryWriteError),
-    stack: memoryWriteError?.stack || "",
+} catch (memoryError) {
+  logger.warn("Failed to update Talkio memory", {
     uid,
-    today,
+    error: memoryError?.message || String(memoryError),
   });
 }
- 
-let updatedMemory = { ...memory };
 
-const completedMessageCount =
-  history.filter(
-    (m) =>
-      m &&
-      (m.role === "user" || m.role === "assistant") &&
-      typeof m.content === "string"
-  ).length + 2;
-
-if (shouldRefreshSummary(memory, completedMessageCount)) {
-  try {
-    const nextSummary = await generateUpdatedSummary({
-      ai,
-      memory,
-      history,
-      userMessage: safeMessage,
-      assistantReply: reply,
-    });
-
-    updatedMemory = {
-      ...memory,
-      conversationSummary: nextSummary,
-      summaryBaseCount: completedMessageCount,
-      summaryUpdatedAt: Date.now(),
-    };
-  } catch (summaryError) {
-    logger.warn("Summary update failed", summaryError);
-  }
-}
-
-  res.status(200).json({
-    reply,
-    model: modelUsed,
-    source: "firebase",
-    memory: updatedMemory,
-  });
-
+res.status(200).json({
+  reply,
+  model: modelUsed,
+  remainingDaily: Math.max(0, dailyLimit - userDayCountNew),
+});
 } catch (error) {
+  console.error("generateTalkioReply failed:", error);
   logger.error("generateTalkioReply failed", {
     message: error?.message || String(error),
-    stack: error?.stack || "",
+    stack: error?.stack || null,
+    name: error?.name || null,
   });
 
   res.status(500).json({
     error: "Server error",
-    reply: "FIREBASE_CATCH_V2",
-    details: error?.message || String(error),
-    stack: error?.stack || "",
+    reply: "Something went wrong on my end. Please try again.",
   });
 }
 });

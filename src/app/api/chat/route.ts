@@ -100,6 +100,7 @@ export async function POST(req: Request) {
       localDate,
       localWeekday,
       timeZone,
+      localHour: now.getHours(),
     };
 
     const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {

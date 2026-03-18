@@ -340,24 +340,26 @@ const res = await fetch("/api/chat", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   credentials: "include",
-  body: JSON.stringify({
-    anonymousId,
-    accountUserId: null,
-    message: text,
-    history: next,
-    memory: nextMemory,
 
-    localTime: now.toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    }),
-    localDate: now.toLocaleDateString(),
-    localWeekday: now.toLocaleDateString(undefined, {
-      weekday: "long",
-    }),
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    localHour: now.getHours(),
+  body: JSON.stringify({
+  anonymousId,
+  accountUserId: null,
+  message: text,
+  history: next,
+  memory: nextMemory,
+  selectedMode: "architect",
+
+  localTime: now.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
   }),
+  localDate: now.toLocaleDateString(),
+  localWeekday: now.toLocaleDateString(undefined, {
+    weekday: "long",
+  }),
+  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  localHour: now.getHours(),
+}),
   signal: controller.signal,
 });
 

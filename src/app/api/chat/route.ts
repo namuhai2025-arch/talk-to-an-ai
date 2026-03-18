@@ -80,7 +80,13 @@ const timeZone =
 const localHour =
   typeof body?.localHour === "number" ? body.localHour : null;
 
-    const payload = {
+  const selectedMode =
+  typeof body?.selectedMode === "string" ? body.selectedMode : "standard";
+
+    const selectedMode =
+  typeof body?.selectedMode === "string" ? body.selectedMode : "standard";
+
+const payload = {
   message,
   history: Array.isArray(body?.history) ? body.history : [],
   sessionId,
@@ -94,12 +100,13 @@ const localHour =
     typeof body?.userTier === "string" && body.userTier.trim()
       ? body.userTier
       : "free",
+  selectedMode,
 
   localTime,
   localDate,
   localWeekday,
   timeZone,
-  localHour
+  localHour,
 };
 
     const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {

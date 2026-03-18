@@ -65,43 +65,42 @@ export async function POST(req: Request) {
       );
     }
 
-    const now = new Date();
+    const localTime =
+  typeof body?.localTime === "string" ? body.localTime : "";
 
-    const localTime = now.toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    });
+const localDate =
+  typeof body?.localDate === "string" ? body.localDate : "";
 
-    const localDate = now.toLocaleDateString();
+const localWeekday =
+  typeof body?.localWeekday === "string" ? body.localWeekday : "";
 
-    const localWeekday = now.toLocaleDateString(undefined, {
-      weekday: "long",
-    });
+const timeZone =
+  typeof body?.timeZone === "string" ? body.timeZone : "unknown";
 
-    const timeZone =
-      Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown";
+const localHour =
+  typeof body?.localHour === "number" ? body.localHour : null;
 
     const payload = {
-      message,
-      history: Array.isArray(body?.history) ? body.history : [],
-      sessionId,
-      anonymousId:
-        typeof body?.anonymousId === "string" ? body.anonymousId : null,
-      accountUserId:
-        typeof body?.accountUserId === "string" ? body.accountUserId : null,
-      memory:
-        body?.memory && typeof body.memory === "object" ? body.memory : {},
-      userTier:
-        typeof body?.userTier === "string" && body.userTier.trim()
-          ? body.userTier
-          : "free",
+  message,
+  history: Array.isArray(body?.history) ? body.history : [],
+  sessionId,
+  anonymousId:
+    typeof body?.anonymousId === "string" ? body.anonymousId : null,
+  accountUserId:
+    typeof body?.accountUserId === "string" ? body.accountUserId : null,
+  memory:
+    body?.memory && typeof body.memory === "object" ? body.memory : {},
+  userTier:
+    typeof body?.userTier === "string" && body.userTier.trim()
+      ? body.userTier
+      : "free",
 
-      localTime,
-      localDate,
-      localWeekday,
-      timeZone,
-      localHour: now.getHours(),
-    };
+  localTime,
+  localDate,
+  localWeekday,
+  timeZone,
+  localHour
+};
 
     const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
       method: "POST",

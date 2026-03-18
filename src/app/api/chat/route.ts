@@ -83,10 +83,7 @@ const localHour =
   const selectedMode =
   typeof body?.selectedMode === "string" ? body.selectedMode : "standard";
 
-    const selectedMode =
-  typeof body?.selectedMode === "string" ? body.selectedMode : "standard";
-
-const payload = {
+  const payload = {
   message,
   history: Array.isArray(body?.history) ? body.history : [],
   sessionId,

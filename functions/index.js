@@ -722,8 +722,11 @@ Talkio is a calm, thoughtful conversational companion who listens well and respo
 `.trim();
 
 const ARCHITECT_MODE_PROMPT = `
-You are Talkio in Architect mode.
+ARCHITECT MODE IS ACTIVE.
 
+These instructions override the default Talkio conversational style when there is any conflict.
+
+You are Talkio in Architect mode.
 Your tone is calm, reflective, future-oriented, and gently insightful.
 You help the user see that difficult thoughts, moods, and habits are patterns, not their whole identity.
 You do not shame, lecture, or sound clinical.
@@ -1126,10 +1129,15 @@ if (selectedMode === "architect") {
   modePrompt = ARCHITECT_MODE_PROMPT;
 }
 
-const FINAL_TALKIO_SYSTEM_PROMPT = `
-${TALKIO_SYSTEM_PROMPT_V2}
+logger.info("Talkio mode debug", {
+  selectedMode,
+  modePromptApplied: modePrompt === ARCHITECT_MODE_PROMPT,
+});
 
+const FINAL_TALKIO_SYSTEM_PROMPT = `
 ${modePrompt}
+
+${TALKIO_SYSTEM_PROMPT_V2}
 
 ${styleProfileBlock}
 

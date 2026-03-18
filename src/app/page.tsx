@@ -359,7 +359,7 @@ const res = await fetch("/api/chat", {
   }),
   timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   localHour: now.getHours(),
-}),
+})
   signal: controller.signal,
 });
 

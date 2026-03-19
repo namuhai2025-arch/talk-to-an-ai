@@ -346,8 +346,8 @@ const res = await fetch("/api/chat", {
     message: text,
     history: next,
     memory: nextMemory,
-    selectedMode: "architect",
-
+    selectedMode: "auto",
+    
     localTime: now.toLocaleTimeString([], {
       hour: "numeric",
       minute: "2-digit",

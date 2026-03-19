@@ -81,7 +81,7 @@ const localHour =
   typeof body?.localHour === "number" ? body.localHour : null;
 
   const selectedMode =
-  typeof body?.selectedMode === "string" ? body.selectedMode : "standard";
+  typeof body?.selectedMode === "string" ? body.selectedMode : "auto";
 
   const payload = {
   message,
@@ -98,13 +98,15 @@ const localHour =
       ? body.userTier
       : "free",
   selectedMode,
-
   localTime,
   localDate,
   localWeekday,
   timeZone,
   localHour,
 };
+
+  console.log("Route selectedMode body:", body?.selectedMode);
+  console.log("Route selectedMode payload:", payload.selectedMode);
 
     const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
       method: "POST",

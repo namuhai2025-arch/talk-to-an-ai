@@ -346,7 +346,7 @@ const res = await fetch("/api/chat", {
     message: text,
     history: next,
     memory: nextMemory,
-    selectedMode: "auto",
+    selectedMode: "stoic", 
     
     localTime: now.toLocaleTimeString([], {
       hour: "numeric",
@@ -387,9 +387,9 @@ const res = await fetch("/api/chat", {
         clearTimeout(typingTimer);
         setShowTyping(false);
 
-        if (msg.toLowerCase().includes("free limit")) {
-          setIsLimitReached(true);
-        }
+        if (res.status === 429) {
+  setIsLimitReached(true);
+}
 
         setMessages((prev) =>
           [

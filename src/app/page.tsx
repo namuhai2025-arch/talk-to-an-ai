@@ -113,6 +113,7 @@ function inferMood(text: string): string | "" {
   }
 
   return "";
+}
 
 function getHumanReplyDelay(mood: string, replyText: string) {
   if (replyText.length < 40) {
@@ -187,7 +188,6 @@ function getTypingDotClass(mood: string) {
   }
 }
 
-}
   export default function Page() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -464,41 +464,41 @@ const res = await fetch("/api/chat", {
         saveMemoryUpdate(data.memory);
       }
 
-      if (res.status === 429) {
-  const msg = String(
-    data?.reply ||
-      "You're sending messages too fast. Please wait a moment and try again."
-  );
+            if (res.status === 429) {
+        const msg = String(
+          data?.reply ||
+            "You're sending messages too fast. Please wait a moment and try again."
+        );
 
-  const delay = getHumanReplyDelay(mood, msg);
-  await new Promise((r) => setTimeout(r, delay));
+        const delay = getHumanReplyDelay(mood, msg);
+        await new Promise((r) => setTimeout(r, delay));
 
-  clearTimeout(typingTimer);
+        clearTimeout(typingTimer);
 
-  if (!typingShown) {
-    await new Promise((r) =>
-      setTimeout(r, typingBehavior.minTypingVisible)
-    );
-  }
+        if (!typingShown) {
+          await new Promise((r) =>
+            setTimeout(r, typingBehavior.minTypingVisible)
+          );
+        }
 
-  setShowTyping(false);
-  setIsTyping(false);
-  setTypingMood("default");
-  setIsLimitReached(true);
+        setShowTyping(false);
+        setIsTyping(false);
+        setTypingMood("default");
+        setIsLimitReached(true);
 
-  setMessages((prev) =>
-    [
-      ...prev,
-      {
-        role: "assistant" as const,
-        content: msg,
-        timestamp: Date.now(),
-      },
-    ].slice(-MAX_MESSAGES)
-  );
+        setMessages((prev) =>
+          [
+            ...prev,
+            {
+              role: "assistant" as const,
+              content: msg,
+              timestamp: Date.now(),
+            },
+          ].slice(-MAX_MESSAGES)
+        );
 
-  return;
-}
+        return;
+      }
 
       const replyText =
         typeof data?.reply === "string" && data.reply.trim()
@@ -506,20 +506,19 @@ const res = await fetch("/api/chat", {
           : "Something went wrong on my end. Please try again.";
 
       const delay = getHumanReplyDelay(mood, replyText);
-
       await new Promise((r) => setTimeout(r, delay));
 
       clearTimeout(typingTimer);
 
-if (!typingShown) {
-  await new Promise((r) =>
-    setTimeout(r, typingBehavior.minTypingVisible)
-  );
-}
+      if (!typingShown) {
+        await new Promise((r) =>
+          setTimeout(r, typingBehavior.minTypingVisible)
+        );
+      }
 
-setShowTyping(false);
-setIsTyping(false);
-setTypingMood("default");
+      setShowTyping(false);
+      setIsTyping(false);
+      setTypingMood("default");
 
       setMessages((prev) =>
         [
@@ -531,40 +530,36 @@ setTypingMood("default");
           },
         ].slice(-MAX_MESSAGES)
       );
-
     } catch (error) {
-  const friendlyMessage =
-    error instanceof DOMException && error.name === "AbortError"
-      ? "The request took too long. Please try again."
-      : "Something went wrong on my end. Please try again.";
+      const friendlyMessage =
+        error instanceof DOMException && error.name === "AbortError"
+          ? "The request took too long. Please try again."
+          : "Something went wrong on my end. Please try again.";
 
-  clearTimeout(typingTimer);
-  setShowTyping(false);
-  setIsTyping(false);
-  setTypingMood("default");
+      clearTimeout(typingTimer);
+      setShowTyping(false);
+      setIsTyping(false);
+      setTypingMood("default");
 
-  setMessages((prev) =>
-    [
-      ...prev,
-      {
-        role: "assistant" as const,
-        content: friendlyMessage,
-        timestamp: Date.now(),
-      },
-    ].slice(-MAX_MESSAGES)
-  );
-}
-
+      setMessages((prev) =>
+        [
+          ...prev,
+          {
+            role: "assistant" as const,
+            content: friendlyMessage,
+            timestamp: Date.now(),
+          },
+        ].slice(-MAX_MESSAGES)
+      );
     } finally {
-  clearTimeout(timeoutId);
-  clearTimeout(typingTimer);
-  setShowTyping(false);
-  setIsTyping(false);
-  setLoading(false);
-  setTypingMood("default");
-  inputRef.current?.focus();
-}
-
+      clearTimeout(timeoutId);
+      clearTimeout(typingTimer);
+      setShowTyping(false);
+      setIsTyping(false);
+      setTypingMood("default");
+      setLoading(false);
+      inputRef.current?.focus();
+    }
   }
 
  return (

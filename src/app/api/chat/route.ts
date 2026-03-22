@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import crypto from "crypto";
 import { corsEmpty, corsJson } from "./_cors";
 
+
 const FIREBASE_FUNCTION_URL =
   "https://generatetalkioreply-ndury54xsq-uc.a.run.app";
 

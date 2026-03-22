@@ -1,4 +1,5 @@
 const { db } = require("./lib/firebase");
+const { markUserMessage, markTalkioReply } = require("./presence");
 
 const {
   getTodayDateString,
@@ -454,15 +455,19 @@ const timeZone =
     const uid =
   body.accountUserId || body.anonymousId || body.sessionId || "guest";
 
-const memoryBundle = await getTalkioMemoryBundle(db, uid, 5);
-const memorySummary = buildTalkioMemorySummary(memoryBundle);
+  await markUserMessage(uid);
+  
+  console.log("🔥 markUserMessage called for:", uid);
 
-const userProfile =
+  const memoryBundle = await getTalkioMemoryBundle(db, uid, 5);
+  const memorySummary = buildTalkioMemorySummary(memoryBundle);
+
+  const userProfile =
   memoryBundle?.profile || defaultTalkioProfile;
 
-const currentUserProfile = userProfile;
+  const currentUserProfile = userProfile;
 
-const updatedSignals = updateStyleSignals(
+  const updatedSignals = updateStyleSignals(
   message,
   currentUserProfile.styleSignals || {}
 );
@@ -841,6 +846,8 @@ try {
     error: memoryError?.message || String(memoryError),
   });
 }
+
+await markTalkioReply(uid);
 
 res.status(200).json({
   reply,

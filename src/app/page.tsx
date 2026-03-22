@@ -113,9 +113,74 @@ function inferMood(text: string): string | "" {
   }
 
   return "";
+
 }
 
-export default function Page() {
+function getHumanReplyDelay(mood: string, replyText: string) {
+  if (replyText.length < 40) {
+    return 400 + Math.random() * 200;
+  }
+
+  const baseByMood: Record<string, number> = {
+    sad: 1650,
+    anxious: 1500,
+    stressed: 1450,
+    angry: 1300,
+    tired: 1250,
+    okay: 850,
+    happy: 700,
+  };
+
+  const base = baseByMood[mood] ?? 950;
+  const lengthFactor = Math.min(replyText.length * 6, 900);
+  const randomness = Math.random() * 250;
+
+  return base + lengthFactor + randomness;
+}
+
+function getTypingBehavior(mood: string) {
+  switch (mood) {
+    case "sad":
+    case "anxious":
+    case "stressed":
+      return {
+        typingAppearDelay: 220,
+        minTypingVisible: 420,
+        hesitationDelay: 220,
+      };
+
+    case "happy":
+    case "okay":
+      return {
+        typingAppearDelay: 180,
+        minTypingVisible: 180,
+        hesitationDelay: 0,
+      };
+
+    case "angry":
+      return {
+        typingAppearDelay: 160,
+        minTypingVisible: 220,
+        hesitationDelay: 60,
+      };
+
+    default:
+      return {
+        typingAppearDelay: 200,
+        minTypingVisible: 260,
+        hesitationDelay: 100,
+      };
+  }
+}
+
+  const base = baseByMood[mood] ?? 950;
+  const lengthFactor = Math.min(replyText.length * 6, 900);
+  const randomness = Math.random() * 250;
+
+  return base + lengthFactor + randomness;
+}
+
+  export default function Page() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -139,6 +204,9 @@ export default function Page() {
   const [messages, setMessages] = useState<ChatMessage[]>([buildGreeting("")]);
 
   const greeting = buildGreeting(displayName);
+
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingMood, setTypingMood] = useState("default");
 
   function saveMemoryUpdate(data: Partial<TalkioMemory>) {
     setMemory((prev) => {
@@ -173,6 +241,24 @@ export default function Page() {
       }
     });
   }
+  function getTypingDotClass(mood: string) {
+  switch (mood) {
+    case "sad":
+    case "anxious":
+    case "stressed":
+      return "animate-bounce [animation-duration:1.2s]";
+
+    case "happy":
+    case "okay":
+      return "animate-bounce [animation-duration:0.6s]";
+
+    case "angry":
+      return "animate-bounce [animation-duration:0.75s]";
+
+    default:
+      return "animate-bounce [animation-duration:0.9s]";
+  }
+} 
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -295,11 +381,23 @@ export default function Page() {
     if (!text || loading || crisisLock || isLimitReached) return;
 
     setLoading(true);
-    setShowTyping(false);
+setShowTyping(false);
+setIsTyping(true);
 
-    const typingTimer = setTimeout(() => {
-      setShowTyping(true);
-    }, 300);
+const mood = inferMood(text);
+setTypingMood(mood || "default");
+
+const typingBehavior = getTypingBehavior(mood);
+
+const thinkingDelay =
+  220 + Math.random() * 180 + typingBehavior.hesitationDelay;
+
+let typingShown = false;
+
+const typingTimer = setTimeout(() => {
+  typingShown = true;
+  setShowTyping(true);
+}, typingBehavior.typingAppearDelay);
 
     if (!overrideText) {
       setInput("");
@@ -323,7 +421,6 @@ export default function Page() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    const mood = inferMood(text);
     const nextMemory: TalkioMemory = mood
       ? { ...memory, mood, updatedAt: Date.now() }
       : memory;
@@ -332,8 +429,10 @@ export default function Page() {
       setMemory(nextMemory);
       persistMemory(nextMemory);
     }
-
+    
     try {
+      
+      await new Promise((r) => setTimeout(r, thinkingDelay));
       const now = new Date();
 
 const res = await fetch("/api/chat", {
@@ -376,46 +475,62 @@ const res = await fetch("/api/chat", {
       }
 
       if (res.status === 429) {
-        const msg = String(
-          data?.reply ||
-            "You're sending messages too fast. Please wait a moment and try again."
-        );
+  const msg = String(
+    data?.reply ||
+      "You're sending messages too fast. Please wait a moment and try again."
+  );
 
-        const delay = 600 + Math.random() * 300;
-        await new Promise((r) => setTimeout(r, delay));
+  const delay = getHumanReplyDelay(mood, msg);
+  await new Promise((r) => setTimeout(r, delay));
 
-        clearTimeout(typingTimer);
-        setShowTyping(false);
+  clearTimeout(typingTimer);
 
-        if (res.status === 429) {
+  if (!typingShown) {
+    await new Promise((r) =>
+      setTimeout(r, typingBehavior.minTypingVisible)
+    );
+  }
+
+  setShowTyping(false);
+  setIsTyping(false);
+  setTypingMood("default");
+
   setIsLimitReached(true);
-}
 
-        setMessages((prev) =>
-          [
-            ...prev,
-            {
-              role: "assistant" as const,
-              content: msg,
-              timestamp: Date.now(),
-            },
-          ].slice(-MAX_MESSAGES)
-        );
-        return;
-      }
+  setMessages((prev) =>
+    [
+      ...prev,
+      {
+        role: "assistant" as const,
+        content: msg,
+        timestamp: Date.now(),
+      },
+    ].slice(-MAX_MESSAGES)
+  );
+
+  return;
+}
 
       const replyText =
         typeof data?.reply === "string" && data.reply.trim()
           ? data.reply
           : "Something went wrong on my end. Please try again.";
 
-      const delay =
-        600 + Math.min(replyText.length * 12, 1400) + Math.random() * 300;
+      const delay = getHumanReplyDelay(mood, replyText);
 
       await new Promise((r) => setTimeout(r, delay));
 
       clearTimeout(typingTimer);
-      setShowTyping(false);
+
+if (!typingShown) {
+  await new Promise((r) =>
+    setTimeout(r, typingBehavior.minTypingVisible)
+  );
+}
+
+setShowTyping(false);
+setIsTyping(false);
+setTypingMood("default");
 
       setMessages((prev) =>
         [
@@ -427,32 +542,39 @@ const res = await fetch("/api/chat", {
           },
         ].slice(-MAX_MESSAGES)
       );
+
     } catch (error) {
-      const friendlyMessage =
-        error instanceof DOMException && error.name === "AbortError"
-          ? "The request took too long. Please try again."
-          : "Something went wrong on my end. Please try again.";
+  const friendlyMessage =
+    error instanceof DOMException && error.name === "AbortError"
+      ? "The request took too long. Please try again."
+      : "Something went wrong on my end. Please try again.";
 
-      clearTimeout(typingTimer);
-      setShowTyping(false);
+  clearTimeout(typingTimer);
+  setShowTyping(false);
+  setIsTyping(false);
+  setTypingMood("default");
 
-      setMessages((prev) =>
-        [
-          ...prev,
-          {
-            role: "assistant" as const,
-            content: friendlyMessage,
-            timestamp: Date.now(),
-          },
-        ].slice(-MAX_MESSAGES)
-      );
+  setMessages((prev) =>
+    [
+      ...prev,
+      {
+        role: "assistant" as const,
+        content: friendlyMessage,
+        timestamp: Date.now(),
+      },
+    ].slice(-MAX_MESSAGES)
+  );
+}
+
     } finally {
-      clearTimeout(timeoutId);
-      clearTimeout(typingTimer);
-      setShowTyping(false);
-      setLoading(false);
-      inputRef.current?.focus();
-    }
+  clearTimeout(timeoutId);
+  clearTimeout(typingTimer);
+  setShowTyping(false);
+  setIsTyping(false);
+  setLoading(false);
+  setTypingMood("default");
+  inputRef.current?.focus();
+}
   }
 
  return (
@@ -638,14 +760,26 @@ const res = await fetch("/api/chat", {
         })}
 
         {showTyping && (
-          <div className="mr-auto max-w-[82%] rounded-[22px] rounded-bl-xl border border-stone-200 bg-stone-100 px-4 py-3 shadow-sm">
-            <div className="flex gap-1">
-              <span className="h-2 w-2 rounded-full bg-stone-400 animate-bounce [animation-delay:-0.3s]" />
-              <span className="h-2 w-2 rounded-full bg-stone-400 animate-bounce [animation-delay:-0.15s]" />
-              <span className="h-2 w-2 rounded-full bg-stone-400 animate-bounce" />
-            </div>
-          </div>
-        )}
+  <div className="mr-auto max-w-[82%] rounded-[22px] rounded-bl-xl border border-stone-200 bg-stone-100 px-4 py-3 shadow-sm">
+    <div className="flex gap-1">
+      <span
+        className={`h-2 w-2 rounded-full bg-stone-400 ${getTypingDotClass(
+          typingMood
+        )} [animation-delay:-0.3s]`}
+      />
+      <span
+        className={`h-2 w-2 rounded-full bg-stone-400 ${getTypingDotClass(
+          typingMood
+        )} [animation-delay:-0.15s]`}
+      />
+      <span
+        className={`h-2 w-2 rounded-full bg-stone-400 ${getTypingDotClass(
+          typingMood
+        )}`}
+      />
+    </div>
+  </div>
+)}
 
         {messages.length === 1 && !loading && !crisisLock && (
           <div className="flex flex-wrap gap-2 pt-1">

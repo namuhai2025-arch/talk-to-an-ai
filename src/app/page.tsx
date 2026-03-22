@@ -377,7 +377,7 @@ setIsTyping(true);
 const mood = inferMood(text);
 setTypingMood(mood || "default");
 
-const typingBehavior = getTypingBehavior(mood);
+const typingBehavior = getTypingBehavior(mood || "default");
 
 const thinkingDelay =
   220 + Math.random() * 180 + typingBehavior.hesitationDelay;

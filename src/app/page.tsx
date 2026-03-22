@@ -114,8 +114,6 @@ function inferMood(text: string): string | "" {
 
   return "";
 
-}
-
 function getHumanReplyDelay(mood: string, replyText: string) {
   if (replyText.length < 40) {
     return 400 + Math.random() * 200;
@@ -173,13 +171,23 @@ function getTypingBehavior(mood: string) {
   }
 }
 
-  const base = baseByMood[mood] ?? 950;
-  const lengthFactor = Math.min(replyText.length * 6, 900);
-  const randomness = Math.random() * 250;
-
-  return base + lengthFactor + randomness;
+function getTypingDotClass(mood: string) {
+  switch (mood) {
+    case "sad":
+    case "anxious":
+    case "stressed":
+      return "animate-bounce [animation-duration:1.2s]";
+    case "happy":
+    case "okay":
+      return "animate-bounce [animation-duration:0.6s]";
+    case "angry":
+      return "animate-bounce [animation-duration:0.75s]";
+    default:
+      return "animate-bounce [animation-duration:0.9s]";
+  }
 }
 
+}
   export default function Page() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -241,24 +249,6 @@ function getTypingBehavior(mood: string) {
       }
     });
   }
-  function getTypingDotClass(mood: string) {
-  switch (mood) {
-    case "sad":
-    case "anxious":
-    case "stressed":
-      return "animate-bounce [animation-duration:1.2s]";
-
-    case "happy":
-    case "okay":
-      return "animate-bounce [animation-duration:0.6s]";
-
-    case "angry":
-      return "animate-bounce [animation-duration:0.75s]";
-
-    default:
-      return "animate-bounce [animation-duration:0.9s]";
-  }
-} 
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -494,7 +484,6 @@ const res = await fetch("/api/chat", {
   setShowTyping(false);
   setIsTyping(false);
   setTypingMood("default");
-
   setIsLimitReached(true);
 
   setMessages((prev) =>
@@ -575,6 +564,7 @@ setTypingMood("default");
   setTypingMood("default");
   inputRef.current?.focus();
 }
+
   }
 
  return (

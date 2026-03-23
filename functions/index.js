@@ -1,3 +1,26 @@
+const admin = require("firebase-admin");
+const { upsertMemoryWithReplacement } = require("./memory_lite/update");
+const {
+  detectMemoryCommand,
+  getUserMemorySummary,
+  forgetMatchingMemory,
+  clearAllMemory,
+} = require("./memory_lite/commands");
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+const { ensureUserBase, markMemoryUsed } = require("./memory_lite/helpers");
+const { extractMemoryCandidates } = require("./memory_lite/extractors");
+const { getRelevantMemory, formatMemoryForPrompt } = require("./memory_lite/retrieval");
+const {
+  getConversationSummary,
+  setConversationSummary,
+  buildSimpleRollingSummary,
+} = require("./memory_lite/summary");
+const { decayMemoryScores, pruneMemory } = require("./memory_lite/maintenance");
+
 const { db } = require("./lib/firebase");
 const { markUserMessage, markTalkioReply } = require("./presence");
 
@@ -138,7 +161,7 @@ function getLimitsForTier(userTier) {
     };
   }
 
-function getConversationSummary(memory) {
+function getLegacyConversationSummary (memory) {
   const raw =
     typeof memory?.conversationSummary === "string"
       ? memory.conversationSummary
@@ -521,9 +544,23 @@ COMMUNICATION RULES
 - Allow slight imperfection in phrasing.
 - Occasionally use softer, less structured sentences.
 - Avoid over-completing responses.
+- Use everyday language.
+- If a sentence sounds formal, simplify it.
+- Speak like a normal person thinking out loud, not instructing.
+- Do not try to “wrap everything up” neatly.
+- Do not force a takeaway in every reply.
 
-Do not try to “wrap everything up” neatly.
-Do not force a takeaway in every reply.
+Avoid formal or corporate language.
+
+Do not use phrases like:
+- "I hear your frustration"
+- "It seems like"
+- "Perhaps you could"
+- "It is understandable that"
+
+Use simple, everyday language instead.
+
+Speak like a normal person reacting naturally, not analyzing or advising.
 
 Sometimes it is better to leave the user with:
 - a clear observation
@@ -700,6 +737,7 @@ const timeZone =
 
     const message =
       typeof body?.message === "string" ? body.message.trim() : "";
+      const memoryCommand = detectMemoryCommand(message);
 
     if (!message) {
       res
@@ -734,7 +772,7 @@ const timeZone =
 
   const memoryBundle = await getTalkioMemoryBundle(db, uid, 5);
   const memorySummary = buildTalkioMemorySummary(memoryBundle);
-
+ 
   const userProfile =
   memoryBundle?.profile || defaultTalkioProfile;
 
@@ -792,7 +830,7 @@ const styleProfileBlock = buildStyleProfileBlock({
   )
   .slice(-MAX_CONTEXT_MESSAGES);
 
-const context = "";
+const context = formatMessagesForPrompt(recentHistory);
 
     const anonymousId =
       typeof body?.anonymousId === "string"
@@ -820,6 +858,38 @@ logger.info("Talkio prompt debug", {
   usingStoicCoreOnly: true,
 });
 
+await ensureUserBase(uid, "Asia/Manila");
+if (memoryCommand?.type === "view_memory") {
+  const summary = await getUserMemorySummary(uid);
+  res.status(200).json({ reply: summary });
+  return;
+}
+
+if (memoryCommand?.type === "forget_memory") {
+  const result = await forgetMatchingMemory(uid, memoryCommand.target);
+  res.status(200).json({
+    reply: result.found
+      ? "Okay. I’ve forgotten that."
+      : "I couldn’t find anything matching that.",
+  });
+  return;
+}
+
+if (memoryCommand?.type === "clear_memory") {
+  const count = await clearAllMemory(uid);
+  res.status(200).json({
+    reply:
+      count > 0
+        ? "Okay. I cleared the memory I was holding onto."
+        : "There wasn’t anything stored to clear.",
+  });
+  return;
+}
+
+const relevantMemories = await getRelevantMemory(uid, message);
+const previousSummary = await getConversationSummary(uid);
+const memoryBlock = formatMemoryForPrompt(relevantMemories, previousSummary);
+
 const FINAL_TALKIO_SYSTEM_PROMPT = `
 ${CORE_IDENTITY_PROMPT}
 `.trim();
@@ -831,7 +901,7 @@ const moodHintRaw = typeof memory?.mood === "string" ? memory.mood : "";
 const moodHint = moodHintRaw.slice(0, 120);
 const intentHint = typeof memory?.intent === "string" ? memory.intent : "";
 
-const conversationSummary = "";
+const conversationSummary = previousSummary;
 
 const metaLine =
   moodHint || intentHint
@@ -880,7 +950,7 @@ ${FINAL_TALKIO_SYSTEM_PROMPT}
 - Be direct, but still human and natural
 - Do not sound robotic, clipped, or mechanical
 
-${localTimeLine}${timeInstructionLine}${metaLine || ""}${moodLine || ""}
+${memoryBlock ? memoryBlock + "\n\n" : ""}${localTimeLine}${timeInstructionLine}${metaLine || ""}${moodLine || ""}
 Conversation summary:
 ${conversationSummary || "(none)"}
 
@@ -1075,6 +1145,26 @@ if (!reply || reply.trim().length === 0) {
   reply = "Something went wrong on my end. Please try sending your message again.";
 }
 
+if (memoryCommand?.type !== "do_not_save") {
+  const candidates = extractMemoryCandidates(message);
+
+  for (const candidate of candidates) {
+    await upsertMemoryWithReplacement(uid, candidate);
+  }
+}
+
+for (const memory of relevantMemories) {
+  await markMemoryUsed(uid, memory.id);
+}
+
+const nextSummary = buildSimpleRollingSummary({
+  previousSummary,
+  userMessage: message,
+  assistantReply: reply,
+});
+
+await setConversationSummary(uid, nextSummary);
+
 try {
   await updateTalkioUserProfile(db, uid, {
     recentMoodTrend: "mixed recently",
@@ -1148,3 +1238,5 @@ res.status(200).json({
   });
 }
 });
+exports.decayMemoryScores = decayMemoryScores;
+exports.pruneMemory = pruneMemory;

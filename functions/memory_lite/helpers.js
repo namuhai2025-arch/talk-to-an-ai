@@ -1,4 +1,4 @@
-// functions/memory/helpers.js
+// functions/memory_lite/helpers.js
 
 const admin = require("firebase-admin");
 const {
@@ -7,7 +7,13 @@ const {
 } = require("./config");
 const { MEMORY_STATUS } = require("./types");
 
-const db = admin.firestore();
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+function getDb() {
+  return admin.firestore();
+}
 
 function clamp(n, min = 0, max = 100) {
   return Math.max(min, Math.min(max, n));
@@ -26,7 +32,7 @@ function buildMemoryId(type, key) {
 }
 
 function userDoc(userId) {
-  return db.collection("users").doc(userId);
+  return getDb().collection("users").doc(userId);
 }
 
 function memoryCollection(userId) {
@@ -134,7 +140,7 @@ async function markMemoryUsed(userId, memoryId) {
 }
 
 module.exports = {
-  db,
+  getDb,
   clamp,
   sanitizeKey,
   buildMemoryId,

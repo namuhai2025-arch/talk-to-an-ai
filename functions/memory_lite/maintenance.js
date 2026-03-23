@@ -7,10 +7,12 @@ const {
   MAX_ACTIVE_MEMORY_ITEMS,
 } = require("./config");
 const {
-  db,
+  getDb,
   memoryMetaDoc,
   clamp,
 } = require("./helpers");
+
+const db = getDb();
 
 function daysBetween(nowMs, pastMs) {
   return Math.max(0, (nowMs - pastMs) / (1000 * 60 * 60 * 24));

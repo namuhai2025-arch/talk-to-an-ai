@@ -1,115 +1,83 @@
 export const runtime = "nodejs";
 
-import crypto from "crypto";
 import { corsEmpty, corsJson } from "./_cors";
-
 
 const FIREBASE_FUNCTION_URL =
   "https://generatetalkioreply-ndury54xsq-uc.a.run.app";
-
-function parseCookie(req: Request, name: string) {
-  const cookie = req.headers.get("cookie") || "";
-  const parts = cookie.split(";").map((p) => p.trim());
-  const found = parts.find((p) => p.startsWith(name + "="));
-  return found ? decodeURIComponent(found.split("=").slice(1).join("=")) : "";
-}
-
-function newSessionId() {
-  return crypto.randomBytes(16).toString("hex");
-}
-
-function buildSetCookie(sessionId: string) {
-  const maxAge = 60 * 60 * 24 * 180;
-  const isProd = process.env.NODE_ENV === "production";
-
-  return `talkio_sid=${encodeURIComponent(
-    sessionId
-  )}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax${
-    isProd ? "; Secure" : ""
-  }`;
-}
 
 export async function OPTIONS(req: Request) {
   return corsEmpty(204, req);
 }
 
 export async function POST(req: Request) {
-
   const reply = (data: any, status = 200) => {
-    const headers: Record<string, string> = {};
-
-    if (setCookieHeader) headers["Set-Cookie"] = setCookieHeader;
-
-    return corsJson(data, { status, headers, req });
+    return corsJson(data, { status, req });
   };
 
   try {
     const body = await req.json().catch(() => ({}));
 
-const userId =
-  typeof body?.userId === "string" ? body.userId.trim() : "";
+    const userId =
+      typeof body?.userId === "string" ? body.userId.trim() : "";
 
-const message =
-  typeof body?.message === "string" ? body.message.trim() : "";
+    const message =
+      typeof body?.message === "string" ? body.message.trim() : "";
 
-if (!userId) {
-  return reply(
-    {
-      error: "Missing userId",
-      reply: "User identity is required.",
-    },
-    400
-  );
-}
+    if (!userId) {
+      return reply(
+        {
+          error: "Missing userId",
+          reply: "User identity is required.",
+        },
+        400
+      );
+    }
 
-if (!message) {
-  return reply(
-    {
-      error: "Invalid message",
-      reply: "Please type a message.",
-    },
-    400
-  );
-}
+    if (!message) {
+      return reply(
+        {
+          error: "Invalid message",
+          reply: "Please type a message.",
+        },
+        400
+      );
+    }
 
-const localTime =
-  typeof body?.localTime === "string" ? body.localTime : "";
+    const localTime =
+      typeof body?.localTime === "string" ? body.localTime : "";
 
-const localDate =
-  typeof body?.localDate === "string" ? body.localDate : "";
+    const localDate =
+      typeof body?.localDate === "string" ? body.localDate : "";
 
-const localWeekday =
-  typeof body?.localWeekday === "string" ? body.localWeekday : "";
+    const localWeekday =
+      typeof body?.localWeekday === "string" ? body.localWeekday : "";
 
-const timeZone =
-  typeof body?.timeZone === "string" ? body.timeZone : "unknown";
+    const timeZone =
+      typeof body?.timeZone === "string" ? body.timeZone : "unknown";
 
-const localHour =
-  typeof body?.localHour === "number" ? body.localHour : null;
+    const localHour =
+      typeof body?.localHour === "number" ? body.localHour : null;
 
-const selectedMode =
-  typeof body?.selectedMode === "string" ? body.selectedMode : "auto";
+    const selectedMode =
+      typeof body?.selectedMode === "string" ? body.selectedMode : "auto";
 
-const payload = {
-  userId,
-  message,
-  history: Array.isArray(body?.history) ? body.history : [],
-  memory:
-    body?.memory && typeof body.memory === "object" ? body.memory : {},
-  userTier:
-    typeof body?.userTier === "string" && body.userTier.trim()
-      ? body.userTier
-      : "free",
-  selectedMode,
-  localTime,
-  localDate,
-  localWeekday,
-  timeZone,
-  localHour,
-};
-
-  console.log("Route selectedMode body:", body?.selectedMode);
-  console.log("Route selectedMode payload:", payload.selectedMode);
+    const payload = {
+      userId,
+      message,
+      history: Array.isArray(body?.history) ? body.history : [],
+      memory:
+        body?.memory && typeof body.memory === "object" ? body.memory : {},
+      userTier:
+        typeof body?.userTier === "string" && body.userTier.trim()
+          ? body.userTier
+          : "free",
+      selectedMode,
+      localTime,
+      localDate,
+      localWeekday,
+      timeZone,
+      localHour,
+    };
 
     const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
       method: "POST",
@@ -122,8 +90,6 @@ const payload = {
     });
 
     const rawText = await firebaseRes.text();
-    console.log("Firebase status:", firebaseRes.status);
-    console.log("Firebase raw response:", rawText);
 
     let data: any;
 

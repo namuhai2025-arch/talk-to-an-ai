@@ -34,13 +34,6 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const cookieSid = parseCookie(req, "talkio_sid");
-  const sessionId = cookieSid || newSessionId();
-  let setCookieHeader: string | null = null;
-
-  if (!cookieSid) {
-    setCookieHeader = buildSetCookie(sessionId);
-  }
 
   const reply = (data: any, status = 200) => {
     const headers: Record<string, string> = {};
@@ -53,20 +46,33 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
 
-    const message =
-      typeof body?.message === "string" ? body.message.trim() : "";
+const userId =
+  typeof body?.userId === "string" ? body.userId.trim() : "";
 
-    if (!message) {
-      return reply(
-        {
-          error: "Invalid message",
-          reply: "Please type a message.",
-        },
-        400
-      );
-    }
+const message =
+  typeof body?.message === "string" ? body.message.trim() : "";
 
-    const localTime =
+if (!userId) {
+  return reply(
+    {
+      error: "Missing userId",
+      reply: "User identity is required.",
+    },
+    400
+  );
+}
+
+if (!message) {
+  return reply(
+    {
+      error: "Invalid message",
+      reply: "Please type a message.",
+    },
+    400
+  );
+}
+
+const localTime =
   typeof body?.localTime === "string" ? body.localTime : "";
 
 const localDate =
@@ -81,17 +87,13 @@ const timeZone =
 const localHour =
   typeof body?.localHour === "number" ? body.localHour : null;
 
-  const selectedMode =
+const selectedMode =
   typeof body?.selectedMode === "string" ? body.selectedMode : "auto";
 
-  const payload = {
+const payload = {
+  userId,
   message,
   history: Array.isArray(body?.history) ? body.history : [],
-  sessionId,
-  anonymousId:
-    typeof body?.anonymousId === "string" ? body.anonymousId : null,
-  accountUserId:
-    typeof body?.accountUserId === "string" ? body.accountUserId : null,
   memory:
     body?.memory && typeof body.memory === "object" ? body.memory : {},
   userTier:

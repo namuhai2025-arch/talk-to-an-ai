@@ -42,16 +42,14 @@ dependencies {
     implementation project(':capacitor-cordova-android-plugins')
 
     implementation "com.android.billingclient:billing:8.3.0"
+
+    implementation platform('com.google.firebase:firebase-bom:33.10.0')
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'com.google.firebase:firebase-firestore'
+    implementation 'com.google.firebase:firebase-auth'
 }
 
 apply from: 'capacitor.build.gradle'
+apply plugin: 'com.google.gms.google-services'
 
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
-}
 

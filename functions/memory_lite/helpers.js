@@ -139,6 +139,16 @@ async function markMemoryUsed(userId, memoryId) {
   );
 }
 
+async function archiveMemory(userId, memoryId) {
+  await memoryDoc(userId, memoryId).set(
+    {
+      status: "archived",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
 module.exports = {
   getDb,
   clamp,
@@ -153,4 +163,5 @@ module.exports = {
   upsertMemory,
   getActiveMemories,
   markMemoryUsed,
+  archiveMemory,
 };

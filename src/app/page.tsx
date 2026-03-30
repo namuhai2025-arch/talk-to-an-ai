@@ -3,8 +3,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
 const MAX_MESSAGES = 30;
-const MEMORY_KEY = "talkio_memory_v1";
-const LOCAL_SESSION_KEY = "talkio_local_session_id_v1";
 
 type ChatRole = "user" | "assistant";
 
@@ -24,53 +22,40 @@ type TalkioMemory = {
 
 const EMOJIS = ["🙂", "😊", "😄", "😅", "😂", "🥲", "😍", "😢", "😡", "👍", "❤️", "✨"];
 
-function loadMemory(): TalkioMemory {
+function loadMemory(userId: string): TalkioMemory {
   if (typeof window === "undefined") return {};
   try {
-    return JSON.parse(localStorage.getItem(MEMORY_KEY) || "{}") || {};
+    return (
+      JSON.parse(localStorage.getItem(`talkio_memory_${userId}`) || "{}") || {}
+    );
   } catch {
     return {};
   }
 }
 
-function persistMemory(mem: TalkioMemory) {
+function persistMemory(userId: string, mem: TalkioMemory) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(MEMORY_KEY, JSON.stringify(mem));
+    localStorage.setItem(`talkio_memory_${userId}`, JSON.stringify(mem));
   } catch {}
 }
 
-function getOrCreateAnonymousId() {
+function getOrCreateUserId(): string {
   if (typeof window === "undefined") return "";
 
-  let id = localStorage.getItem("talkio_anonymous_id");
+  const key = "talkio_user_id";
 
-  if (!id) {
-    id =
-      "anon_" +
-      Math.random().toString(36).slice(2) +
-      Date.now().toString(36);
+  let id = localStorage.getItem(key);
+  if (id) return id;
 
-    localStorage.setItem("talkio_anonymous_id", id);
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    id = crypto.randomUUID();
+  } else {
+    id = "uid_" + Date.now() + "_" + Math.random().toString(36).slice(2);
   }
 
+  localStorage.setItem(key, id);
   return id;
-}
-
-function getOrCreateLocalSessionId() {
-  try {
-    let id = localStorage.getItem(LOCAL_SESSION_KEY);
-    if (!id) {
-      id =
-        (globalThis.crypto?.randomUUID?.() ??
-          `sid_${Date.now()}_${Math.random()}`) + "";
-      localStorage.setItem(LOCAL_SESSION_KEY, id);
-    }
-    return id;
-  } catch {
-    (globalThis as any).__talkio_local_sid ??= `sid_${Date.now()}_${Math.random()}`;
-    return (globalThis as any).__talkio_local_sid as string;
-  }
 }
 
 function buildConversationTitle(messages: ChatMessage[]): string {
@@ -117,7 +102,7 @@ function inferMood(text: string): string | "" {
 
 function getHumanReplyDelay(mood: string, replyText: string) {
   if (replyText.length < 40) {
-    return 400 + Math.random() * 200;
+    return 650 + Math.random() * 250;
   }
 
   const baseByMood: Record<string, number> = {
@@ -143,31 +128,31 @@ function getTypingBehavior(mood: string) {
     case "anxious":
     case "stressed":
       return {
-        typingAppearDelay: 220,
-        minTypingVisible: 420,
-        hesitationDelay: 220,
+        typingAppearDelay: 550,
+        minTypingVisible: 700,
+        hesitationDelay: 250,
       };
 
     case "happy":
     case "okay":
       return {
-        typingAppearDelay: 180,
-        minTypingVisible: 180,
-        hesitationDelay: 0,
+        typingAppearDelay: 420,
+        minTypingVisible: 420,
+        hesitationDelay: 80,
       };
 
     case "angry":
       return {
-        typingAppearDelay: 160,
-        minTypingVisible: 220,
-        hesitationDelay: 60,
+        typingAppearDelay: 380,
+        minTypingVisible: 420,
+        hesitationDelay: 100,
       };
 
     default:
       return {
-        typingAppearDelay: 200,
-        minTypingVisible: 260,
-        hesitationDelay: 100,
+        typingAppearDelay: 450,
+        minTypingVisible: 520,
+        hesitationDelay: 140,
       };
   }
 }
@@ -205,7 +190,6 @@ function getTypingDotClass(mood: string) {
   const [conversationTitle, setConversationTitle] = useState("New conversation");
 
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [anonymousId, setAnonymousId] = useState("");
   const [showTyping, setShowTyping] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
@@ -216,20 +200,28 @@ function getTypingDotClass(mood: string) {
   const [isTyping, setIsTyping] = useState(false);
   const [typingMood, setTypingMood] = useState("default");
 
+  const userIdRef = useRef<string>("");
+
+if (!userIdRef.current) {
+  userIdRef.current = getOrCreateUserId();
+}
+
+const userId = userIdRef.current;
+
   function saveMemoryUpdate(data: Partial<TalkioMemory>) {
-    setMemory((prev) => {
-      const next = { ...prev, ...data };
-      persistMemory(next);
-      return next;
-    });
-  }
+  setMemory((prev) => {
+    const next = { ...prev, ...data };
+    persistMemory(userId, next);
+    return next;
+  });
+}
 
   function saveNickname(name: string) {
     const clean = name.trim();
     setDisplayName(clean);
 
     if (typeof window !== "undefined") {
-      localStorage.setItem("talkio_nickname", clean);
+      localStorage.setItem(`talkio_nickname_${userId}`, clean);
     }
   }
 
@@ -251,29 +243,23 @@ function getTypingDotClass(mood: string) {
   }
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+  if (typeof window === "undefined") return;
 
-    const savedNick = localStorage.getItem("talkio_nickname") || "";
-    if (savedNick.trim()) {
-      setDisplayName(savedNick);
-      setShowNamePrompt(false);
-    } else {
-      setShowNamePrompt(true);
-    }
-  }, []);
+  const savedNick = localStorage.getItem(`talkio_nickname_${userId}`) || "";
 
-  useEffect(() => {
-    setMemory(loadMemory());
-  }, []);
+  if (savedNick.trim()) {
+    setDisplayName(savedNick);
+    setShowNamePrompt(false);
+  } else {
+    setShowNamePrompt(true);
+  }
+}, [userId]);
 
-  useEffect(() => {
-    setAnonymousId(getOrCreateAnonymousId());
-  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const localSid = getOrCreateLocalSessionId();
+    const localSid = userId;
     const saved = localStorage.getItem(`talkio_messages_${localSid}`);
 
     if (!saved) {
@@ -305,25 +291,25 @@ function getTypingDotClass(mood: string) {
     } catch {
       setMessages([buildGreeting(displayName)]);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const localSid = getOrCreateLocalSessionId();
+    const localSid = userId;
     const savedTitle = localStorage.getItem(`talkio_title_${localSid}`);
 
     if (savedTitle) {
       setConversationTitle(savedTitle);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+  if (typeof window === "undefined") return;
 
-    const localSid = getOrCreateLocalSessionId();
-    localStorage.setItem(`talkio_title_${localSid}`, conversationTitle);
-  }, [conversationTitle]);
+  const localSid = userId;
+  localStorage.setItem(`talkio_title_${localSid}`, conversationTitle);
+}, [conversationTitle, userId]);
 
   useEffect(() => {
     setMessages((prev) => {
@@ -342,10 +328,11 @@ function getTypingDotClass(mood: string) {
   }, [displayName]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const localSid = getOrCreateLocalSessionId();
-    localStorage.setItem(`talkio_messages_${localSid}`, JSON.stringify(messages));
-  }, [messages]);
+  if (typeof window === "undefined") return;
+
+  const localSid = userId;
+  localStorage.setItem(`talkio_messages_${localSid}`, JSON.stringify(messages));
+}, [messages, userId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -380,7 +367,7 @@ setTypingMood(mood || "default");
 const typingBehavior = getTypingBehavior(mood || "default");
 
 const thinkingDelay =
-  220 + Math.random() * 180 + typingBehavior.hesitationDelay;
+  320 + Math.random() * 220 + typingBehavior.hesitationDelay;
 
 let typingShown = false;
 
@@ -417,7 +404,7 @@ const typingTimer = setTimeout(() => {
 
     if (mood) {
       setMemory(nextMemory);
-      persistMemory(nextMemory);
+      persistMemory(userId, nextMemory);
     }
     
     try {
@@ -430,13 +417,12 @@ const res = await fetch("/api/chat", {
   headers: { "Content-Type": "application/json" },
   credentials: "include",
   body: JSON.stringify({
-    anonymousId,
-    accountUserId: null,
+    userId: userId,
     message: text,
     history: next,
     memory: nextMemory,
-    selectedMode: "stoic", 
-    
+    selectedMode: "stoic",
+   
     localTime: now.toLocaleTimeString([], {
       hour: "numeric",
       minute: "2-digit",
@@ -869,7 +855,7 @@ const res = await fetch("/api/chat", {
             disabled={loading || crisisLock || isLimitReached || !input.trim()}
             className="h-[50px] rounded-full bg-emerald-400 px-5 text-white hover:bg-emerald-500 disabled:opacity-50"
           >
-            {loading ? "..." : "Send"}
+            Send
           </button>
         </form>
       </div>

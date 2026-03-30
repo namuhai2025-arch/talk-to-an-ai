@@ -37,6 +37,25 @@ function scoreMemory(memory, message) {
     score += 3;
   }
 
+  if (
+  memory.type === "reminder_followup" &&
+  (
+    msg.includes("today") ||
+    msg.includes("later") ||
+    msg.includes("done") ||
+    msg.includes("finished") ||
+    msg.includes("forgot") ||
+    msg.includes("how") ||
+    msg.includes("what happened") ||
+    msg.includes("update") ||
+    msg.includes("i'm back") ||
+    msg.includes("hello") ||
+    msg.includes("hi")
+  )
+) {
+  score += 6;
+}
+
   return score;
 }
 
@@ -56,8 +75,12 @@ function formatMemoryForPrompt(memories, summary) {
   if (memories && memories.length) {
     lines.push("Relevant user memory:");
     for (const m of memories) {
-      lines.push(`- ${m.type}: ${m.value}`);
-    }
+  if (m.type === "reminder_followup") {
+    lines.push(`- follow-up cue: ${m.value}. If natural, briefly ask how it went.`);
+  } else {
+    lines.push(`- ${m.type}: ${m.value}`);
+  }
+}
   }
 
   if (summary && String(summary).trim()) {

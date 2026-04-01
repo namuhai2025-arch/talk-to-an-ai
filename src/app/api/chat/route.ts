@@ -27,13 +27,65 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json().catch(() => ({}));
+    const rawBody = await req.text();
+    let body: any = {};
 
-    const nickname =
-      typeof body?.nickname === "string" ? body.nickname.trim().slice(0, 40) : "";
+    try {
+      body = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+      console.error("chat route invalid JSON body:", rawBody);
+      body = {};
+    }
 
-    const timezone =
-      typeof body?.timezone === "string" ? body.timezone.trim().slice(0, 80) : "";
+    console.log("chat route parsed body:", body);
+
+    const message =
+      typeof body?.message === "string" ? body.message.trim() : "";
+
+    if (!message) {
+      return reply(
+        {
+          error: "Invalid message",
+          reply: "Please type a message.",
+        },
+        400
+      );
+    }
+
+    const localTime =
+      typeof body?.localTime === "string" ? body.localTime : "";
+
+    const localDate =
+      typeof body?.localDate === "string" ? body.localDate : "";
+
+    const localWeekday =
+      typeof body?.localWeekday === "string" ? body.localWeekday : "";
+
+    const timeZone =
+      typeof body?.timeZone === "string" ? body.timeZone : "unknown";
+
+    const localHour =
+      typeof body?.localHour === "number" ? body.localHour : null;
+
+    const selectedMode =
+      typeof body?.selectedMode === "string" ? body.selectedMode : "auto";
+
+    const payload = {
+      message,
+      history: Array.isArray(body?.history) ? body.history : [],
+      memory:
+        body?.memory && typeof body.memory === "object" ? body.memory : {},
+      userTier:
+        typeof body?.userTier === "string" && body.userTier.trim()
+          ? body.userTier
+          : "free",
+      selectedMode,
+      localTime,
+      localDate,
+      localWeekday,
+      timeZone,
+      localHour,
+    };
 
     const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
       method: "POST",
@@ -42,42 +94,46 @@ export async function POST(req: Request) {
         Authorization: authHeader,
         "x-talkio-app-key": process.env.INTERNAL_APP_KEY || "",
       },
-      body: JSON.stringify({
-        nickname,
-        timezone,
-      }),
+      body: JSON.stringify(payload),
       cache: "no-store",
     });
 
     const rawText = await firebaseRes.text();
 
-    let data: any = {};
+    let data: any;
     try {
       data = rawText ? JSON.parse(rawText) : {};
     } catch {
-      data = {};
+      data = {
+        error: "Invalid upstream response",
+        reply: "Something went wrong on my end. Please try again.",
+        upstreamStatus: firebaseRes.status,
+        upstreamBody: rawText,
+      };
     }
 
     if (!firebaseRes.ok) {
       return reply(
         {
-          error: data?.error || "Profile upstream error",
-          reply:
-            data?.reply ||
-            "Something went wrong while saving your profile.",
+          error: data?.error || "Firebase upstream error",
+          reply: data?.reply || "Firebase error",
+          upstreamStatus: firebaseRes.status,
+          upstreamBody: rawText,
+          firebaseDetails: data?.details || null,
         },
         firebaseRes.status
       );
     }
 
-    return reply(data, 200);
+    return reply(data, firebaseRes.status);
   } catch (error: any) {
-    console.error("Profile route error:", error);
+    console.error("Chat route error:", error);
 
     return reply(
       {
         error: "Server error",
-        reply: "Something went wrong while saving your profile.",
+        reply: "ROUTE_CATCH_V2",
+        details: error?.message || String(error),
       },
       500
     );

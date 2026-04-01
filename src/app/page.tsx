@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { signInAnonymously } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { getFirebaseAuth } from "@/lib/firebase";
 
 const MAX_MESSAGES = 30;
 

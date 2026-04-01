@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { getAuth, signInAnonymously } from "firebase/auth";
+
+import { signInAnonymously } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 const MAX_MESSAGES = 30;
 
@@ -221,7 +223,6 @@ function getTypingDotClass(mood: string) {
   }
 
   useEffect(() => {
-  const auth = getAuth();
 
   async function ensureUser() {
     if (!auth.currentUser) {
@@ -376,23 +377,20 @@ const res = await fetch("/api/bootstrap", {
   }
 
   async function sendMessage(overrideText?: string) {
+  if (!auth.currentUser) {
+    await signInAnonymously(auth);
+  }
 
-    const auth = getAuth();
+  const user = auth.currentUser;
 
-if (!auth.currentUser) {
-  await signInAnonymously(auth);
-}
+  if (!user) {
+    throw new Error("Auth failed to initialize");
+  }
 
-const user = auth.currentUser;
+  const token = await user.getIdToken();
 
-if (!user) {
-  throw new Error("Auth failed to initialize");
-}
-
-const token = await user.getIdToken();
-
-    const text = (overrideText ?? input).trim();
-    if (!text || loading || crisisLock || isLimitReached) return;
+  const text = (overrideText ?? input).trim();
+  if (!text || loading || crisisLock || isLimitReached) return;
 
     setLoading(true);
 setShowTyping(false);
@@ -585,8 +583,6 @@ const res = await fetch("/api/chat", {
   }
 
   async function saveProfileToBackend(profile: { nickname?: string; timezone?: string }) {
-  const auth = getAuth();
-
   if (!auth.currentUser) {
     await signInAnonymously(auth);
   }

@@ -197,6 +197,12 @@ function getTypingDotClass(mood: string) {
 
   const [serverProfile, setServerProfile] = useState<BootstrapProfile>({});
   const [serverSummary, setServerSummary] = useState("");
+
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+  setMounted(true);
+}, []);
   
   function saveMemoryUpdate(data: Partial<TalkioMemory>) {
   setMemory((prev) => {
@@ -225,6 +231,8 @@ function getTypingDotClass(mood: string) {
   useEffect(() => {
 
   async function ensureUser() {
+    const auth = getFirebaseAuth();
+
     if (!auth.currentUser) {
       await signInAnonymously(auth);
     }
@@ -377,6 +385,8 @@ const res = await fetch("/api/bootstrap", {
   }
 
   async function sendMessage(overrideText?: string) {
+  const auth = getFirebaseAuth();
+  
   if (!auth.currentUser) {
     await signInAnonymously(auth);
   }
@@ -583,6 +593,8 @@ const res = await fetch("/api/chat", {
   }
 
   async function saveProfileToBackend(profile: { nickname?: string; timezone?: string }) {
+  const auth = getFirebaseAuth();
+
   if (!auth.currentUser) {
     await signInAnonymously(auth);
   }
@@ -635,6 +647,8 @@ async function handleSaveNickname() {
   await saveNickname(displayName);
   setShowNamePrompt(false);
 }
+
+if (!mounted) return null;
 
  return (
   <main

@@ -1,9 +1,9 @@
 export const runtime = "nodejs";
 
-import { corsEmpty, corsJson } from "./_cors";
+import { corsEmpty, corsJson } from "../chat/_cors";
 
-const FIREBASE_FUNCTION_URL =
-  "https://generatetalkioreply-ndury54xsq-uc.a.run.app";
+const FIREBASE_PROFILE_URL =
+  "https://YOUR-SAVE-PROFILE-FUNCTION-URL.a.run.app";
 
 export async function OPTIONS(req: Request) {
   return corsEmpty(204, req);
@@ -15,117 +15,69 @@ export async function POST(req: Request) {
   };
 
   try {
+    const authHeader = req.headers.get("authorization") || "";
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return reply(
+        {
+          error: "Unauthorized",
+          reply: "Please sign in again and try once more.",
+        },
+        401
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
 
-    const userId =
-      typeof body?.userId === "string" ? body.userId.trim() : "";
+    const nickname =
+      typeof body?.nickname === "string" ? body.nickname.trim().slice(0, 40) : "";
 
-    const message =
-      typeof body?.message === "string" ? body.message.trim() : "";
+    const timezone =
+      typeof body?.timezone === "string" ? body.timezone.trim().slice(0, 80) : "";
 
-    if (!userId) {
-      return reply(
-        {
-          error: "Missing userId",
-          reply: "User identity is required.",
-        },
-        400
-      );
-    }
-
-    if (!message) {
-      return reply(
-        {
-          error: "Invalid message",
-          reply: "Please type a message.",
-        },
-        400
-      );
-    }
-
-    const localTime =
-      typeof body?.localTime === "string" ? body.localTime : "";
-
-    const localDate =
-      typeof body?.localDate === "string" ? body.localDate : "";
-
-    const localWeekday =
-      typeof body?.localWeekday === "string" ? body.localWeekday : "";
-
-    const timeZone =
-      typeof body?.timeZone === "string" ? body.timeZone : "unknown";
-
-    const localHour =
-      typeof body?.localHour === "number" ? body.localHour : null;
-
-    const selectedMode =
-      typeof body?.selectedMode === "string" ? body.selectedMode : "auto";
-
-    const payload = {
-      userId,
-      message,
-      history: Array.isArray(body?.history) ? body.history : [],
-      memory:
-        body?.memory && typeof body.memory === "object" ? body.memory : {},
-      userTier:
-        typeof body?.userTier === "string" && body.userTier.trim()
-          ? body.userTier
-          : "free",
-      selectedMode,
-      localTime,
-      localDate,
-      localWeekday,
-      timeZone,
-      localHour,
-    };
-
-    const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
+    const firebaseRes = await fetch(FIREBASE_PROFILE_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: authHeader,
         "x-talkio-app-key": process.env.INTERNAL_APP_KEY || "",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        nickname,
+        timezone,
+      }),
       cache: "no-store",
     });
 
     const rawText = await firebaseRes.text();
 
-    let data: any;
-
+    let data: any = {};
     try {
       data = rawText ? JSON.parse(rawText) : {};
     } catch {
-      data = {
-        error: "Invalid upstream response",
-        reply: "Something went wrong on my end. Please try again.",
-        upstreamStatus: firebaseRes.status,
-        upstreamBody: rawText,
-      };
+      data = {};
     }
 
     if (!firebaseRes.ok) {
       return reply(
         {
-          error: data?.error || "Firebase upstream error",
-          reply: data?.reply || "Firebase error",
-          upstreamStatus: firebaseRes.status,
-          upstreamBody: rawText,
-          firebaseDetails: data?.details || null,
+          error: data?.error || "Profile upstream error",
+          reply:
+            data?.reply ||
+            "Something went wrong while saving your profile.",
         },
         firebaseRes.status
       );
     }
 
-    return reply(data, firebaseRes.status);
+    return reply(data, 200);
   } catch (error: any) {
-    console.error("Chat route error:", error);
+    console.error("Profile route error:", error);
 
     return reply(
       {
         error: "Server error",
-        reply: "ROUTE_CATCH_V2",
-        details: error?.message || String(error),
+        reply: "Something went wrong while saving your profile.",
       },
       500
     );

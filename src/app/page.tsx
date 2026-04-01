@@ -1,8 +1,18 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { getAuth, signInAnonymously } from "firebase/auth";
 
 const MAX_MESSAGES = 30;
+
+type BootstrapProfile = {
+  nickname?: string;
+  recentMoodTrend?: string;
+  commonEmotionalStates?: string[];
+  supportStyle?: string[];
+  styleProfile?: Record<string, any>;
+  lastOpenLoop?: string;
+};
 
 type ChatRole = "user" | "assistant";
 
@@ -38,24 +48,6 @@ function persistMemory(userId: string, mem: TalkioMemory) {
   try {
     localStorage.setItem(`talkio_memory_${userId}`, JSON.stringify(mem));
   } catch {}
-}
-
-function getOrCreateUserId(): string {
-  if (typeof window === "undefined") return "";
-
-  const key = "talkio_user_id";
-
-  let id = localStorage.getItem(key);
-  if (id) return id;
-
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    id = crypto.randomUUID();
-  } else {
-    id = "uid_" + Date.now() + "_" + Math.random().toString(36).slice(2);
-  }
-
-  localStorage.setItem(key, id);
-  return id;
 }
 
 function buildConversationTitle(messages: ChatMessage[]): string {
@@ -197,38 +189,24 @@ function getTypingDotClass(mood: string) {
 
   const greeting = buildGreeting(displayName);
 
-  const [isTyping, setIsTyping] = useState(false);
   const [typingMood, setTypingMood] = useState("default");
 
-  const userIdRef = useRef<string>("");
+  const [userId, setUserId] = useState("guest");
 
-if (!userIdRef.current) {
-  userIdRef.current = getOrCreateUserId();
-}
-
-const userId = userIdRef.current;
-
+  const [serverProfile, setServerProfile] = useState<BootstrapProfile>({});
+  const [serverSummary, setServerSummary] = useState("");
+  
   function saveMemoryUpdate(data: Partial<TalkioMemory>) {
   setMemory((prev) => {
     const next = { ...prev, ...data };
-    persistMemory(userId, next);
+
+    if (userId !== "guest") {
+      persistMemory(userId, next);
+    }
+
     return next;
   });
 }
-
-  function saveNickname(name: string) {
-    const clean = name.trim();
-    setDisplayName(clean);
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem(`talkio_nickname_${userId}`, clean);
-    }
-  }
-
-  function handleSaveNickname() {
-    saveNickname(displayName);
-    setShowNamePrompt(false);
-  }
 
   function addEmoji(emoji: string) {
     setInput((prev) => prev + emoji);
@@ -243,18 +221,62 @@ const userId = userIdRef.current;
   }
 
   useEffect(() => {
+  const auth = getAuth();
+
+  async function ensureUser() {
+    if (!auth.currentUser) {
+      await signInAnonymously(auth);
+    }
+
+    const user = auth.currentUser;
+const uid = user?.uid || "guest";
+
+setUserId(uid);
+setMemory(loadMemory(uid));
+
+if (!user) return;
+
+const token = await user.getIdToken();
+
+const res = await fetch("/api/bootstrap", {
+  method: "GET",
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+  credentials: "include",
+});
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) return;
+
+    if (data?.profile && typeof data.profile === "object") {
+      setServerProfile(data.profile);
+
+      if (!displayName && typeof data.profile.nickname === "string" && data.profile.nickname.trim()) {
+        setDisplayName(data.profile.nickname.trim());
+      }
+    }
+
+    if (typeof data?.conversationSummary === "string") {
+      setServerSummary(data.conversationSummary);
+    }
+  }
+
+  ensureUser().catch(() => {
+    setUserId("guest");
+  });
+}, []);
+
+  useEffect(() => {
   if (typeof window === "undefined") return;
 
   const savedNick = localStorage.getItem(`talkio_nickname_${userId}`) || "";
 
-  if (savedNick.trim()) {
-    setDisplayName(savedNick);
-    setShowNamePrompt(false);
-  } else {
-    setShowNamePrompt(true);
+  if (savedNick.trim() && !displayName.trim()) {
+    setDisplayName(savedNick.trim());
   }
-}, [userId]);
-
+}, [userId, displayName]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -354,12 +376,26 @@ const userId = userIdRef.current;
   }
 
   async function sendMessage(overrideText?: string) {
+
+    const auth = getAuth();
+
+if (!auth.currentUser) {
+  await signInAnonymously(auth);
+}
+
+const user = auth.currentUser;
+
+if (!user) {
+  throw new Error("Auth failed to initialize");
+}
+
+const token = await user.getIdToken();
+
     const text = (overrideText ?? input).trim();
     if (!text || loading || crisisLock || isLimitReached) return;
 
     setLoading(true);
 setShowTyping(false);
-setIsTyping(true);
 
 const mood = inferMood(text);
 setTypingMood(mood || "default");
@@ -404,7 +440,9 @@ const typingTimer = setTimeout(() => {
 
     if (mood) {
       setMemory(nextMemory);
-      persistMemory(userId, nextMemory);
+      if (userId !== "guest") {
+  persistMemory(userId, nextMemory);
+}
     }
     
     try {
@@ -414,15 +452,17 @@ const typingTimer = setTimeout(() => {
 
 const res = await fetch("/api/chat", {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  },
   credentials: "include",
   body: JSON.stringify({
-    userId: userId,
     message: text,
     history: next,
     memory: nextMemory,
     selectedMode: "stoic",
-   
+
     localTime: now.toLocaleTimeString([], {
       hour: "numeric",
       minute: "2-digit",
@@ -468,7 +508,6 @@ const res = await fetch("/api/chat", {
         }
 
         setShowTyping(false);
-        setIsTyping(false);
         setTypingMood("default");
         setIsLimitReached(true);
 
@@ -503,7 +542,6 @@ const res = await fetch("/api/chat", {
       }
 
       setShowTyping(false);
-      setIsTyping(false);
       setTypingMood("default");
 
       setMessages((prev) =>
@@ -524,7 +562,6 @@ const res = await fetch("/api/chat", {
 
       clearTimeout(typingTimer);
       setShowTyping(false);
-      setIsTyping(false);
       setTypingMood("default");
 
       setMessages((prev) =>
@@ -541,12 +578,67 @@ const res = await fetch("/api/chat", {
       clearTimeout(timeoutId);
       clearTimeout(typingTimer);
       setShowTyping(false);
-      setIsTyping(false);
       setTypingMood("default");
       setLoading(false);
       inputRef.current?.focus();
     }
   }
+
+  async function saveProfileToBackend(profile: { nickname?: string; timezone?: string }) {
+  const auth = getAuth();
+
+  if (!auth.currentUser) {
+    await signInAnonymously(auth);
+  }
+
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error("Auth failed to initialize");
+  }
+
+  const token = await user.getIdToken();
+
+  const res = await fetch("/api/profile", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    credentials: "include",
+    body: JSON.stringify(profile),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data?.reply || "Failed to save profile");
+  }
+
+  return data;
+}
+
+async function saveNickname(name: string) {
+  const clean = name.trim().slice(0, 40);
+
+  setDisplayName(clean);
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem(`talkio_nickname_${userId}`, clean);
+  }
+
+  try {
+    await saveProfileToBackend({
+      nickname: clean,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+  } catch (error) {
+    console.error("Failed to save nickname to backend:", error);
+  }
+}
+async function handleSaveNickname() {
+  await saveNickname(displayName);
+  setShowNamePrompt(false);
+}
 
  return (
   <main
@@ -637,12 +729,14 @@ const res = await fetch("/api/chat", {
             </button>
 
             <button
-              type="button"
-              className="flex-1 rounded-xl bg-emerald-500 px-3 py-2.5 text-white hover:bg-emerald-600"
-              onClick={handleSaveNickname}
-            >
-              Save
-            </button>
+  type="button"
+  className="flex-1 rounded-xl bg-emerald-500 px-3 py-2.5 text-white hover:bg-emerald-600"
+  onClick={async () => {
+    await handleSaveNickname();
+  }}
+>
+  Save
+</button>
           </div>
         </div>
       </div>

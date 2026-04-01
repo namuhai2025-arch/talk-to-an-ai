@@ -193,6 +193,389 @@ function getLimitsForTier(userTier) {
     perMinuteLimit: FREE_PER_MINUTE_LIMIT,
   };
 }
+function detectLanguageMirror(text = "") {
+  const raw = String(text || "").trim();
+  const t = raw.toLowerCase();
+
+  const taglishMarkers = [
+    "naman", "kasi", "pero", "lang", "sige", "grabe",
+    "nahihiya", "hirap", "kapoy", "ayoko", "okay lang",
+    "pwede", "gusto", "wala", "meron", "pagod", "nakakapagod",
+  ];
+
+  const spanishMarkers = [
+    "estoy", "gracias", "hola", "porque", "buenos", "buenas",
+    "puedo", "quiero", "tengo", "siento", "ayuda", "cansado",
+    "triste", "hoy", "mañana",
+  ];
+
+  const portugueseMarkers = [
+    "oi", "obrigado", "obrigada", "porque", "quero", "tenho",
+    "estou", "cansado", "triste", "amanhã", "hoje",
+  ];
+
+  const frenchMarkers = [
+    "bonjour", "merci", "parce", "je suis", "fatigué", "fatigue",
+    "triste", "aujourd", "demain", "besoin",
+  ];
+
+  const germanMarkers = [
+    "hallo", "danke", "weil", "ich bin", "müde", "traurig",
+    "heute", "morgen", "hilfe",
+  ];
+
+  const hasCJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(raw);
+  const hasHangul = /[\uac00-\ud7af]/.test(raw);
+  const hasArabic = /[\u0600-\u06ff]/.test(raw);
+  const hasCyrillic = /[\u0400-\u04ff]/.test(raw);
+  const hasDevanagari = /[\u0900-\u097f]/.test(raw);
+  const hasThai = /[\u0e00-\u0e7f]/.test(raw);
+
+  const countMatches = (markers) => markers.filter((w) => t.includes(w)).length;
+
+  const taglishCount = countMatches(taglishMarkers);
+  const spanishCount = countMatches(spanishMarkers);
+  const portugueseCount = countMatches(portugueseMarkers);
+  const frenchCount = countMatches(frenchMarkers);
+  const germanCount = countMatches(germanMarkers);
+
+  if (taglishCount >= 2) {
+    return {
+      language: "taglish",
+      mirrorInstruction:
+        "Mirror the user's Taglish naturally. Keep it clear, warm, and not overly slang-heavy.",
+    };
+  }
+
+  if (hasHangul) {
+    return {
+      language: "korean",
+      mirrorInstruction:
+        "Reply in Korean, matching the user's tone and formality level naturally.",
+    };
+  }
+
+  if (hasCJK) {
+    return {
+      language: "cjk",
+      mirrorInstruction:
+        "Reply in the same East Asian language/script the user is using. Keep it natural, simple, and emotionally clear.",
+    };
+  }
+
+  if (hasArabic) {
+    return {
+      language: "arabic",
+      mirrorInstruction:
+        "Reply in Arabic, matching the user's tone naturally and keeping the phrasing clear and supportive.",
+    };
+  }
+
+  if (hasCyrillic) {
+    return {
+      language: "cyrillic_script",
+      mirrorInstruction:
+        "Reply in the same Cyrillic-script language the user is using, matching tone naturally.",
+    };
+  }
+
+  if (hasDevanagari) {
+    return {
+      language: "devanagari_script",
+      mirrorInstruction:
+        "Reply in the same Devanagari-script language the user is using, matching tone naturally.",
+    };
+  }
+
+  if (hasThai) {
+    return {
+      language: "thai",
+      mirrorInstruction:
+        "Reply in Thai, matching the user's tone naturally.",
+    };
+  }
+
+  if (spanishCount >= 2) {
+    return {
+      language: "spanish",
+      mirrorInstruction:
+        "Reply in Spanish, matching the user's tone naturally and clearly.",
+    };
+  }
+
+  if (portugueseCount >= 2) {
+    return {
+      language: "portuguese",
+      mirrorInstruction:
+        "Reply in Portuguese, matching the user's tone naturally and clearly.",
+    };
+  }
+
+  if (frenchCount >= 2) {
+    return {
+      language: "french",
+      mirrorInstruction:
+        "Reply in French, matching the user's tone naturally and clearly.",
+    };
+  }
+
+  if (germanCount >= 2) {
+    return {
+      language: "german",
+      mirrorInstruction:
+        "Reply in German, matching the user's tone naturally and clearly.",
+    };
+  }
+
+  return {
+    language: "english_or_unrecognized",
+    mirrorInstruction:
+      "Reply in the same language the user is currently using, even if the language is not explicitly recognized. If the language is unclear or mixed, follow the dominant language of the message. Do not default to English unless the user is clearly using English. If the user's language is unclear, respond in simple, neutral English.",
+  };
+}
+
+function detectLanguageMixLevel(text = "") {
+  const raw = String(text || "");
+  const lower = raw.toLowerCase();
+
+  const filipinoMarkers = [
+    "naman", "kasi", "pero", "lang", "sige", "gusto", "wala", "meron", "pwede",
+  ];
+
+  const englishWords = (lower.match(/\b[a-z]{2,}\b/g) || []).length;
+  const filipinoHits = filipinoMarkers.filter((w) => lower.includes(w)).length;
+
+  if (englishWords >= 4 && filipinoHits >= 2) return "mixed";
+  return "single";
+}
+
+function detectToneSignal(text = "") {
+  const t = String(text).toLowerCase();
+
+  const playfulMarkers = [
+    "haha",
+    "hahaha",
+    "lol",
+    "lmao",
+    "ayiee",
+    "char",
+    "joke",
+    "eme",
+    "hehe",
+  ];
+
+  const seriousMarkers = [
+    "seriously",
+    "to be honest",
+    "honestly",
+    "i need help",
+    "i'm struggling",
+    "im struggling",
+    "this is hard",
+    "i feel stuck",
+  ];
+
+  if (playfulMarkers.some((w) => t.includes(w))) return "playful";
+  if (seriousMarkers.some((w) => t.includes(w))) return "serious";
+  return "neutral";
+}
+
+function detectReplyStyleSignal(text = "") {
+  const trimmed = String(text).trim();
+  const length = trimmed.length;
+  const lower = trimmed.toLowerCase();
+
+  const directMarkers = [
+    "just tell me",
+    "be straight",
+    "be honest",
+    "direct",
+    "what should i do",
+    "give me the answer",
+  ];
+
+  const gentleMarkers = [
+    "i'm overwhelmed",
+    "please be gentle",
+    "softly",
+    "i feel fragile",
+    "can you stay with me",
+    "don't be harsh",
+  ];
+
+  if (directMarkers.some((w) => lower.includes(w))) return "direct";
+  if (gentleMarkers.some((w) => lower.includes(w))) return "gentle";
+  if (length < 40) return "short";
+  if (length > 220) return "long";
+  return "balanced";
+}
+
+function detectEmotionalIntensity(text = "") {
+  const t = String(text);
+
+  const exclamations = (t.match(/!/g) || []).length;
+  const capsWords = (t.match(/\b[A-Z]{3,}\b/g) || []).length;
+
+  if (exclamations >= 2 || capsWords >= 2) return "high";
+
+  const lower = t.toLowerCase();
+  if (
+    lower.includes("panic") ||
+    lower.includes("overwhelmed") ||
+    lower.includes("can't do this") ||
+    lower.includes("cant do this")
+  ) {
+    return "high";
+  }
+
+  return "low";
+}
+
+function updateBehaviorSignals(message, currentSignals = {}) {
+  const next = {
+    shortMessageCount: currentSignals.shortMessageCount || 0,
+    longMessageCount: currentSignals.longMessageCount || 0,
+    playfulCount: currentSignals.playfulCount || 0,
+    seriousCount: currentSignals.seriousCount || 0,
+    taglishCount: currentSignals.taglishCount || 0,
+    englishCount: currentSignals.englishCount || 0,
+    spanishCount: currentSignals.spanishCount || 0,
+    mixedLanguageCount: currentSignals.mixedLanguageCount || 0,
+    emotionalIntensityHighCount: currentSignals.emotionalIntensityHighCount || 0,
+    emotionalIntensityLowCount: currentSignals.emotionalIntensityLowCount || 0,
+    directPreferenceCount: currentSignals.directPreferenceCount || 0,
+    gentlePreferenceCount: currentSignals.gentlePreferenceCount || 0,
+  };
+
+  const trimmed = String(message || "").trim();
+  const languageMeta = detectLanguageMirror(trimmed);
+  const language = languageMeta.language;
+  const mixLevel = detectLanguageMixLevel(trimmed);
+  const tone = detectToneSignal(trimmed);
+  const style = detectReplyStyleSignal(trimmed);
+  const intensity = detectEmotionalIntensity(trimmed);
+
+  if (trimmed.length < 40) next.shortMessageCount += 1;
+  if (trimmed.length > 220) next.longMessageCount += 1;
+
+  if (language === "taglish") next.taglishCount += 1;
+  else if (language === "spanish") next.spanishCount += 1;
+  else if (language === "english_or_unrecognized") next.englishCount += 1;
+  // DO NOT force other languages into english bucket
+
+  if (mixLevel === "mixed") next.mixedLanguageCount += 1;
+
+  if (tone === "playful") next.playfulCount += 1;
+  if (tone === "serious") next.seriousCount += 1;
+
+  if (style === "direct") next.directPreferenceCount += 1;
+  if (style === "gentle") next.gentlePreferenceCount += 1;
+
+  if (intensity === "high") next.emotionalIntensityHighCount += 1;
+  else next.emotionalIntensityLowCount += 1;
+
+  return next;
+}
+
+function deriveBehaviorProfile(signals = {}) {
+  const shortCount = signals.shortMessageCount || 0;
+  const longCount = signals.longMessageCount || 0;
+  const playfulCount = signals.playfulCount || 0;
+  const seriousCount = signals.seriousCount || 0;
+  const taglishCount = signals.taglishCount || 0;
+  const englishCount = signals.englishCount || 0;
+  const spanishCount = signals.spanishCount || 0;
+  const mixedLanguageCount = signals.mixedLanguageCount || 0;
+  const highIntensity = signals.emotionalIntensityHighCount || 0;
+  const lowIntensity = signals.emotionalIntensityLowCount || 0;
+  const directCount = signals.directPreferenceCount || 0;
+  const gentleCount = signals.gentlePreferenceCount || 0;
+
+  let replyStyle = "balanced";
+  if (shortCount >= longCount + 3) replyStyle = "brief";
+  else if (longCount >= shortCount + 3) replyStyle = "expanded";
+
+  let tonePreference = "calm";
+  if (playfulCount >= seriousCount + 3) tonePreference = "light_playful";
+  else if (seriousCount >= playfulCount + 3) tonePreference = "serious_grounded";
+
+  let languagePreference = "english";
+
+  if (taglishCount >= englishCount + 3) languagePreference = "taglish";
+  else if (spanishCount >= englishCount + 3) languagePreference = "spanish";
+  else if (signals.mixedLanguageCount >= 3) languagePreference = "mixed";
+
+  let languageMirroring = "single_language";
+  if (mixedLanguageCount >= 3) languageMirroring = "mixed_ok";
+
+  let humorPreference = "low";
+  if (playfulCount >= 5) humorPreference = "medium";
+
+  let structurePreference = "medium";
+  if (directCount >= gentleCount + 3) structurePreference = "high";
+  else if (gentleCount >= directCount + 3) structurePreference = "low";
+
+  let emotionalPacing = "steady";
+  if (highIntensity >= lowIntensity + 3) emotionalPacing = "soft_slow";
+
+  return {
+    replyStyle,
+    tonePreference,
+    languagePreference,
+    languageMirroring,
+    humorPreference,
+    structurePreference,
+    emotionalPacing,
+  };
+}
+
+function buildBehaviorProfileBlock(profile = {}) {
+  const behavior = profile?.behaviorProfile || {};
+
+  const replyStyle = behavior.replyStyle || "balanced";
+  const tonePreference = behavior.tonePreference || "calm";
+  const languagePreference = behavior.languagePreference || "english";
+  const languageMirroring = behavior.languageMirroring || "single_language";
+  const humorPreference = behavior.humorPreference || "low";
+  const structurePreference = behavior.structurePreference || "medium";
+  const emotionalPacing = behavior.emotionalPacing || "steady";
+
+  return `
+BEHAVIORAL ADAPTATION:
+Preferred reply length/style: ${replyStyle}
+Preferred tone: ${tonePreference}
+Stored language tendency: ${languagePreference}
+Stored mirroring preference: ${languageMirroring}
+Preferred humor level: ${humorPreference}
+Preferred structure level: ${structurePreference}
+Preferred emotional pacing: ${emotionalPacing}
+
+Adapt gently to these preferences without sounding forced or exaggerated.
+Do not mention this profile to the user.
+`.trim();
+}
+
+function buildLanguageMirrorBlock(text = "", behaviorProfile = {}) {
+  const detected = detectLanguageMirror(text);
+  const profileLanguage = behaviorProfile?.languagePreference || "english";
+  const mirrorMode = behaviorProfile?.languageMirroring || "single_language";
+
+  return `
+LANGUAGE MIRRORING:
+Current detected user language/style: ${detected.language}
+Stored language tendency: ${profileLanguage}
+Stored mirroring preference: ${mirrorMode}
+
+${detected.mirrorInstruction}
+
+Always reply in the same language the user is currently using.
+This rule overrides stored preferences.
+Even if the language is not recognized, mirror it based on the user's message.
+Do not default to English unless the user is clearly using English..
+If the user mixes languages naturally, you may mirror that mix lightly.
+Do not force slang. Keep the reply natural and easy to understand.
+`.trim();
+}
 
 function getLegacyConversationSummary(memory) {
   const raw =
@@ -437,11 +820,12 @@ const CORE_IDENTITY_PROMPT = `
 You are Talkio: a calm, natural, and emotionally intelligent AI companion.
 
 Your role is to talk like a real human—warm, present, and easy to speak with—while quietly helping the user stay grounded and move forward when needed.
-You can sense right timing to apply stoic core.
+You can sense right timing to apply stoic core and incorporate gratefulness in ones life no matter what.
+
+Your role is to have natural, human-like conversations that help users feel heard, think clearly, and move forward in small, meaningful ways.
 
 You are not a therapist, coach, or authority.
 You are a steady companion who understands, then gently guides when the moment is right.
-
 `.trim();
 
 async function sendPushToUser(userId, notification) {
@@ -519,36 +903,334 @@ async function sendPushToUser(userId, notification) {
     failureCount: response.failureCount,
   };
 }
+exports.bootstrapTalkioMemory = onRequest({ cors: true }, async (req, res) => {
+  let uid = "unknown";
 
-exports.createCheckin = onRequest({ cors: true }, async (req, res) => {
+  try {
+    if (req.method !== "GET" && req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const allowedOrigins = [
+      "https://talkiochat.com",
+      "https://www.talkiochat.com",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+    ];
+
+    const origin = req.headers.origin || "";
+
+    if (origin && !allowedOrigins.includes(origin)) {
+      res.status(403).json({
+        error: "Blocked origin",
+        reply: "Unauthorized domain.",
+      });
+      return;
+    }
+
+    const incomingAppKey = req.headers["x-talkio-app-key"];
+
+    if (!INTERNAL_APP_KEY) {
+      res.status(500).json({
+        error: "Missing INTERNAL_APP_KEY",
+        reply: "Server security configuration is missing.",
+      });
+      return;
+    }
+
+    if (incomingAppKey !== INTERNAL_APP_KEY) {
+      res.status(403).json({
+        error: "Forbidden",
+        reply: "Unauthorized request.",
+      });
+      return;
+    }
+
+    const auth = await requireVerifiedUser(req);
+    uid = auth.uid;
+
+    await ensureUserBase(uid, "Asia/Manila");
+
+    const userSnap = await db.collection("users").doc(uid).get();
+    const userData = userSnap.exists ? userSnap.data() || {} : {};
+
+    const conversationSummary = await getConversationSummary(uid);
+
+    const memoryBundle = await getTalkioMemoryBundle(db, uid, 5);
+    const profile = memoryBundle?.profile || defaultTalkioProfile;
+
+    const nickname =
+      typeof userData?.nickname === "string" && userData.nickname.trim()
+        ? userData.nickname.trim()
+        : "";
+
+    const response = {
+  ok: true,
+  uid,
+  profile: {
+    nickname,
+
+    recentMoodTrend:
+      typeof profile?.recentMoodTrend === "string"
+        ? profile.recentMoodTrend
+        : "",
+
+    commonEmotionalStates: Array.isArray(profile?.commonEmotionalStates)
+      ? profile.commonEmotionalStates.slice(0, 8)
+      : [],
+
+    supportStyle: Array.isArray(profile?.supportStyle)
+      ? profile.supportStyle.slice(0, 8)
+      : [],
+
+    styleProfile:
+      profile?.styleProfile && typeof profile.styleProfile === "object"
+        ? profile.styleProfile
+        : {},
+
+    // ✅ ADD THIS
+    behaviorProfile:
+      profile?.behaviorProfile && typeof profile.behaviorProfile === "object"
+        ? profile.behaviorProfile
+        : {},
+
+    // ✅ ADD THIS
+    behaviorSignals:
+      profile?.behaviorSignals && typeof profile.behaviorSignals === "object"
+        ? profile.behaviorSignals
+        : {},
+
+    lastOpenLoop:
+      typeof profile?.lastOpenLoop === "string"
+        ? profile.lastOpenLoop
+        : "",
+    emotionalContinuityProfile:
+  profile?.emotionalContinuityProfile &&
+  typeof profile.emotionalContinuityProfile === "object"
+    ? profile.emotionalContinuityProfile
+    : {},
+
+emotionalContinuitySignals:
+  profile?.emotionalContinuitySignals &&
+  typeof profile.emotionalContinuitySignals === "object"
+    ? profile.emotionalContinuitySignals
+    : {},
+  },
+
+  conversationSummary:
+    typeof conversationSummary === "string" ? conversationSummary : "",
+};
+
+    logInfo("bootstrap_memory_loaded", {
+      uid,
+      hasNickname: !!nickname,
+      hasSummary: !!response.conversationSummary,
+      hasStyleProfile: !!profile?.styleProfile,
+      hasBehaviorProfile: !!profile?.behaviorProfile,
+    });
+
+    res.status(200).json(response);
+  } catch (error) {
+    const statusCode = error?.statusCode || 500;
+
+    logError("bootstrap_memory_failed", error, { uid });
+
+    if (statusCode === 401) {
+      res.status(401).json({
+        error: "Unauthorized",
+        reply: "Please sign in again and try once more.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: "Failed to load memory bootstrap",
+      reply: "Something went wrong while loading your profile.",
+    });
+  }
+});
+
+exports.saveTalkioProfile = onRequest({ cors: true }, async (req, res) => {
+  let uid = "unknown";
+
   try {
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
       return;
     }
 
-    const body = req.body || {};
-    
-    const uid = typeof body.userId === "string" ? body.userId.trim() : "";
+    const allowedOrigins = [
+      "https://talkiochat.com",
+      "https://www.talkiochat.com",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+    ];
 
-if (!uid) {
-  res.status(400).json({
-    error: "Missing userId",
-    reply: "User identity is required.",
-  });
-  return;
-}
+    const origin = req.headers.origin || "";
+
+    if (origin && !allowedOrigins.includes(origin)) {
+      res.status(403).json({
+        error: "Blocked origin",
+        reply: "Unauthorized domain.",
+      });
+      return;
+    }
+
+    const incomingAppKey = req.headers["x-talkio-app-key"];
+
+    if (!INTERNAL_APP_KEY) {
+      res.status(500).json({
+        error: "Missing INTERNAL_APP_KEY",
+        reply: "Server security configuration is missing.",
+      });
+      return;
+    }
+
+    if (incomingAppKey !== INTERNAL_APP_KEY) {
+      res.status(403).json({
+        error: "Forbidden",
+        reply: "Unauthorized request.",
+      });
+      return;
+    }
+
+    const auth = await requireVerifiedUser(req);
+    uid = auth.uid;
+
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+
+    const nickname =
+      typeof body.nickname === "string" ? body.nickname.trim().slice(0, 40) : "";
+
+    const timezone =
+      typeof body.timezone === "string" && body.timezone.trim()
+        ? body.timezone.trim().slice(0, 80)
+        : "";
+
+    const update = {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (nickname) {
+      update.nickname = nickname;
+    } else if (body.nickname === "") {
+      update.nickname = "";
+    }
+
+    if (timezone) {
+      update.timezone = timezone;
+    }
+
+    await db.collection("users").doc(uid).set(update, { merge: true });
+
+    logInfo("profile_saved", {
+      uid,
+      hasNickname: !!nickname,
+      hasTimezone: !!timezone,
+    });
+
+    res.status(200).json({
+      ok: true,
+      profile: {
+        nickname: nickname || "",
+        timezone: timezone || "",
+      },
+    });
+  } catch (error) {
+    const statusCode = error?.statusCode || 500;
+
+    logError("save_profile_failed", error, { uid });
+
+    if (statusCode === 401) {
+      res.status(401).json({
+        error: "Unauthorized",
+        reply: "Please sign in again and try once more.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: "Failed to save profile",
+      reply: "Something went wrong while saving your profile.",
+    });
+  }
+});
+
+exports.createCheckin = onRequest({ cors: true }, async (req, res) => {
+  let uid = "unknown";
+
+  try {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const allowedOrigins = getAllowedOrigins();
+    const origin = req.headers.origin || "";
+
+    if (origin && !allowedOrigins.includes(origin)) {
+      res.status(403).json({
+        error: "Blocked origin",
+        reply: "Unauthorized domain.",
+      });
+      return;
+    }
+
+    const incomingAppKey = req.headers["x-talkio-app-key"];
+
+    if (!INTERNAL_APP_KEY) {
+      res.status(500).json({
+        error: "Missing INTERNAL_APP_KEY",
+        reply: "Server security configuration is missing.",
+      });
+      return;
+    }
+
+    if (incomingAppKey !== INTERNAL_APP_KEY) {
+      res.status(403).json({
+        error: "Forbidden",
+        reply: "Unauthorized request.",
+      });
+      return;
+    }
+
+    const auth = await requireVerifiedUser(req);
+    uid = auth.uid;
+
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+
+    const timezone =
+      typeof body.timezone === "string" && body.timezone.trim()
+        ? body.timezone.trim().slice(0, 80)
+        : "Asia/Manila";
+
+    const localHour =
+      typeof body.localHour === "number" &&
+      Number.isFinite(body.localHour) &&
+      body.localHour >= 0 &&
+      body.localHour <= 23
+        ? body.localHour
+        : 19;
+
+    const localMinute =
+      typeof body.localMinute === "number" &&
+      Number.isFinite(body.localMinute) &&
+      body.localMinute >= 0 &&
+      body.localMinute <= 59
+        ? body.localMinute
+        : 0;
+
+    const message =
+      typeof body.message === "string" && body.message.trim()
+        ? body.message.trim().slice(0, 200)
+        : "Hey… just checking in. How are you feeling today?";
 
     await upsertCheckin(uid, {
-      timezone: body.timezone || "Asia/Manila",
-      localHour:
-        typeof body.localHour === "number" ? body.localHour : 19,
-      localMinute:
-        typeof body.localMinute === "number" ? body.localMinute : 0,
-      message:
-        typeof body.message === "string" && body.message.trim()
-          ? body.message.trim()
-          : "Hey… just checking in. How are you feeling today?",
+      timezone,
+      localHour,
+      localMinute,
+      message,
     });
 
     logInfo("checkin_created", { uid });
@@ -558,10 +1240,21 @@ if (!uid) {
       reply: "Check-in created.",
     });
   } catch (error) {
-    logError("create_checkin_failed", error);
+    const statusCode = error?.statusCode || 500;
+
+    logError("create_checkin_failed", error, { uid });
+
+    if (statusCode === 401) {
+      res.status(401).json({
+        error: "Unauthorized",
+        reply: "Please sign in again and try once more.",
+      });
+      return;
+    }
+
     res.status(500).json({
       error: "Failed to create check-in",
-      details: error?.message || String(error),
+      reply: "Something went wrong while saving your check-in.",
     });
   }
 });
@@ -731,20 +1424,325 @@ function getTimeOfDayLabelFromHour(localHour) {
   return "night";
 }
 
+function extractBearerToken(req) {
+  const authHeader = req.headers.authorization || req.headers.Authorization || "";
+  if (typeof authHeader !== "string") return "";
+  if (!authHeader.startsWith("Bearer ")) return "";
+  return authHeader.slice(7).trim();
+}
+
+async function requireVerifiedUser(req) {
+  const idToken = extractBearerToken(req);
+
+  if (!idToken) {
+    const err = new Error("Missing auth token");
+    err.statusCode = 401;
+    throw err;
+  }
+
+  let decoded;
+  try {
+    decoded = await admin.auth().verifyIdToken(idToken);
+  } catch (error) {
+    const err = new Error("Invalid auth token");
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const uid = decoded?.uid || "";
+  if (!uid) {
+    const err = new Error("Invalid authenticated user");
+    err.statusCode = 401;
+    throw err;
+  }
+
+  return { uid, decoded };
+}
+
+async function getTrustedUserTier(uid) {
+  try {
+    const userSnap = await db.collection("users").doc(uid).get();
+    if (!userSnap.exists) return "free";
+
+    const rawTier = userSnap.data()?.userTier || userSnap.data()?.tier || "free";
+
+    if (rawTier === "ultra") return "ultra";
+    if (rawTier === "premium") return "premium";
+    return "free";
+  } catch (error) {
+    logWarn("trusted_tier_lookup_failed", {
+      uid,
+      message: error?.message || String(error),
+    });
+    return "free";
+  }
+}
+
+function validateIncomingHistory(history) {
+  if (!Array.isArray(history)) return [];
+
+  return history
+    .filter(
+      (m) =>
+        m &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string"
+    )
+    .slice(-20)
+    .map((m) => ({
+      role: m.role,
+      content: m.content.slice(0, 2000),
+    }));
+}
+
+function validateOptionalString(value, max = 120) {
+  return typeof value === "string" ? value.slice(0, max) : "";
+}
+
+function validateOptionalNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function getAllowedOrigins() {
+  return [
+    "https://talkiochat.com",
+    "https://www.talkiochat.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ];
+}
+
+function detectEmotionalState(text = "") {
+  const t = String(text || "").toLowerCase();
+
+  if (
+    t.includes("overwhelmed") ||
+    t.includes("panic") ||
+    t.includes("panicking") ||
+    t.includes("anxious") ||
+    t.includes("stressed out")
+  ) {
+    return "overwhelmed";
+  }
+
+  if (
+    t.includes("sad") ||
+    t.includes("lonely") ||
+    t.includes("down") ||
+    t.includes("empty") ||
+    t.includes("heartbroken")
+  ) {
+    return "low";
+  }
+
+  if (
+    t.includes("tired") ||
+    t.includes("drained") ||
+    t.includes("exhausted") ||
+    t.includes("burned out") ||
+    t.includes("kapoy") ||
+    t.includes("pagod")
+  ) {
+    return "drained";
+  }
+
+  if (
+    t.includes("angry") ||
+    t.includes("mad") ||
+    t.includes("furious") ||
+    t.includes("annoyed")
+  ) {
+    return "agitated";
+  }
+
+  if (
+    t.includes("okay") ||
+    t.includes("fine") ||
+    t.includes("better") ||
+    t.includes("calmer")
+  ) {
+    return "settling";
+  }
+
+  return "neutral";
+}
+
+function detectEmotionalWeight(text = "") {
+  const t = String(text || "").toLowerCase();
+
+  let score = 0;
+
+  const heavyMarkers = [
+    "overwhelmed",
+    "panic",
+    "anxious",
+    "can't do this",
+    "cant do this",
+    "stuck",
+    "lost",
+    "lonely",
+    "empty",
+    "drained",
+    "exhausted",
+    "burned out",
+    "heartbroken",
+  ];
+
+  for (const marker of heavyMarkers) {
+    if (t.includes(marker)) score += 1;
+  }
+
+  if ((t.match(/!/g) || []).length >= 2) score += 1;
+
+  if (score >= 4) return "high";
+  if (score >= 2) return "medium";
+  return "low";
+}
+
+function updateEmotionalContinuitySignals(message, currentSignals = {}) {
+  const next = {
+    overwhelmedCount: currentSignals.overwhelmedCount || 0,
+    lowCount: currentSignals.lowCount || 0,
+    drainedCount: currentSignals.drainedCount || 0,
+    agitatedCount: currentSignals.agitatedCount || 0,
+    settlingCount: currentSignals.settlingCount || 0,
+    neutralCount: currentSignals.neutralCount || 0,
+    highWeightCount: currentSignals.highWeightCount || 0,
+    mediumWeightCount: currentSignals.mediumWeightCount || 0,
+    lowWeightCount: currentSignals.lowWeightCount || 0,
+    unresolvedTopicCount: currentSignals.unresolvedTopicCount || 0,
+    lastUpdatedAt: currentSignals.lastUpdatedAt || 0,
+  };
+
+  const state = detectEmotionalState(message);
+  const weight = detectEmotionalWeight(message);
+  const hasOpenLoop = shouldCreateOpenLoop(message);
+
+  if (state === "overwhelmed") next.overwhelmedCount += 1;
+  else if (state === "low") next.lowCount += 1;
+  else if (state === "drained") next.drainedCount += 1;
+  else if (state === "agitated") next.agitatedCount += 1;
+  else if (state === "settling") next.settlingCount += 1;
+  else next.neutralCount += 1;
+
+  if (weight === "high") next.highWeightCount += 1;
+  else if (weight === "medium") next.mediumWeightCount += 1;
+  else next.lowWeightCount += 1;
+
+  if (hasOpenLoop) next.unresolvedTopicCount += 1;
+
+  next.lastUpdatedAt = Date.now();
+
+  return next;
+}
+
+function deriveEmotionalContinuityProfile(signals = {}) {
+  const overwhelmedCount = signals.overwhelmedCount || 0;
+  const lowCount = signals.lowCount || 0;
+  const drainedCount = signals.drainedCount || 0;
+  const agitatedCount = signals.agitatedCount || 0;
+  const settlingCount = signals.settlingCount || 0;
+  const highWeightCount = signals.highWeightCount || 0;
+  const mediumWeightCount = signals.mediumWeightCount || 0;
+  const unresolvedTopicCount = signals.unresolvedTopicCount || 0;
+  const lastUpdatedAt = signals.lastUpdatedAt || 0;
+
+  const hoursSinceUpdate = lastUpdatedAt
+    ? (Date.now() - lastUpdatedAt) / (1000 * 60 * 60)
+    : Infinity;
+
+  let dominantEmotionalPattern = "steady";
+  const maxValue = Math.max(
+    overwhelmedCount,
+    lowCount,
+    drainedCount,
+    agitatedCount,
+    settlingCount
+  );
+
+  if (maxValue === overwhelmedCount && maxValue > 0) {
+    dominantEmotionalPattern = "overwhelmed";
+  } else if (maxValue === lowCount && maxValue > 0) {
+    dominantEmotionalPattern = "low";
+  } else if (maxValue === drainedCount && maxValue > 0) {
+    dominantEmotionalPattern = "drained";
+  } else if (maxValue === agitatedCount && maxValue > 0) {
+    dominantEmotionalPattern = "agitated";
+  } else if (maxValue === settlingCount && maxValue > 0) {
+    dominantEmotionalPattern = "settling";
+  }
+
+  if (hoursSinceUpdate > 48) {
+    dominantEmotionalPattern = "steady";
+  }
+
+  let emotionalLoad = "light";
+  if (highWeightCount >= 4) emotionalLoad = "heavy";
+  else if (highWeightCount + mediumWeightCount >= 4) emotionalLoad = "moderate";
+
+  let continuityNeed = "low";
+  if (unresolvedTopicCount >= 5) continuityNeed = "high";
+  else if (unresolvedTopicCount >= 2) continuityNeed = "medium";
+
+  let followUpStyle = "gentle";
+  if (dominantEmotionalPattern === "agitated") followUpStyle = "steady_direct";
+  else if (dominantEmotionalPattern === "overwhelmed") followUpStyle = "soft_slow";
+  else if (dominantEmotionalPattern === "low") followUpStyle = "warm_gentle";
+
+  return {
+    dominantEmotionalPattern,
+    emotionalLoad,
+    continuityNeed,
+    followUpStyle,
+    lastUpdatedAt,
+  };
+}
+
+function buildEmotionalContinuityBlock(profile = {}, recentContext = {}) {
+  const emotional = profile?.emotionalContinuityProfile || {};
+  const dominantEmotionalPattern =
+    emotional.dominantEmotionalPattern || "steady";
+  const emotionalLoad = emotional.emotionalLoad || "light";
+  const continuityNeed = emotional.continuityNeed || "low";
+  const followUpStyle = emotional.followUpStyle || "gentle";
+
+  const lastOpenLoop =
+    typeof profile?.lastOpenLoop === "string" ? profile.lastOpenLoop : "";
+
+  const recentMoodTrend =
+    typeof profile?.recentMoodTrend === "string" ? profile.recentMoodTrend : "";
+
+  return `
+EMOTIONAL CONTINUITY:
+Recent emotional pattern: ${dominantEmotionalPattern}
+Recent emotional load: ${emotionalLoad}
+Continuity need: ${continuityNeed}
+Suggested follow-up style: ${followUpStyle}
+Recent mood trend: ${recentMoodTrend || "unknown"}
+Last open loop: ${lastOpenLoop || "(none)"}
+
+If the current message connects naturally to an unresolved emotional thread, acknowledge that gently.
+Do not force a follow-up if the user is clearly moving to a different topic.
+Keep continuity subtle, human, and emotionally steady.
+Do not mention this profile to the user.
+
+Only apply emotional continuity if the current message clearly relates
+to a similar emotional tone or unresolved issue.
+
+If the user shifts topic, prioritize the present message instead.
+`.trim();
+}
+
 exports.generateTalkioReply = onRequest({ cors: true }, async (req, res) => {
+  let uid = "unknown";
+
   try {
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
       return;
     }
 
-    const allowedOrigins = [
-      "https://talkiochat.com",
-      "https://www.talkiochat.com",
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-    ];
-
+    const allowedOrigins = getAllowedOrigins();
     const origin = req.headers.origin || "";
 
     if (origin && !allowedOrigins.includes(origin)) {
@@ -756,7 +1754,6 @@ exports.generateTalkioReply = onRequest({ cors: true }, async (req, res) => {
     }
 
     const incomingAppKey = req.headers["x-talkio-app-key"];
-
     if (!INTERNAL_APP_KEY) {
       res.status(500).json({
         error: "Missing INTERNAL_APP_KEY",
@@ -773,53 +1770,19 @@ exports.generateTalkioReply = onRequest({ cors: true }, async (req, res) => {
       return;
     }
 
-    const body = req.body || {};
+    const auth = await requireVerifiedUser(req);
+    uid = auth.uid;
 
-    const uid = typeof body.userId === "string" ? body.userId.trim() : "";
-
-if (!uid) {
-  res.status(400).json({
-    error: "Missing userId",
-    reply: "User identity is required.",
-  });
-  return;
-}
-
-    logInfo("request_received", {
-      hasMessage: !!body?.message,
-      hasHistory: Array.isArray(body?.history),
-      userTier: body?.userTier || "free",
-      
-    });
-
-    const localTime =
-      typeof body?.localTime === "string" ? body.localTime : "";
-
-    const localDate =
-      typeof body?.localDate === "string" ? body.localDate : "";
-
-    const localWeekday =
-      typeof body?.localWeekday === "string" ? body.localWeekday : "";
-
-    const timeZone =
-      typeof body?.timeZone === "string" ? body.timeZone : "";
-
-    const localHour =
-      typeof body?.localHour === "number" ? body.localHour : null;
-
-    const userTier = getUserTier(body);
-    const { dailyLimit, perMinuteLimit } = getLimitsForTier(userTier);
+    const body = req.body && typeof req.body === "object" ? req.body : {};
 
     const message =
-      typeof body?.message === "string" ? body.message.trim() : "";
-
-    const memoryCommand = detectMemoryCommand(message);
-    const reminderCommand = detectReminderCommand(message);
+      typeof body.message === "string" ? body.message.trim() : "";
 
     if (!message) {
-      res
-        .status(400)
-        .json({ error: "Invalid message", reply: "Please type a message." });
+      res.status(400).json({
+        error: "Invalid message",
+        reply: "Please type a message.",
+      });
       return;
     }
 
@@ -840,46 +1803,6 @@ if (!uid) {
       return;
     }
 
-    logInfo("resolved_uid_for_chat", {
-      uid,      
-    });
-
-    await markUserMessage(uid);
-    await updateSmartCheckinState(uid, message);
-
-    logInfo("user_message_received", {
-      uid,
-      preview: message.slice(0, 100),
-    });
-
-    const memoryBundle = await getTalkioMemoryBundle(db, uid, 5);
-    logInfo("memory_loaded", {
-      uid,
-      hasProfile: !!memoryBundle?.profile,
-      memoryCount: memoryBundle?.memories?.length || 0,
-    });
-
-    const userProfile = memoryBundle?.profile || defaultTalkioProfile;
-    const currentUserProfile = userProfile;
-
-    const updatedSignals = updateStyleSignals(
-      message,
-      currentUserProfile.styleSignals || {}
-    );
-
-    const updatedStyleProfile = deriveStyleProfileFromSignals(
-      updatedSignals,
-      currentUserProfile.styleProfile || defaultTalkioProfile.styleProfile
-    );
-
-    const styleProfileBlock = buildStyleProfileBlock({
-      ...currentUserProfile,
-      styleProfile: updatedStyleProfile,
-      styleSignals: updatedSignals,
-    });
-
-    const ai = new GoogleGenAI({ apiKey });
-
     const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
     const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
@@ -891,48 +1814,123 @@ if (!uid) {
       return;
     }
 
+    const trustedUserTier = await getTrustedUserTier(uid);
+    const { dailyLimit, perMinuteLimit } = getLimitsForTier(trustedUserTier);
+
+    const localTime = validateOptionalString(body.localTime, 40);
+    const localDate = validateOptionalString(body.localDate, 40);
+    const localWeekday = validateOptionalString(body.localWeekday, 20);
+    const timeZone = validateOptionalString(body.timeZone, 80) || "Asia/Manila";
+    const localHour = validateOptionalNumber(body.localHour);
+
+    const history = validateIncomingHistory(body.history);
+
+    const safeMessage = message.slice(0, 1200);
+
+    logInfo("request_received", {
+      uid,
+      hasMessage: true,
+      hasHistory: history.length > 0,
+      userTier: trustedUserTier,
+      messageLength: message.length,
+    });
+
+    if (looksLikeCrisis(safeMessage)) {
+      res.status(200).json({
+        reply: crisisReplyPH(),
+        flagged: "crisis",
+      });
+      return;
+    }
+
+    const memoryCommand = detectMemoryCommand(message);
+    const reminderCommand = detectReminderCommand(message);
+
+    await markUserMessage(uid);
+    await updateSmartCheckinState(uid, message);
+
+    logInfo("user_message_received", {
+      uid,
+      messageLength: message.length,
+    });
+
+    const memoryBundle = await getTalkioMemoryBundle(db, uid, 5);
+
+    logInfo("memory_loaded", {
+      uid,
+      hasProfile: !!memoryBundle?.profile,
+      memoryCount: memoryBundle?.memories?.length || 0,
+    });
+
+    const userProfile = memoryBundle?.profile || defaultTalkioProfile;
+    const currentUserProfile = userProfile;
+
+    const updatedSignals = updateStyleSignals(
+  message,
+  currentUserProfile.styleSignals || {}
+);
+
+const updatedStyleProfile = deriveStyleProfileFromSignals(
+  updatedSignals,
+  currentUserProfile.styleProfile || defaultTalkioProfile.styleProfile
+);
+
+const updatedBehaviorSignals = updateBehaviorSignals(
+  message,
+  currentUserProfile.behaviorSignals || {}
+);
+
+const updatedBehaviorProfile = deriveBehaviorProfile(
+  updatedBehaviorSignals
+);
+
+const updatedEmotionalContinuitySignals = updateEmotionalContinuitySignals(
+  message,
+  currentUserProfile.emotionalContinuitySignals || {}
+);
+
+const updatedEmotionalContinuityProfile = deriveEmotionalContinuityProfile(
+  updatedEmotionalContinuitySignals
+);
+
+const enrichedProfile = {
+  ...currentUserProfile,
+  styleProfile: updatedStyleProfile,
+  styleSignals: updatedSignals,
+  behaviorProfile: updatedBehaviorProfile,
+  behaviorSignals: updatedBehaviorSignals,
+  emotionalContinuityProfile: updatedEmotionalContinuityProfile,
+  emotionalContinuitySignals: updatedEmotionalContinuitySignals,
+};
+
+const styleProfileBlock = buildStyleProfileBlock(enrichedProfile);
+const behaviorProfileBlock = buildBehaviorProfileBlock(enrichedProfile);
+const languageMirrorBlock = buildLanguageMirrorBlock(
+  message,
+  enrichedProfile.behaviorProfile
+);
+
+const emotionalContinuityBlock = buildEmotionalContinuityBlock(enrichedProfile);
+
+    const ai = new GoogleGenAI({ apiKey });
+
     const redis = new Redis({
       url: redisUrl,
       token: redisToken,
     });
 
-    const safeMessage = message.slice(0, 1200);
-
-    if (looksLikeCrisis(safeMessage)) {
-      res.status(200).json({ reply: crisisReplyPH(), flagged: "crisis" });
-      return;
-    }
-
-    const history = Array.isArray(body?.history) ? body.history : [];
-
     const recentHistory = history
-      .filter(
-        (m) =>
-          m &&
-          m.role === "user" &&
-          typeof m.content === "string"
-      )
+      .filter((m) => m.role === "user" && typeof m.content === "string")
       .slice(-MAX_CONTEXT_MESSAGES);
 
     const context = formatMessagesForPrompt(recentHistory);
-    
+
     const ip = getClientIp(req);
     const ua = getUa(req);
     const fp = sha1(`${ip}|${ua}`);
-
     const effectiveUserId = uid;
 
-    const requestedMode =
-      typeof body?.selectedMode === "string" ? body.selectedMode : "auto";
-
-    logger.info("Talkio prompt debug", {
-      safeMessage,
-      requestedMode,
-      effectiveMode: "stoic",
-      usingStoicCoreOnly: true,
-    });
-
-    await ensureUserBase(uid, "Asia/Manila");
+    await ensureUserBase(uid, timeZone);
 
     if (memoryCommand?.type === "view_memory") {
       const summary = await getUserMemorySummary(uid);
@@ -966,9 +1964,11 @@ if (!uid) {
         let reply = "I can set that reminder, but I need a clearer time.";
 
         if (reminderCommand.reason === "missing_date") {
-          reply = "I can set that reminder, but I need the date. Try saying something like: remind me tomorrow at 7am to drink bone broth.";
+          reply =
+            "I can set that reminder, but I need the date. Try saying something like: remind me tomorrow at 7am to drink bone broth.";
         } else if (reminderCommand.reason === "missing_time") {
-          reply = "I can set that reminder, but I need the time. Try saying something like: remind me tomorrow at 7am to drink bone broth.";
+          reply =
+            "I can set that reminder, but I need the time. Try saying something like: remind me tomorrow at 7am to drink bone broth.";
         }
 
         res.status(200).json({ reply });
@@ -979,7 +1979,7 @@ if (!uid) {
         text: reminderCommand.text,
         category: reminderCommand.category,
         scheduledAt: admin.firestore.Timestamp.fromDate(reminderCommand.scheduledAt),
-        timezone: timeZone || "Asia/Manila",
+        timezone: timeZone,
         repeat: reminderCommand.repeat,
         sourceMessage: reminderCommand.sourceMessage,
       });
@@ -987,7 +1987,7 @@ if (!uid) {
       const whenText = new Intl.DateTimeFormat("en-PH", {
         dateStyle: "medium",
         timeStyle: "short",
-        timeZone: timeZone || "Asia/Manila",
+        timeZone,
       }).format(reminderCommand.scheduledAt);
 
       res.status(200).json({
@@ -1004,12 +2004,15 @@ if (!uid) {
 ${CORE_IDENTITY_PROMPT}
 `.trim();
 
-    const memory =
-      typeof body?.memory === "object" && body.memory ? body.memory : {};
+    const deviceMemory =
+      typeof body.memory === "object" && body.memory ? body.memory : {};
 
-    const moodHintRaw = typeof memory?.mood === "string" ? memory.mood : "";
+    const moodHintRaw =
+      typeof deviceMemory.mood === "string" ? deviceMemory.mood : "";
     const moodHint = moodHintRaw.slice(0, 120);
-    const intentHint = typeof memory?.intent === "string" ? memory.intent : "";
+
+    const intentHint =
+      typeof deviceMemory.intent === "string" ? deviceMemory.intent.slice(0, 120) : "";
 
     const conversationSummary = previousSummary;
 
@@ -1051,6 +2054,11 @@ If unsure, avoid time-of-day greetings.
 
     const prompt = `
 ${FINAL_TALKIO_SYSTEM_PROMPT}
+
+${styleProfileBlock ? styleProfileBlock + "\n\n" : ""}
+${behaviorProfileBlock ? behaviorProfileBlock + "\n\n" : ""}
+${languageMirrorBlock ? languageMirrorBlock + "\n\n" : ""}
+${emotionalContinuityBlock ? emotionalContinuityBlock + "\n\n" : ""}
 
 - Ground the reply in:
   1. Reality
@@ -1106,9 +2114,11 @@ Talkio:
       res.status(429).json({
         error: "Daily message limit reached",
         reply:
-          userTier === "premium"
+          trustedUserTier === "premium"
             ? "You've reached today's premium message limit. Please come back tomorrow when messages reset."
-            : "You've reached today's free message limit. Talkio Pro unlocks higher limits, or you can come back tomorrow when messages reset.",
+            : trustedUserTier === "ultra"
+              ? "You've reached today's ultra message limit. Please come back tomorrow when messages reset."
+              : "You've reached today's free message limit. Talkio Pro unlocks higher limits, or you can come back tomorrow when messages reset.",
       });
       return;
     }
@@ -1163,21 +2173,12 @@ Talkio:
       await Promise.all(expireOps);
     }
 
-    const selectedModel = pickModel(body);
+    const selectedModel = pickModel({ userTier: trustedUserTier });
 
     let reply = "";
     let modelUsed = selectedModel;
 
     try {
-      logger.info("AI object check", {
-        hasAI: !!ai,
-        hasModels: !!ai?.models,
-      });
-
-      logger.info("API key exists", {
-        hasKey: !!process.env.GEMINI_API_KEY,
-      });
-
       logInfo("ai_generation_start", {
         model: selectedModel,
         uid,
@@ -1216,7 +2217,10 @@ Talkio:
         error: errorText,
       });
 
-      if (errorText.includes('"code":429') || errorText.includes("RESOURCE_EXHAUSTED")) {
+      if (
+        errorText.includes('"code":429') ||
+        errorText.includes("RESOURCE_EXHAUSTED")
+      ) {
         res.status(429).json({
           error: "AI quota reached",
           reply: "Talkio is a bit busy right now. Please wait a little and try again.",
@@ -1226,16 +2230,11 @@ Talkio:
 
       try {
         const fallbackModel =
-          selectedModel === FREE_MODEL
-            ? FREE_MODEL
-            : selectedModel === PREMIUM_MODEL
-              ? PREMIUM_MODEL
-              : ULTRA_MODEL;
-
-        logger.warn("Trying fallback Gemini model", {
-          fallbackModel,
-          usingStoicCoreOnly: true,
-        });
+          trustedUserTier === "ultra"
+            ? PREMIUM_MODEL
+            : trustedUserTier === "premium"
+              ? FREE_MODEL
+              : FREE_MODEL;
 
         logInfo("ai_generation_start", {
           model: fallbackModel,
@@ -1284,7 +2283,7 @@ Talkio:
     }
 
     if (memoryCommand?.type !== "do_not_save") {
-      const candidates = extractMemoryCandidates(message);
+      const candidates = extractMemoryCandidates(message).slice(0, 3);
 
       for (const candidate of candidates) {
         await upsertMemoryWithReplacement(uid, candidate);
@@ -1309,6 +2308,11 @@ Talkio:
 
     try {
       await updateTalkioUserProfile(db, uid, {
+        behaviorProfile: updatedBehaviorProfile,
+        behaviorSignals: updatedBehaviorSignals,
+        emotionalContinuityProfile: updatedEmotionalContinuityProfile,
+        emotionalContinuitySignals: updatedEmotionalContinuitySignals,
+
         recentMoodTrend: "mixed recently",
         commonEmotionalStates: ["mixed"],
         supportStyle: ["steady conversation", "grounded support"],
@@ -1326,17 +2330,18 @@ Talkio:
           : "",
 
         openLoops: shouldCreateOpenLoop(safeMessage)
-          ? [
-              {
-                topic: "stoic_core",
-                summary: safeMessage.slice(0, 200),
-                startedAt: Date.now(),
-                lastMentionedAt: Date.now(),
-                status: "open",
-                followUpStyle: "gentle",
-              },
-            ]
-          : [],
+  ? [
+      {
+        topic: "stoic_core",
+        summary: safeMessage.slice(0, 200),
+        emotion: detectEmotionalState(safeMessage), // ✅ ADD THIS
+        startedAt: Date.now(),
+        lastMentionedAt: Date.now(),
+        status: "open",
+        followUpStyle: "gentle",
+      },
+    ]
+  : [],
       });
 
       await updateEmotionDay(db, uid, today, {
@@ -1367,66 +2372,106 @@ Talkio:
       remainingDaily: Math.max(0, dailyLimit - userDayCountNew),
     });
   } catch (error) {
+    const statusCode = error?.statusCode || 500;
     const errorMessage = error?.message || String(error);
     const errorStack = error?.stack || null;
     const errorName = error?.name || null;
 
-    logError("generate_reply_failed", error, {
-      uid: "unknown",
-    });
+    logError("generate_reply_failed", error, { uid });
 
     logger.error("generateTalkioReply failed", {
       message: errorMessage,
       stack: errorStack,
       name: errorName,
+      uid,
     });
+
+    if (statusCode === 401) {
+      res.status(401).json({
+        error: "Unauthorized",
+        reply: "Please sign in again and try once more.",
+      });
+      return;
+    }
 
     res.status(500).json({
       error: "Server error",
       reply: "Something went wrong on my end. Please try again.",
-      details: errorMessage,
     });
   }
 });
 
 exports.testPush = onRequest({ cors: true }, async (req, res) => {
+  let uid = "unknown";
+
   try {
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
       return;
     }
 
-    const body = req.body || {};
+    const allowedOrigins = getAllowedOrigins();
+    const origin = req.headers.origin || "";
 
-    const uid = typeof body.userId === "string" ? body.userId.trim() : "";
+    if (origin && !allowedOrigins.includes(origin)) {
+      res.status(403).json({
+        error: "Blocked origin",
+        reply: "Unauthorized domain.",
+      });
+      return;
+    }
 
-if (!uid) {
-  res.status(400).json({
-    error: "Missing userId",
-    reply: "User identity is required.",
-  });
-  return;
-}
+    const incomingAppKey = req.headers["x-talkio-app-key"];
+
+    if (!INTERNAL_APP_KEY) {
+      res.status(500).json({
+        error: "Missing INTERNAL_APP_KEY",
+        reply: "Server security configuration is missing.",
+      });
+      return;
+    }
+
+    if (incomingAppKey !== INTERNAL_APP_KEY) {
+      res.status(403).json({
+        error: "Forbidden",
+        reply: "Unauthorized request.",
+      });
+      return;
+    }
+
+    const auth = await requireVerifiedUser(req);
+    uid = auth.uid;
 
     logInfo("test_push_requested", { uid });
 
-const result = await sendPushToUser(uid, {
-  title: "Talkio",
-  body: "Test push notification from Talkio.",
-  data: {
-    type: "test_push",
-  },
-});
+    const result = await sendPushToUser(uid, {
+      title: "Talkio",
+      body: "Test push notification from Talkio.",
+      data: {
+        type: "test_push",
+      },
+    });
 
     res.status(200).json({
       ok: true,
       result,
     });
   } catch (error) {
-    logError("test_push_failed", error);
+    const statusCode = error?.statusCode || 500;
+
+    logError("test_push_failed", error, { uid });
+
+    if (statusCode === 401) {
+      res.status(401).json({
+        error: "Unauthorized",
+        reply: "Please sign in again and try once more.",
+      });
+      return;
+    }
+
     res.status(500).json({
       error: "Failed to send test push",
-      details: error?.message || String(error),
+      reply: "Something went wrong while sending the test notification.",
     });
   }
 });

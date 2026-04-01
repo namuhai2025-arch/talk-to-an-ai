@@ -4,37 +4,84 @@ function getTodayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const defaultTalkioUserProfile = {
-  name: null,
-  nickname: null,
-  preferredLanguage: "Taglish",
-  conversationStyle: "warm, casual, short replies",
-  importantPeople: [],
-  commonTopics: [],
+const defaultTalkioProfile = {
   recentMoodTrend: "",
-  repeatingFeelings: [],
-  commonTriggers: [],
-  comfortStyle: ["gentle humor", "light reassurance"],
-  lastOpenLoop: null,
-
-  preferredTone: "warm_light",
-  preferredReplyLength: "short",
-  likesHumorWhenSad: false,
-  likesDirectAdvice: false,
   commonEmotionalStates: [],
-  frequentTimePattern: "",
-  supportStyle: ["gentle reassurance"],
-  relationshipStyle: "soft companion",
+  supportStyle: [],
 
-  openLoops: [],
-  recentRelationalContext: {
-    lastEmotionalTone: "",
-    lastSupportNeed: "",
-    lastConversationVibe: "",
-    lastCheckInWorthyTopic: "",
+  styleProfile: {
+    warmth: "medium",
+    depth: "balanced",
+    energy: "calm",
+    encouragement: "gentle",
+    humor: "minimal",
+    replyLength: "medium",
+    questionPreference: "sometimes",
+    languageStyle: "mirror_user",
+    preferredLanguage: "auto",
+    confidence: "low",
   },
 
-  updatedAt: null,
+  styleSignals: {
+    playfulCount: 0,
+    shortReplyCount: 0,
+    mixedLanguageCount: 0,
+    lowQuestionCount: 0,
+    deepReflectionCount: 0,
+  },
+
+  behaviorProfile: {
+    replyStyle: "balanced",
+    tonePreference: "calm",
+    languagePreference: "english",
+    languageMirroring: "single_language",
+    humorPreference: "low",
+    structurePreference: "medium",
+    emotionalPacing: "steady",
+  },
+
+  behaviorSignals: {
+    shortMessageCount: 0,
+    longMessageCount: 0,
+    playfulCount: 0,
+    seriousCount: 0,
+    taglishCount: 0,
+    englishCount: 0,
+    spanishCount: 0,
+    mixedLanguageCount: 0,
+    emotionalIntensityHighCount: 0,
+    emotionalIntensityLowCount: 0,
+    directPreferenceCount: 0,
+    gentlePreferenceCount: 0,
+  },
+
+  emotionalContinuityProfile: {
+    dominantEmotionalPattern: "steady",
+    emotionalLoad: "light",
+    continuityNeed: "low",
+    followUpStyle: "gentle",
+  },
+
+  emotionalContinuitySignals: {
+    overwhelmedCount: 0,
+    lowCount: 0,
+    drainedCount: 0,
+    agitatedCount: 0,
+    settlingCount: 0,
+    neutralCount: 0,
+    highWeightCount: 0,
+    mediumWeightCount: 0,
+    lowWeightCount: 0,
+    unresolvedTopicCount: 0,
+    lastUpdatedAt: 0,
+  },
+
+  memory: {
+    recurringThemes: [],
+    emotionalPatterns: [],
+    importantPeople: [],
+    recentSummary: "",
+  },
 };
 
 function createDefaultEmotionDay(date) {
@@ -57,6 +104,43 @@ function userProfileRef(db, uid) {
 function emotionDayRef(db, uid, date) {
   return db.doc(`users/${uid}/emotionDays/${date}`);
 }
+
+const defaultTalkioUserProfile = {
+  name: null,
+  nickname: null,
+  preferredLanguage: "Taglish",
+  conversationStyle: "warm, casual, short replies",
+
+  importantPeople: [],
+  commonTopics: [],
+  recentMoodTrend: "",
+  repeatingFeelings: [],
+  commonTriggers: [],
+  comfortStyle: ["gentle humor", "light reassurance"],
+
+  lastOpenLoop: null,
+
+  preferredTone: "warm_light",
+  preferredReplyLength: "short",
+  likesHumorWhenSad: false,
+  likesDirectAdvice: false,
+
+  commonEmotionalStates: [],
+  frequentTimePattern: "",
+  supportStyle: ["gentle reassurance"],
+  relationshipStyle: "soft companion",
+
+  openLoops: [],
+
+  recentRelationalContext: {
+    lastEmotionalTone: "",
+    lastSupportNeed: "",
+    lastConversationVibe: "",
+    lastCheckInWorthyTopic: "",
+  },
+
+  updatedAt: null,
+};
 
 async function getTalkioUserProfile(db, uid) {
   const ref = userProfileRef(db, uid);
@@ -211,34 +295,6 @@ async function updateEmotionDay(db, uid, date, updates) {
   );
 }
 
-const defaultTalkioProfile = {
-  styleProfile: {
-    warmth: "medium",
-    depth: "balanced",
-    energy: "calm",
-    encouragement: "gentle",
-    humor: "minimal",
-    replyLength: "medium",
-    questionPreference: "sometimes",
-    languageStyle: "mirror_user",
-    preferredLanguage: "auto",
-    confidence: "low",
-  },
-  styleSignals: {
-    playfulCount: 0,
-    shortReplyCount: 0,
-    mixedLanguageCount: 0,
-    lowQuestionCount: 0,
-    deepReflectionCount: 0,
-  },
-  memory: {
-    recurringThemes: [],
-    emotionalPatterns: [],
-    importantPeople: [],
-    recentSummary: "",
-  },
-};
-
 function updateStyleSignals(userMessage, signals = {}) {
   const text = (userMessage || "").trim().toLowerCase();
 
@@ -346,6 +402,7 @@ module.exports = {
   updateTalkioUserProfile,
   updateEmotionDay,
   defaultTalkioProfile,
+  defaultTalkioUserProfile, // ✅ ADD THIS
   updateStyleSignals,
   deriveStyleProfileFromSignals,
   buildStyleProfileBlock,

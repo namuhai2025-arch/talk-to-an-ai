@@ -1,9 +1,9 @@
 export const runtime = "nodejs";
 
-import { corsEmpty, corsJson } from "../chat/_cors";
+import { corsEmpty, corsJson } from "./_cors";
 
-const FIREBASE_PROFILE_URL =
-  "https://YOUR-SAVE-PROFILE-FUNCTION-URL.a.run.app";
+const FIREBASE_FUNCTION_URL =
+  "https://generatetalkioreply-ndury54xsq-uc.a.run.app";
 
 export async function OPTIONS(req: Request) {
   return corsEmpty(204, req);
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     const timezone =
       typeof body?.timezone === "string" ? body.timezone.trim().slice(0, 80) : "";
 
-    const firebaseRes = await fetch(FIREBASE_PROFILE_URL, {
+    const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

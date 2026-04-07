@@ -777,12 +777,6 @@ if (!mounted) return null;
       </div>
     </div>
 
-    {conversationTitle !== "New conversation" && (
-      <div className="px-4 pb-2 text-xs text-stone-500">
-        {conversationTitle}
-      </div>
-    )}
-
     <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3">
       <div className="mx-auto flex max-w-2xl flex-col gap-3">
         {messages.map((m, i) => {

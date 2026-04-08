@@ -16,8 +16,6 @@ function safeString(text = "", maxLen = 300) {
 }
 
 async function logTalkioEvent({
-  console.log("📊 Writing Talkio log...");
-
   latestUserMessage,
   draftReply,
   finalReply,
@@ -28,6 +26,8 @@ async function logTalkioEvent({
   reasons,
   userState,
 }) {
+  console.log("📊 Writing Talkio log...");
+
   const doc = {
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
     userMessage: safeString(latestUserMessage, 200),

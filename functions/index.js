@@ -4346,8 +4346,49 @@ ${messages.map((m) => `${m.role}: ${m.content}`).join("\n")}
 Reply naturally as Talkio.
 `.trim();
 
-  const response = await ai.models.generateContent({
-    model: selectedModel,
+  async function safeGenerate({ modelList, contents }) {
+    let lastError;
+
+    for (const model of modelList) {
+      try {
+        console.log("⚡ Trying model:", model);
+
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+        });
+
+        return { response, modelUsed: model };
+      } catch (err) {
+        const msg = err?.message || String(err);
+        console.error("❌ Model failed:", model, msg);
+
+        lastError = err;
+
+        if (
+          msg.includes("429") ||
+          msg.includes("quota") ||
+          msg.includes("RESOURCE_EXHAUSTED")
+        ) {
+          continue;
+        }
+
+        throw err;
+      }
+    }
+
+    throw lastError || new Error("All models failed");
+  }
+
+  const fallbackModels =
+    trustedUserTier === "ultra"
+      ? ["gemini-2.5-pro", "gemini-2.5-flash"]
+      : trustedUserTier === "premium"
+      ? ["gemini-2.5-flash", "gemini-2.0-flash"]
+      : ["gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
+
+  const { response, modelUsed: actualModelUsed } = await safeGenerate({
+    modelList: fallbackModels,
     contents: [
       {
         role: "user",
@@ -4356,122 +4397,147 @@ Reply naturally as Talkio.
     ],
   });
 
+  modelUsed = actualModelUsed;
+
   const text =
-    typeof response.text === "function"
-      ? response.text()
-      : response.text || "";
+    response?.candidates?.[0]?.content?.parts?.[0]?.text ||
+    (typeof response?.text === "function" ? response.text() : response?.text) ||
+    "";
 
   return text;
 }
 
-try {
-  const result = await generateTalkioReplyEngine({
+//
+// ✅ SINGLE RESPONSE POINT
+//
+ try {
+  console.log("🚀 BEFORE ENGINE CALL");
+
+  const engineResult = await generateTalkioReplyEngine({
     modelGenerate,
     systemPrompt: FINAL_TALKIO_SYSTEM_PROMPT,
     conversationMessages: history,
     latestUserMessage: message,
   });
 
-  reply = result.reply;
-  
+  console.log("🚀 AFTER ENGINE CALL");
+  console.log("STEP B OUTPUT:", engineResult);
+
+  if (
+    !engineResult ||
+    typeof engineResult.reply !== "string" ||
+    engineResult.reply.trim().length === 0
+  ) {
+    console.error("❌ INVALID ENGINE RESULT:", engineResult);
+    reply = `ENGINE_INVALID_RESULT: ${JSON.stringify(engineResult)}`;
+  } else {
+    reply = engineResult.reply;
+  }
 } catch (err) {
-  console.error("Talkio engine error:", err);
-  reply = "Something went wrong on my end. Please try again.";
+  console.error("🔥 ENGINE ERROR:", err?.message || String(err));
+  console.error("🔥 ENGINE ERROR STACK:", err?.stack || null);
+  reply = `ENGINE_ROOT_FAIL: ${err?.message || String(err)}`;
 }
 
-    if (!reply || reply.trim().length === 0) {
-      reply = "Something went wrong on my end. Please try sending your message again.";
+try {
+  if (memoryCommand?.type !== "do_not_save") {
+    const candidates = extractMemoryCandidates(message).slice(0, 3);
+    for (const candidate of candidates) {
+      await upsertMemoryWithReplacement(uid, candidate);
     }
+  }
 
-    if (memoryCommand?.type !== "do_not_save") {
-      const candidates = extractMemoryCandidates(message).slice(0, 3);
+  for (const memory of relevantMemories) {
+    await markMemoryUsed(uid, memory.id);
 
-      for (const candidate of candidates) {
-        await upsertMemoryWithReplacement(uid, candidate);
-      }
+    if (memory.type === "reminder_followup") {
+      await archiveMemory(uid, memory.id);
     }
+  }
 
-    for (const memory of relevantMemories) {
-      await markMemoryUsed(uid, memory.id);
+  const nextSummary = buildSimpleRollingSummary({
+    previousSummary,
+    userMessage: message,
+    assistantReply: reply,
+  });
 
-      if (memory.type === "reminder_followup") {
-        await archiveMemory(uid, memory.id);
-      }
-    }
+  await setConversationSummary(uid, nextSummary);
 
-    const nextSummary = buildSimpleRollingSummary({
-      previousSummary,
-      userMessage: message,
-      assistantReply: reply,
-    });
+  try {
+    await updateTalkioUserProfile(db, uid, {
+      behaviorProfile: updatedBehaviorProfile,
+      behaviorSignals: updatedBehaviorSignals,
+      emotionalContinuityProfile: updatedEmotionalContinuityProfile,
+      emotionalContinuitySignals: updatedEmotionalContinuitySignals,
 
-    await setConversationSummary(uid, nextSummary);
+      recentMoodTrend: "mixed recently",
+      commonEmotionalStates: ["mixed"],
+      supportStyle: ["steady conversation", "grounded support"],
 
-    try {
-      await updateTalkioUserProfile(db, uid, {
-        behaviorProfile: updatedBehaviorProfile,
-        behaviorSignals: updatedBehaviorSignals,
-        emotionalContinuityProfile: updatedEmotionalContinuityProfile,
-        emotionalContinuitySignals: updatedEmotionalContinuitySignals,
-
-        recentMoodTrend: "mixed recently",
-        commonEmotionalStates: ["mixed"],
-        supportStyle: ["steady conversation", "grounded support"],
-
-        recentRelationalContext: {
-          lastMode: "stoic_core",
-          lastConversationVibe: "grounded",
-          lastCheckInWorthyTopic: shouldCreateOpenLoop(safeMessage)
-            ? safeMessage.slice(0, 80)
-            : "",
-        },
-
-        lastOpenLoop: shouldCreateOpenLoop(safeMessage)
-          ? safeMessage.slice(0, 120)
+      recentRelationalContext: {
+        lastMode: "stoic_core",
+        lastConversationVibe: "grounded",
+        lastCheckInWorthyTopic: shouldCreateOpenLoop(safeMessage)
+          ? safeMessage.slice(0, 80)
           : "",
-
-        openLoops: shouldCreateOpenLoop(safeMessage)
-  ? [
-      {
-        topic: "stoic_core",
-        summary: safeMessage.slice(0, 200),
-        emotion: detectEmotionalState(safeMessage), // ✅ ADD THIS
-        startedAt: Date.now(),
-        lastMentionedAt: Date.now(),
-        status: "open",
-        followUpStyle: "gentle",
       },
-    ]
-  : [],
-      });
 
-      await updateEmotionDay(db, uid, today, {
-        dominantMood: "mixed",
-        moodScore: 3,
-        themes: ["stoic_core"],
-        summary: safeMessage.slice(0, 200),
-      });
-    } catch (memoryError) {
-      logger.warn("Failed to update Talkio memory", {
-        uid,
-        error: memoryError?.message || String(memoryError),
-      });
-    }
+      lastOpenLoop: shouldCreateOpenLoop(safeMessage)
+        ? safeMessage.slice(0, 120)
+        : "",
 
-    await markTalkioReply(uid);
+      openLoops: shouldCreateOpenLoop(safeMessage)
+        ? [
+            {
+              topic: "stoic_core",
+              summary: safeMessage.slice(0, 200),
+              emotion: detectEmotionalState(safeMessage),
+              startedAt: Date.now(),
+              lastMentionedAt: Date.now(),
+              status: "open",
+              followUpStyle: "gentle",
+            },
+          ]
+        : [],
+    });
 
-    logInfo("response_sent", {
+    await updateEmotionDay(db, uid, today, {
+      dominantMood: "mixed",
+      moodScore: 3,
+      themes: ["stoic_core"],
+      summary: safeMessage.slice(0, 200),
+    });
+  } catch (memoryError) {
+    logger.warn("Failed to update Talkio memory", {
       uid,
-      modelUsed,
-      replyLength: reply.length,
-      remainingDaily: Math.max(0, dailyLimit - userDayCountNew),
+      error: memoryError?.message || String(memoryError),
     });
+  }
 
-    res.status(200).json({
-      reply,
-      model: modelUsed,
-      remainingDaily: Math.max(0, dailyLimit - userDayCountNew),
-    });
+  await markTalkioReply(uid);
+} catch (postError) {
+  console.error("⚠️ POST-PROCESS ERROR:", postError?.message || String(postError));
+  console.error("⚠️ POST-PROCESS STACK:", postError?.stack || null);
+}
+
+if (!reply || reply.trim().length === 0) {
+  reply = "FINAL_FALLBACK_TRIGGERED";
+}
+
+logInfo("response_sent", {
+  uid,
+  modelUsed,
+  replyLength: reply.length,
+  remainingDaily: Math.max(0, dailyLimit - userDayCountNew),
+});
+
+return res.status(200).json({
+  reply,
+  model: modelUsed,
+  remainingDaily: Math.max(0, dailyLimit - userDayCountNew),
+});
+
+
   } catch (error) {
     const statusCode = error?.statusCode || 500;
     const errorMessage = error?.message || String(error);

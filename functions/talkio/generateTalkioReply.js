@@ -87,30 +87,30 @@ async function generateTalkioReply({
 
   // 1) First draft
   let draft = "";
-  try {
-    draft = await modelGenerate({
-      systemPrompt,
-      messages: conversationMessages,
-    });
-  } catch (err) {
-    const fallback = buildFallbackReply(latestUserMessage);
-    return {
-      reply: fallback,
-      quality: {
-        total: 0,
-        breakdown: {},
-        reasons: ["initial_generation_failed"],
-        shouldRewrite: false,
-        shouldDiscard: false,
-      },
-      rewritten: false,
-      rewriteType: "fallback_after_generation_error",
-      debug: {
-        userState,
-        error: err?.message || String(err),
-      },
-    };
-  }
+try {
+  draft = await modelGenerate({
+    systemPrompt,
+    messages: conversationMessages,
+  });
+} catch (err) {
+  const fallback = buildFallbackReply(latestUserMessage);
+  return {
+    reply: fallback,
+    quality: {
+      total: 0,
+      breakdown: {},
+      reasons: ["initial_generation_failed"],
+      shouldRewrite: false,
+      shouldDiscard: false,
+    },
+    rewritten: false,
+    rewriteType: "fallback_after_generation_error",
+    debug: {
+      userState,
+      error: err?.message || String(err),
+    },
+  };
+}
 
   const score1 = scoreReply({
     reply: draft,
@@ -199,7 +199,9 @@ async function generateTalkioReply({
         rewriteType: "model_rewrite",
       });
     } catch (err) {
-      candidates.push({
+      console.error("🔥 model rewrite failed:", err);
+
+      candidates.push({      
         type: "model_rewrite_error",
         reply: "",
         quality: {

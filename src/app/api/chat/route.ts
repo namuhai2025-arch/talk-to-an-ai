@@ -10,6 +10,7 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function POST(req: Request) {
+  console.log("🔥 ROUTE HIT");
   const reply = (data: any, status = 200) => {
     return corsJson(data, { status, req });
   };
@@ -87,6 +88,7 @@ export async function POST(req: Request) {
       localHour,
     };
 
+    console.log("🔥 calling firebase...");
     const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
       method: "POST",
       headers: {
@@ -98,6 +100,7 @@ export async function POST(req: Request) {
       cache: "no-store",
     });
 
+    console.log("🔥 firebase response status:", firebaseRes.status);
     const rawText = await firebaseRes.text();
 
     let data: any;

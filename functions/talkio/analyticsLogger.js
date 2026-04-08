@@ -1,14 +1,7 @@
 "use strict";
 
-/**
- * Talkio Analytics Logger
- * -----------------------
- * Writes lightweight logs to Firestore for tuning and debugging.
- */
-
 const admin = require("firebase-admin");
 
-// Ensure initialized
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -23,6 +16,8 @@ function safeString(text = "", maxLen = 300) {
 }
 
 async function logTalkioEvent({
+  console.log("📊 Writing Talkio log...");
+
   latestUserMessage,
   draftReply,
   finalReply,
@@ -33,44 +28,34 @@ async function logTalkioEvent({
   reasons,
   userState,
 }) {
-  try {
-    const doc = {
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  const doc = {
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    userMessage: safeString(latestUserMessage, 200),
+    draftReply: safeString(draftReply, 300),
+    finalReply: safeString(finalReply, 300),
+    scoreBefore: scoreBefore?.total || 0,
+    scoreAfter: scoreAfter?.total || 0,
+    rewriteUsed: Boolean(rewriteUsed),
+    rewriteType: rewriteType || null,
+    reasons: Array.isArray(reasons) ? reasons : [],
+    userState: {
+      intent: userState?.intent || "unknown",
+      energy: userState?.energy || "unknown",
+      intensity: userState?.intensity || "unknown",
+      asksWhatToDo: Boolean(userState?.asksWhatToDo),
+      overwhelmed: Boolean(userState?.overwhelmed),
+      shortInput: Boolean(userState?.shortInput),
+      lowEnergy: Boolean(userState?.lowEnergy),
+      source: userState?.source || "unknown",
+      escalatedToModel: Boolean(userState?.escalatedToModel),
+      confidence:
+        typeof userState?.confidence === "number" ? userState.confidence : null,
+    },
+  };
 
-      // Input
-      userMessage: safeString(latestUserMessage, 200),
+  await db.collection("talkio_logs").add(doc);
 
-      // Replies
-      draftReply: safeString(draftReply, 300),
-      finalReply: safeString(finalReply, 300),
-
-      // Scores
-      scoreBefore: scoreBefore?.total || 0,
-      scoreAfter: scoreAfter?.total || 0,
-
-      // Rewrite info
-      rewriteUsed: Boolean(rewriteUsed),
-      rewriteType: rewriteType || null,
-      reasons: reasons || [],
-
-      // Smart Hybrid insights
-      userState: {
-        intent: userState?.intent || "unknown",
-        energy: userState?.energy || "unknown",
-        intensity: userState?.intensity || "unknown",
-        asksWhatToDo: Boolean(userState?.asksWhatToDo),
-        overwhelmed: Boolean(userState?.overwhelmed),
-        shortInput: Boolean(userState?.shortInput),
-        source: userState?.source || "unknown",
-        escalatedToModel: Boolean(userState?.escalatedToModel),
-        confidence: userState?.confidence ?? null,
-      },
-    };
-
-    await db.collection("talkio_logs").add(doc);
-  } catch (err) {
-    console.error("Talkio analytics log failed:", err.message);
-  }
+  console.log("✅ Talkio log written");
 }
 
 module.exports = {

@@ -101,6 +101,13 @@ async function detectUserStateHybrid({
 }) {
   const heuristicState = detectUserState(latestUserMessage);
 
+  const asksWhatToDoRegex =
+  /what should i do|what do i do|what now|unsa akong buhaton|unsa man akong buhaton|ano gagawin ko|anong gagawin ko/i;
+
+if (asksWhatToDoRegex.test(String(latestUserMessage || ""))) {
+  heuristicState.asksWhatToDo = true;
+}
+
   const confidenceMeta = scoreHeuristicConfidence({
     latestUserMessage,
     heuristicState,

@@ -7,9 +7,9 @@ const { detectUserStateHybrid } = require("./detectUserStateHybrid");
 const { logTalkioEvent } = require("./analyticsLogger");
 
 const DEFAULT_THRESHOLDS = {
-  ACCEPT_THRESHOLD: 80,
-  REWRITE_THRESHOLD: 68,
-  DISCARD_THRESHOLD: 50,
+  ACCEPT_THRESHOLD: 88,
+  REWRITE_THRESHOLD: 78,
+  DISCARD_THRESHOLD: 65,
 };
 
 function getPreviousAssistantReply(messages = []) {
@@ -73,7 +73,7 @@ async function generateTalkioReply({
   if (typeof modelGenerate !== "function") {
     throw new Error("generateTalkioReply requires a valid async modelGenerate function.");
   }
-
+  
   const previousAssistantReply = getPreviousAssistantReply(conversationMessages);
   const turnIndex = Array.isArray(conversationMessages)
     ? conversationMessages.length
@@ -223,17 +223,21 @@ async function generateTalkioReply({
     const best = ranked[0];
 
     if (best.quality.total >= thresholds.REWRITE_THRESHOLD) {
-      logTalkioEvent({
-  latestUserMessage,
-  draftReply: draft,
-  finalReply: best.reply,
-  scoreBefore: score1,
-  scoreAfter: best.quality,
-  rewriteUsed: best.rewritten,
-  rewriteType: best.rewriteType,
-  reasons: best.quality.reasons,
-  userState,
-});
+  try {
+    await logTalkioEvent({
+      latestUserMessage,
+      draftReply: draft,
+      finalReply: best.reply,
+      scoreBefore: score1,
+      scoreAfter: best.quality,
+      rewriteUsed: best.rewritten,
+      rewriteType: best.rewriteType,
+      reasons: best.quality.reasons,
+      userState,
+    });
+  } catch (e) {
+    console.error("logTalkioEvent failed", e);
+  }
       return {
         reply: best.reply,
         quality: best.quality,
@@ -261,17 +265,21 @@ async function generateTalkioReply({
     userStateOverride: userState,
   });
 
-  logTalkioEvent({
-  latestUserMessage,
-  draftReply: draft,
-  finalReply: fallback,
-  scoreBefore: score1,
-  scoreAfter: fallbackScore,
-  rewriteUsed: true,
-  rewriteType: "fallback",
-  reasons: ["fallback_used"],
-  userState,
-});
+  try {
+  await logTalkioEvent({
+    latestUserMessage,
+    draftReply: draft,
+    finalReply: fallback,
+    scoreBefore: score1,
+    scoreAfter: fallbackScore,
+    rewriteUsed: true,
+    rewriteType: "fallback",
+    reasons: ["fallback_used"],
+    userState,
+  });
+} catch (e) {
+  console.error("logTalkioEvent failed", e);
+}
 
   return {
     reply: fallback,

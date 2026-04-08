@@ -17,6 +17,7 @@ if (!admin.apps.length) {
 const { createReminder } = require("./reminders/helpers");
 const { detectReminderCommand } = require("./reminders/extractors");
 const { processDueReminders } = require("./reminders/scheduler");
+const { generateTalkioReply } = require("./talkio/generateTalkioReply");
 
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 
@@ -716,24 +717,16 @@ function shouldCreateOpenLoop(text) {
 
 "use strict";
 
-const { scoreReply } = require("./responseScorer");
-const { repairReply } = require("./replyRepair");
-const { buildFallbackReply } = require("./fallbackReply");
-const { generateTalkioReply, DEFAULT_THRESHOLDS } = require("./generateTalkioReply");
-const { detectUserStateHybrid, classifyUserStateWithModel } = require("./detectUserStateHybrid");
-const { scoreHeuristicConfidence, detectLikelyNonEnglish } = require("./stateConfidence");
-
-module.exports = {
-  scoreReply,
-  repairReply,
-  buildFallbackReply,
-  generateTalkioReply,
+const { scoreReply } = require("./talkio/responseScorer");
+const { repairReply } = require("./talkio/replyRepair");
+const { buildFallbackReply } = require("./talkio/fallbackReply");
+const { detectUserStateHybrid, classifyUserStateWithModel } = require("./talkio/detectUserStateHybrid");
+const { logTalkioEvent } = require("./talkio/analyticsLogger");
+const {
+  generateTalkioReply: generateTalkioReplyEngine,
   DEFAULT_THRESHOLDS,
-  detectUserStateHybrid,
-  classifyUserStateWithModel,
-  scoreHeuristicConfidence,
-  detectLikelyNonEnglish,
-};
+} = require("./talkio/generateTalkioReply");
+const { scoreHeuristicConfidence, detectLikelyNonEnglish } = require("./talkio/stateConfidence");
 
 async function updateSmartCheckinState(uid, message) {
   const update = {
@@ -4340,107 +4333,51 @@ Talkio:
     const selectedModel = pickModel({ userTier: trustedUserTier });
 
     let reply = "";
-    let modelUsed = selectedModel;
+let modelUsed = selectedModel;
 
-    try {
-      logInfo("ai_generation_start", {
-        model: selectedModel,
-        uid,
-        type: "primary",
-      });
+// Adapter for your existing Gemini call
+async function modelGenerate({ systemPrompt, messages }) {
+  const finalPrompt = `
+${systemPrompt}
 
-      const response = await ai.models.generateContent({
-        model: selectedModel,
-        systemInstruction: {
-          parts: [{ text: FINAL_TALKIO_SYSTEM_PROMPT }],
-        },
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: prompt }],
-          },
-        ],
-      });
+Conversation:
+${messages.map((m) => `${m.role}: ${m.content}`).join("\n")}
 
-      reply =
-        typeof response.text === "function"
-          ? response.text()
-          : response.text || "";
+Reply naturally as Talkio.
+`.trim();
 
-      logInfo("ai_generation_success", {
-        model: selectedModel,
-        uid,
-        replyLength: reply.length,
-        type: "primary",
-      });
-    } catch (err) {
-      const errorText = err?.message || String(err);
+  const response = await ai.models.generateContent({
+    model: selectedModel,
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: finalPrompt }],
+      },
+    ],
+  });
 
-      logger.warn("Primary model failed", {
-        model: selectedModel,
-        error: errorText,
-      });
+  const text =
+    typeof response.text === "function"
+      ? response.text()
+      : response.text || "";
 
-      if (
-        errorText.includes('"code":429') ||
-        errorText.includes("RESOURCE_EXHAUSTED")
-      ) {
-        res.status(429).json({
-          error: "AI quota reached",
-          reply: "Talkio is a bit busy right now. Please wait a little and try again.",
-        });
-        return;
-      }
+  return text;
+}
 
-      try {
-        const fallbackModel =
-          trustedUserTier === "ultra"
-            ? PREMIUM_MODEL
-            : trustedUserTier === "premium"
-              ? FREE_MODEL
-              : FREE_MODEL;
+try {
+  const result = await generateTalkioReplyEngine({
+    modelGenerate,
+    systemPrompt: FINAL_TALKIO_SYSTEM_PROMPT,
+    conversationMessages: history,
+    latestUserMessage: message,
+  });
 
-        logInfo("ai_generation_start", {
-          model: fallbackModel,
-          uid,
-          type: "fallback",
-        });
-
-        const response = await ai.models.generateContent({
-          model: fallbackModel,
-          systemInstruction: {
-            parts: [{ text: FINAL_TALKIO_SYSTEM_PROMPT }],
-          },
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: prompt }],
-            },
-          ],
-        });
-
-        reply =
-          typeof response.text === "function"
-            ? response.text()
-            : response.text || "";
-
-        logInfo("ai_generation_success", {
-          model: fallbackModel,
-          uid,
-          replyLength: reply.length,
-          type: "fallback",
-        });
-
-        modelUsed = fallbackModel;
-      } catch (fallbackError) {
-        logger.error("Fallback model also failed", {
-          message: fallbackError?.message || String(fallbackError),
-          stack: fallbackError?.stack || null,
-          name: fallbackError?.name || null,
-        });
-        throw fallbackError;
-      }
-    }
+  reply = result.reply;
+  
+} catch (err) {
+  console.error("Talkio engine error:", err);
+  reply = "Something went wrong on my end. Please try again.";
+}
 
     if (!reply || reply.trim().length === 0) {
       reply = "Something went wrong on my end. Please try sending your message again.";

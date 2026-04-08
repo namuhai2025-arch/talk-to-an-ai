@@ -102,6 +102,7 @@ export async function POST(req: Request) {
 
     console.log("🔥 firebase response status:", firebaseRes.status);
     const rawText = await firebaseRes.text();
+    console.log("🔥 RAW FIREBASE RESPONSE:", rawText);
 
     let data: any;
     try {

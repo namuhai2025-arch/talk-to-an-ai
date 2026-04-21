@@ -31,9 +31,9 @@ const ULTRA_PER_MINUTE_LIMIT = 60;
 const EARLY_ACCESS_DAILY_LIMIT = 1000;
 const EARLY_ACCESS_PER_MINUTE_LIMIT = 60;
 
-const EARLY_ACCESS_EMAILS = new Set([
-  "vmonitoringsystem@gmail.com",
-  "rosalialacida06@gmail.com",  
+const EARLY_ACCESS_UIDS = new Set([
+  "vxcHUj4oWZb0ZqLEdQFeHCAaLSA2",
+  "w2Bxf7Xh3cMjsaePIt1bOWYrm2F2",
 ]);
 
 function normalizeEmail(email) {
@@ -41,13 +41,15 @@ function normalizeEmail(email) {
 }
 
 function isEarlyAccessUser(body = {}, authUser = null) {
+  const uid = authUser?.uid || "";
   const emailFromBody = normalizeEmail(body?.email);
   const emailFromAuth =
     normalizeEmail(authUser?.email) ||
     normalizeEmail(authUser?.token?.email);
 
   const email = emailFromAuth || emailFromBody;
-  return EARLY_ACCESS_EMAILS.has(email);
+
+  return EARLY_ACCESS_UIDS.has(uid) || EARLY_ACCESS_EMAILS.has(email);
 }
 
 function getLimitsForUser({ userTier, isEarlyAccess }) {
@@ -2985,6 +2987,7 @@ logger.info("limit_debug", {
   ipDailyCount,
   ipMinuteCount,
   email: resolvedEmail,
+  uid: decodedToken?.uid || "",
 });
 
     if (userDailyCount > dailyLimit) {

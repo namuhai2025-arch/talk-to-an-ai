@@ -1,32 +1,35 @@
-// functions/memory/config.js
+"use strict";
 
-const STARTING_SCORE = {
-  core: 100,
-  important: 75,
-  light: 40,
-};
+const PERSON_ROLES = [
+  "mom",
+  "mother",
+  "dad",
+  "father",
+  "sister",
+  "brother",
+  "boss",
+  "manager",
+  "coworker",
+  "co-worker",
+  "friend",
+  "best friend",
+  "boyfriend",
+  "girlfriend",
+  "husband",
+  "wife",
+];
 
-const MONTHLY_DECAY = {
-  core: 1,
-  important: 3,
-  light: 8,
-};
-
-const REINFORCEMENT_BOOST = {
-  explicit_repeat: 15,
-  indirect_repeat: 8,
-  successful_use: 5,
-};
-
-const MAX_ACTIVE_MEMORY_ITEMS = 50;
-const MAX_RETRIEVED_MEMORY_ITEMS = 5;
-const MAX_SUMMARY_CHARS = 800;
+const SAFE_STYLE_EXPRESSIONS = [
+  "grabe",
+  "hala",
+  "ayieee",
+  "char",
+  "naku",
+  "kapoy",
+  "hay",
+];
 
 module.exports = {
-  STARTING_SCORE,
-  MONTHLY_DECAY,
-  REINFORCEMENT_BOOST,
-  MAX_ACTIVE_MEMORY_ITEMS,
-  MAX_RETRIEVED_MEMORY_ITEMS,
-  MAX_SUMMARY_CHARS,
+  PERSON_ROLES,
+  SAFE_STYLE_EXPRESSIONS,
 };

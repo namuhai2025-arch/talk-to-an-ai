@@ -124,4 +124,5 @@ module.exports = {
   DISTRESS_PATTERNS,
   TRAJECTORY_PATTERNS,
   REPLY_PATTERNS,
+  hasGroundModeShape,
 };

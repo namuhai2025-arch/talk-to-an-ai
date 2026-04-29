@@ -18,8 +18,6 @@ const ALLOWED_ORIGINS = new Set<string>([
 function isAllowedOrigin(origin: string) {
   if (ALLOWED_ORIGINS.has(origin)) return true;
 
-  // Optional: allow Vercel preview deployments
-  // e.g. https://talkio-xyz.vercel.app
   try {
     const u = new URL(origin);
     if (u.hostname.endsWith(".vercel.app")) return true;
@@ -31,9 +29,6 @@ function isAllowedOrigin(origin: string) {
 function pickOrigin(req?: Request) {
   const origin = req?.headers.get("origin") || "";
   if (origin && isAllowedOrigin(origin)) return origin;
-
-  // If no Origin header, do NOT echo something random.
-  // For no-origin requests, returning DEFAULT_ORIGIN is fine.
   return DEFAULT_ORIGIN;
 }
 
@@ -43,7 +38,7 @@ export function corsHeadersFor(req?: Request) {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Allow-Credentials": "true",
     Vary: "Origin",
   } as const;

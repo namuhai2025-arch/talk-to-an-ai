@@ -16,7 +16,7 @@
     "@google/genai": "^1.44.0",
     "@upstash/redis": "^1.36.4",
     "firebase-admin": "^13.6.0",
-    "firebase-functions": "^7.0.0"
+    "firebase-functions": "^7.2.5"
   },
   "devDependencies": {
     "firebase-functions-test": "^3.4.1"

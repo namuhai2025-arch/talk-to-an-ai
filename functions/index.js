@@ -2106,20 +2106,27 @@ try {
   redis.expire(ipDailyKey, secondsUntilUtcMidnight()),
   redis.expire(ipMinuteKey, 120),
 ]);
+  
+  if (userDailyCount > dailyLimit) {
+  const isFree = limitLabel === "free";
 
-    if (userDailyCount > dailyLimit) {
   res.status(429).json({
     error: "Daily message limit reached",
-    reply:
-      limitLabel === "free"
-        ? "You've reached today's free message limit. Talkio Pro unlocks more conversations, or you can come back tomorrow."
-        : "You've reached today's message limit. Please come back later.",
+
+    // 🔥 THIS is the important addition
+    paywallRequired: isFree,
+
+    reply: isFree
+      ? "You’ve reached today’s free limit. Continue with Talkio Paid to keep chatting."
+      : "You've reached today's message limit. Please come back later.",
+
     remainingDaily: 0,
     dailyLimit,
     quotaTier: limitLabel,
   });
+
   return;
-}
+}   
 
 if (
   userMinuteCount > perMinuteLimit ||

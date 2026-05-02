@@ -185,6 +185,15 @@ export default function Page() {
   }, [mounted]);
 
   useEffect(() => {
+  const shouldOpenNickname = localStorage.getItem("openNicknamePrompt");
+
+  if (shouldOpenNickname === "true") {
+    localStorage.removeItem("openNicknamePrompt");
+    setShowNamePrompt(true);
+  }
+}, []);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, showTyping]);
 

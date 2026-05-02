@@ -56,7 +56,10 @@ export default function SettingsPage() {
         <section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-sm">
           <button
             type="button"
-            onClick={() => (window.location.href = "/")}
+            onClick={() => {
+  localStorage.setItem("openNicknamePrompt", "true");
+  window.location.href = "/";
+}}
             className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
           >
             <div>
@@ -71,10 +74,10 @@ export default function SettingsPage() {
           <div className="mx-5 border-t border-stone-100" />
 
           <button
-            type="button"
-            onClick={() => (window.location.href = "/settings/account")}
-            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
-          >
+  type="button"
+  onClick={() => (window.location.href = "/settings/account")}
+  className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+>
             <div>
               <p className="font-medium text-stone-900">Account</p>
               <p className="mt-1 text-sm text-stone-500">

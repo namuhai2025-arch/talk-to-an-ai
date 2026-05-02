@@ -1,8 +1,14 @@
 "use strict";
 
-const admin = require("firebase-admin");
-const { onRequest } = require("firebase-functions/v2/https");
-const { onSchedule } = require("firebase-functions/v2/scheduler");
+import admin from "firebase-admin";
+import { onRequest } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import * as functions from "firebase-functions";
+import { createRequire } from "module";
+
+
+const require = createRequire(import.meta.url);
+
 const logger = require("firebase-functions/logger");
 const { GoogleGenAI } = require("@google/genai");
 const crypto = require("crypto");
@@ -10,7 +16,11 @@ const { Redis } = require("@upstash/redis");
 
 const { db } = require("./lib/firebase");
 const { ensureUserBase } = require("./memory_lite/helpers");
-const { getTalkioMemoryBundle, defaultTalkioProfile, getTodayDateString } = require("./lib/talkioMemory");
+const {
+  getTalkioMemoryBundle,
+  defaultTalkioProfile,
+  getTodayDateString,
+} = require("./lib/talkioMemory");
 
 const {
   generateTalkioReply: generateTalkioReplyEngine,
@@ -76,6 +86,51 @@ async function getUserAccessProfile(uid, decodedToken = {}) {
     subscriptionStatus: data.subscriptionStatus || "none",
   };
 }
+
+export const activateTestPaid = onRequest(async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const authHeader = req.headers.authorization || "";
+
+    if (!authHeader.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const idToken = authHeader.split("Bearer ")[1];
+    const decoded = await admin.auth().verifyIdToken(idToken);
+
+    if (decoded.firebase?.sign_in_provider === "anonymous") {
+      res.status(403).json({
+        error: "Google account required",
+        message: "Connect Google before activating Paid.",
+      });
+      return;
+    }
+
+    const uid = decoded.uid;
+
+    await admin.firestore().collection("users").doc(uid).set(
+      {
+        subscriptionActive: true,
+        plan: "paid",
+        subscriptionProvider: "manual_test",
+        paidActivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    res.status(200).json({ ok: true, plan: "paid" });
+  } catch (error) {
+    console.error("activateTestPaid failed:", error);
+    res.status(500).json({ error: "Failed to activate test paid" });
+  }
+});
 
 function getLimitsForAccess(access = {}) {
   const tier = access.quotaTier || access.plan || "free";
@@ -1509,7 +1564,7 @@ function pickCheckinMessage(checkin, userData = {}) {
   return options[Math.floor(Math.random() * options.length)];
 }
 
-exports.mergeUserData = onRequest(async (req, res) => {
+export const mergeUserData = onRequest(async (req, res) => {
   try {
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
@@ -1583,7 +1638,7 @@ exports.mergeUserData = onRequest(async (req, res) => {
   }
 });
 
-exports.bootstrapTalkioMemory = onRequest({ cors: true }, async (req, res) => {
+export const bootstrapTalkioMemory = onRequest({ cors: true }, async (req, res) => {
   let uid = "unknown";
 
   try {
@@ -1701,7 +1756,7 @@ exports.bootstrapTalkioMemory = onRequest({ cors: true }, async (req, res) => {
   }
 });
 
-exports.saveTalkioProfile = onRequest({ cors: true }, async (req, res) => {
+export const saveTalkioProfile = onRequest({ cors: true }, async (req, res) => {
   let uid = "unknown";
 
   try {
@@ -1784,7 +1839,7 @@ exports.saveTalkioProfile = onRequest({ cors: true }, async (req, res) => {
   }
 });
 
-exports.createCheckin = onRequest({ cors: true }, async (req, res) => {
+export const createCheckin = onRequest({ cors: true }, async (req, res) => {
   let uid = "unknown";
 
   try {
@@ -1881,7 +1936,7 @@ exports.createCheckin = onRequest({ cors: true }, async (req, res) => {
   }
 });
 
-exports.processDueCheckins = onSchedule(
+export const processDueCheckins = onSchedule(
   {
     schedule: "* * * * *",
     timeZone: "Asia/Manila",
@@ -1967,7 +2022,7 @@ async function deleteCollection(path, batchSize = 100) {
   }
 }
 
-exports.deleteMyAccount = onRequest({ cors: true }, async (req, res) => {
+export const deleteMyAccount = onRequest({ cors: true }, async (req, res) => {
   let uid = "unknown";
 
   try {
@@ -2020,7 +2075,7 @@ exports.deleteMyAccount = onRequest({ cors: true }, async (req, res) => {
   }
 });
         
-exports.generateTalkioReply = onRequest(async (req, res) => {
+export const generateTalkioReply = onRequest(async (req, res) => {
   try {
       if (req.method === "OPTIONS") {
       res.status(204).send("");

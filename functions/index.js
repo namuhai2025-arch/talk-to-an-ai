@@ -473,154 +473,6 @@ function detectLanguageMirror(text = "") {
   };
 }
 
-function detectGroundingNeed(messages = []) {
-  const joined = messages
-    .map((m) => `${m.role || ""}: ${String(m.content || "").toLowerCase()}`)
-    .join("\n");
-
-  const overwhelmed =
-    /\bdevastated|broken|shattered|can't think|cant think|panic|panicking|overwhelmed|falling apart|spiraling|spiralling|lost everything\b/i.test(
-      joined
-    );
-
-  const intoxicated =
-    /\bdrunk|tipsy|wasted|intoxicated|hammered|not sober|drinking again|drunk as hell\b/i.test(
-      joined
-    );
-
-  const disoriented =
-    /\bi don't know where to go|nowhere to go|completely lost\b/i.test(joined);
-
-  const hasIdentityCollapse =
-    /\bi am nobody|i'm nobody|i am nothing|i'm nothing|worthless|useless|empty\b/i.test(
-      joined
-    );
-
-  return overwhelmed || hasIdentityCollapse || (intoxicated && disoriented);
-}
-
-function normalizeForTrajectory(text = "") {
-  return String(text || "")
-    .toLowerCase()
-    .replace(/[^\w\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function detectTrajectory(messages = []) {
-  const userMessages = (Array.isArray(messages) ? messages : [])
-    .filter((m) => m && m.role === "user" && typeof m.content === "string")
-    .map((m) => m.content.trim())
-    .filter(Boolean);
-
-  const recent = userMessages.slice(-6);
-  const joined = recent.join("\n").toLowerCase();
-
-  const distressSignals =
-    /\b(devastated|broken|shattered|heartbroken|betrayed|lost|empty|numb|worthless|alone|ignored|overwhelmed|falling apart|spiraling|panic|drunk|nobody cares|i am nobody|i'm nobody)\b/i;
-
-  const lighterSurface =
-    /\b(i'm okay|im okay|i'm fine|im fine|all good|haha|lol|lmao|just chilling|whatever|it's fine|its fine)\b/i;
-
-  const shutdownSignals =
-    /\b(doesn't matter|doesnt matter|never mind|forget it|leave it|whatever)\b/i;
-
-  const repeatedLoopSignals =
-    /\b(still|again|same|nothing changed|always|every time)\b/i;
-
-  let distressCount = 0;
-  let lightCount = 0;
-  let shutdownCount = 0;
-  let loopCount = 0;
-
-  for (const text of recent) {
-    const t = text.toLowerCase();
-    if (distressSignals.test(t)) distressCount++;
-    if (lighterSurface.test(t)) lightCount++;
-    if (shutdownSignals.test(t)) shutdownCount++;
-    if (repeatedLoopSignals.test(t)) loopCount++;
-  }
-
-  const last = recent[recent.length - 1]?.toLowerCase() || "";
-  const prev = recent[recent.length - 2]?.toLowerCase() || "";
-
-  const suddenDrop =
-    lighterSurface.test(prev) && distressSignals.test(last);
-
-  const maskingLikely =
-    distressCount >= 1 &&
-    lightCount >= 1 &&
-    /\b(haha|lol|i'm fine|im fine|whatever|it's fine|its fine)\b/i.test(last);
-
-  const worsening =
-    distressCount >= 2 &&
-    (loopCount >= 1 || /\b(still|nothing changed|falling apart|worse)\b/i.test(last));
-
-  const looping =
-    loopCount >= 2 ||
-    /\b(same thing|same problem|again and again|over and over)\b/i.test(joined);
-
-  const shutDown =
-    shutdownCount >= 1 && /\b(never mind|doesn't matter|forget it)\b/i.test(last);
-
-  if (suddenDrop) {
-    return {
-      mode: "sudden_drop",
-      worsening: true,
-      maskingLikely: false,
-      looping: false,
-      shutDown: false,
-    };
-  }
-
-  if (worsening) {
-    return {
-      mode: "worsening",
-      worsening: true,
-      maskingLikely,
-      looping,
-      shutDown,
-    };
-  }
-
-  if (maskingLikely) {
-    return {
-      mode: "masking",
-      worsening: false,
-      maskingLikely: true,
-      looping,
-      shutDown,
-    };
-  }
-
-  if (looping) {
-    return {
-      mode: "looping",
-      worsening: false,
-      maskingLikely: false,
-      looping: true,
-      shutDown,
-    };
-  }
-
-  if (shutDown) {
-    return {
-      mode: "shutdown",
-      worsening: false,
-      maskingLikely: false,
-      looping: false,
-      shutDown: true,
-    };
-  }
-
-  return {
-    mode: "stable",
-    worsening: false,
-    maskingLikely: false,
-    looping: false,
-    shutDown: false,
-  };
-}
 const CORE_IDENTITY_PROMPT = `
 
 You are Talkio: a natural, emotionally intelligent, Stoic AI companion.
@@ -694,6 +546,34 @@ Before sending a reply, check:
 
 If not, simplify it.
 
+- uplift:
+  match the user's positive energy
+  celebrate naturally
+  do not sound exaggerated
+  do not turn joy into advice too quickly
+
+- receive:
+  warmly receive gratitude
+  keep it humble and grounded
+  do not over-expand
+
+- settle:
+  honor relief
+  help the user feel the pressure drop
+  do not add new pressure
+
+- soft_reflect:
+  mirror calm, peace, or lightness
+  keep the reply spacious and simple
+
+- clear_answer:
+  answer directly and clearly
+  keep warmth, but prioritize usefulness
+
+- hold_complexity:
+  hold mixed emotions without flattening them
+  allow joy and sadness, relief and grief, anger and hurt to exist together
+  do not force a single emotional label
 --------------------------------
 STOIC REINFORCEMENT (SUBTLE)
 --------------------------------
@@ -1059,177 +939,17 @@ ${RELATIONAL_INTELLIGENCE_LAYER}
 ${HUMAN_REALISM_LAYER}
 `.trim();
 
-  // ==============================
-// CONVERSATION STATE DETECTOR
-// ==============================
-function detectConversationState(messages = []) {
-  const joined = messages
-    .map((m) => `${m.role || ""}: ${String(m.content || "").toLowerCase()}`)
-    .join("\n");
-
-  const state = {
-    emotionalTone: "neutral",
-    stability: "stable",
-    risk: "normal",
-  };
-
-  const hasDistress =
-    /\bdevastated|broken|shattered|heartbroken|betrayed|cheated|hurt badly|hurting badly|lost everything|crushed\b/i.test(
-      joined
-    );
-
-  const hasOverwhelm =
-    /\boverwhelmed|panic|panicking|can't think|cant think|don't know what to do|dont know what to do|falling apart|spiraling|spiralling\b/i.test(
-      joined
-    );
-
-  const hasNumbness =
-    /\bempty|numb|nothing matters|don’t feel anything|dont feel anything|checked out|dead inside\b/i.test(
-      joined
-    );
-
-  const hasSuppression =
-    /\bi guess|whatever|fine i guess|it's fine|its fine|okay i guess|doesn't matter|doesnt matter|it is what it is\b/i.test(
-      joined
-    );
-
-  const hasAgitation =
-    /\bangry|mad|furious|pissed|annoyed|fed up\b/i.test(joined);
-
-  const hasIntoxication =
-    /\bdrunk|tipsy|wasted|intoxicated|hammered|not sober|high\b/i.test(joined);
-
-  const hasIndirectCoping =
-    /\bat the bar|drinking again|been drinking|trying not to think|trying to forget|just want to disappear for a while\b/i.test(
-      joined
-    );
-
-  const hasFragileRecovery =
-    /\bi'm okay now|im okay now|i'm fine now|im fine now|all good now|better now\b/i.test(
-      joined
-    );
-
-  const hasIdentityCollapse =
-    /\bi am nobody|i'm nobody|i am nothing|i'm nothing|worthless|useless|empty\b/i.test(joined);
-
-  const hasAbandonment =
-    /\balone|ignored|everyone leaves|no one cares|nobody cares|left me\b/i.test(joined);
-
-  if (hasDistress || hasIdentityCollapse || hasAbandonment) {
-    state.emotionalTone = "distressed";
-  } else if (hasNumbness) {
-    state.emotionalTone = "numb";
-  } else if (hasSuppression) {
-    state.emotionalTone = "suppressed";
-  } else if (hasAgitation) {
-    state.emotionalTone = "agitated";
-  }
-
-  if (hasOverwhelm || hasNumbness || hasIndirectCoping || hasIdentityCollapse) {
-    state.stability = "unstable";
-  }
-
-  if (hasIntoxication) {
-    state.risk = "elevated";
-  }
-
-  if (
-    (hasDistress && hasIntoxication) ||
-    (hasOverwhelm && hasIntoxication) ||
-    (hasNumbness && hasIndirectCoping) ||
-    (hasIdentityCollapse && hasIntoxication)
-  ) {
-    state.stability = "unstable";
-    state.risk = "high";
-  }
-
-  if (
-    hasFragileRecovery &&
-    (hasDistress || hasOverwhelm || hasNumbness || hasIntoxication)
-  ) {
-    state.stability = "fragile";
-  }
-
-  return state;
-}
-
-// ==============================
-// TONE INERTIA DETECTOR
-// ==============================
-function detectToneInertia(conversationState = {}, latestUserMessage = "") {
-  const text = String(latestUserMessage || "").toLowerCase();
-
-  const casualSurface =
-    /\bhaha|lol|lmao|whatever|okay fine|i'm good|im good|just chilling|at the bar|drunk as hell|all good\b/i.test(
-      text
-    );
-
-  const heavyState =
-    conversationState?.emotionalTone === "distressed" ||
-    conversationState?.emotionalTone === "numb" ||
-    conversationState?.emotionalTone === "suppressed" ||
-    conversationState?.stability === "unstable" ||
-    conversationState?.stability === "fragile" ||
-    conversationState?.risk === "high";
-
-  if (heavyState && casualSurface) {
-    return "hold_serious_tone";
-  }
-
-  return "normal";
-}
-
 // ==============================
 // SYSTEM PROMPT BUILDER
 // ==============================
-function buildSystemPrompt({
-  languageMeta,
-  conversationMessages,
-  conversationState,
-  toneInertia,
-  trajectory,
-  groundingNeeded,
-}) {
-  const parts = [
+function buildSystemPrompt({ languageMeta }) {
+  return [
     SYSTEM_PROMPT,
-
     `LANGUAGE MIRRORING
 ${languageMeta?.mirrorInstruction || "Reply in the same language the user is using."}`.trim(),
-
-    `CONVERSATION STATE
-Emotional tone: ${conversationState?.emotionalTone || "neutral"}
-Stability: ${conversationState?.stability || "stable"}
-Risk: ${conversationState?.risk || "normal"}`.trim(),
-
-    `TONE INERTIA
-Mode: ${toneInertia || "normal"}`.trim(),
-
-    `TRAJECTORY
-Mode: ${trajectory?.mode || "stable"}`.trim(),
-
-    `ADDITIONAL RULES
-- Sound like a real human, not a bot.`.trim(),
-
-    `TRAJECTORY RESPONSE RULE
-- Reduce repetitive empathy
-- Shift toward clarity when needed`.trim(),
-
-    `IDENTITY COLLAPSE RULE
-- Do not reinforce "I am nothing"
-- Ground gently`.trim(),
-  ];
-
-  if (groundingNeeded) {
-    parts.push(`
-GROUNDING OVERRIDE
-- Be steady
-- Be simple
-- No playful tone
-- Guide next safe step
-`.trim());
-  }
-
-  return parts.filter(Boolean).join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function buildConversationMessages(messages, latestUserMessage) {

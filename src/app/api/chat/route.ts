@@ -69,20 +69,39 @@ export async function POST(req: Request) {
       cache: "no-store",
     });
 
-    const rawText = await firebaseRes.text();
+        const rawText = await firebaseRes.text();
 
-    let data: any;
+    let data: any = {};
     try {
       data = rawText ? JSON.parse(rawText) : {};
     } catch {
-      data = {
-        error: "Invalid upstream response",
-        reply: "",
-        upstreamStatus: firebaseRes.status,
-      };
+      console.error("Firebase returned non-JSON:", {
+        status: firebaseRes.status,
+        rawText,
+      });
+
+      return reply(
+        {
+          error: "Firebase returned non-JSON",
+          reply: "",
+          upstreamStatus: firebaseRes.status,
+          rawText: rawText.slice(0, 500),
+        },
+        502
+      );
     }
 
-    return reply(data, firebaseRes.status);
+    return reply(
+      {
+        reply: typeof data?.reply === "string" ? data.reply : "",
+        error: data?.error || null,
+        model: data?.model || null,
+        path: data?.path || null,
+        remainingDaily: data?.remainingDaily ?? null,
+        upstreamStatus: firebaseRes.status,
+      },
+      firebaseRes.status
+    );
   } catch (error: any) {
     return reply(
       {

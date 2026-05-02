@@ -242,6 +242,69 @@ function extractUnknownExpressions(text = "") {
   return [...new Set(candidates)];
 }
 
+function extractContinuityPatch({
+  latestUserMessage = "",
+  responseMode = "reflect",
+  emotionResult = {},
+}) {
+  const text = String(latestUserMessage || "").toLowerCase();
+  const patch = {};
+
+  // Theme memory
+  if (/\bwork|job|boss|office|coworker|career\b/.test(text)) {
+    patch.activeTheme = "work_stress_or_career";
+  }
+
+  if (/\bfamily|mom|mother|dad|father|sibling|parents\b/.test(text)) {
+    patch.activeTheme = "family_relationships";
+  }
+
+  if (/\brelationship|partner|boyfriend|girlfriend|husband|wife|breakup\b/.test(text)) {
+    patch.activeTheme = "romantic_relationships";
+  }
+
+  if (/\bapp|talkio|business|launch|startup|project|build\b/.test(text)) {
+    patch.activeTheme = "building_talkio_or_personal_project";
+  }
+
+  // Situation memory
+  if (/\boverwhelmed|too much|stressed|pressure|burned out|exhausted\b/.test(text)) {
+    patch.activeSituation = "User is dealing with pressure or overwhelm.";
+    patch.userPattern = "needs_narrowing_when_overwhelmed";
+  }
+
+  if (/\bconfused|lost|i don't know|i dont know|not sure\b/.test(text)) {
+    patch.userPattern = "needs_clarity_when_confused";
+  }
+
+  if (/\bwhat should i do|next step|help me decide|how do i\b/.test(text)) {
+    patch.responsePreference = "clear_next_step";
+  }
+
+  if (/\bjust tell me|be direct|quick answer|short answer\b/.test(text)) {
+    patch.responsePreference = "direct_and_concise";
+  }
+
+  if (/\bexplain|why|help me understand|what does it mean\b/.test(text)) {
+    patch.responsePreference = "reflective_explanation";
+  }
+
+  // Emotion-informed memory, but no duplicate emotional brain
+  if (emotionResult?.toneFamily) {
+    patch.lastToneFamily = emotionResult.toneFamily;
+  }
+
+  if (emotionResult?.primaryEmotion) {
+    patch.lastPrimaryEmotion = emotionResult.primaryEmotion;
+  }
+
+  if (responseMode) {
+    patch.lastResponseMode = responseMode;
+  }
+
+  return patch;
+}
+
 function extractNativeExpressions(text = "") {
   const t = String(text || "").toLowerCase();
 
@@ -685,12 +748,8 @@ module.exports = {
   loadContinuityMemory,
   saveContinuityMemory,
   buildContinuityBlock,
+  buildNativeExpressionBlock,
+  buildPersonalityBlock,
   extractContinuityPatch,
   extractNativeExpressionPatch,
-  buildNativeExpressionBlock,
-  decideExpressionLevel,
-  buildExpressionControlBlock,
-  buildPersonalityBlock,
-  extractPersonalityPatch,
-  mergePersonalityMemory,
 };

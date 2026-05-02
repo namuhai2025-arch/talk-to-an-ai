@@ -29,17 +29,28 @@ function trackReplyLifecycle({
   path = "unknown",
   error = null,
 }) {
+  const emotionResult = humanState?.emotionResult || {};
+
   debugLog(label, {
     uid,
     dynamicMode,
     path,
-    state: humanState?.state || null,
-    drift: humanState?.drift || null,
-    movementShift: humanState?.movementShift || null,
+
+    // 🔥 NEW (aligned with Emotional Spectrum Engine)
+    toneFamily: emotionResult?.toneFamily || null,
+    primaryEmotion: emotionResult?.primaryEmotion || null,
+    secondaryEmotion: emotionResult?.secondaryEmotion || null,
+    intensity: emotionResult?.intensity || null,
+    responseMode: humanState?.responseMode || dynamicMode || null,
+
+    // 🧾 Reply info
     replyPreview: String(reply || "").slice(0, 300),
     replyLength: String(reply || "").length,
+
+    // 🔧 Pipeline info
     usedRepair,
     usedRecovery,
+
     error: error ? error?.message || String(error) : null,
     at: new Date().toISOString(),
   });

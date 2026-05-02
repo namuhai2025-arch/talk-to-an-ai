@@ -428,16 +428,6 @@ setMessages((prev): ChatMessage[] => {
       ⚙️
     </button>
 
-    {!displayName && (
-      <button
-        type="button"
-        className="rounded-xl border px-3 py-2 text-sm"
-        onClick={() => setShowNamePrompt(true)}
-      >
-        Nickname
-      </button>
-    )}
-
     <button
       type="button"
       className="rounded-xl border px-3 py-2 text-sm disabled:opacity-50"

@@ -422,14 +422,6 @@ setMessages((prev): ChatMessage[] => {
   <div className="flex items-center gap-2">
     <button
       type="button"
-      className="rounded-xl bg-emerald-500 px-3 py-2 text-sm text-white hover:bg-emerald-600"
-      onClick={() => (window.location.href = "/paywall")}
-    >
-      Upgrade
-    </button>
-
-    <button
-      type="button"
       className="rounded-xl border px-3 py-2 text-sm"
       onClick={() => (window.location.href = "/settings")}
     >

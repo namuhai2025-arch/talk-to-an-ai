@@ -23,6 +23,27 @@ function normalizeReply(reply) {
   return String(reply || "").trim();
 }
 
+function extractModelText(raw) {
+  if (!raw) return "";
+
+  if (typeof raw === "string") return raw;
+
+  if (typeof raw.text === "string") return raw.text;
+  if (typeof raw.reply === "string") return raw.reply;
+
+  if (Array.isArray(raw?.candidates?.[0]?.content?.parts)) {
+    return raw.candidates[0].content.parts
+      .map((p) => (typeof p?.text === "string" ? p.text : ""))
+      .join(" ");
+  }
+
+  if (typeof raw?.choices?.[0]?.message?.content === "string") {
+    return raw.choices[0].message.content;
+  }
+
+  return "";
+}
+
 function sanitizeConversationMessages(messages) {
   if (!Array.isArray(messages)) return [];
 
@@ -68,10 +89,12 @@ async function callWithRetry(fn, retries = 2) {
 
     console.error("RETRY_ERROR_DEBUG:", e);
 
-    if (retries > 0 && code === 429) {
-      await new Promise((r) => setTimeout(r, 1000));
-      return callWithRetry(fn, retries - 1);
-    }
+    const normalizedCode = Number(code) || 0;
+
+if (retries > 0 && [429, 500, 503].includes(normalizedCode)) {
+  await new Promise((r) => setTimeout(r, 1000));
+  return callWithRetry(fn, retries - 1);
+}
 
     throw e;
   }
@@ -197,9 +220,9 @@ async function generateTalkioReply({
       })
     );
 
-    let reply = normalizeReply(
-      typeof raw === "string" ? raw : raw?.text || raw?.reply || ""
-    );
+    console.log("MODEL RAW OUTPUT:", JSON.stringify(raw, null, 2));
+
+    let reply = normalizeReply(extractModelText(raw));
 
     if (isTooWeakReply(reply) || !isUsableReply(reply)) {
       const repairedRaw = await callWithRetry(() =>
@@ -224,11 +247,7 @@ Write a fresh reply that:
         })
       );
 
-      reply = normalizeReply(
-        typeof repairedRaw === "string"
-          ? repairedRaw
-          : repairedRaw?.text || repairedRaw?.reply || ""
-      );
+      reply = normalizeReply(extractModelText(repairedRaw));
     }
 
     if (isUsableReply(reply)) {
@@ -250,7 +269,7 @@ Write a fresh reply that:
 }
 
     return {
-      reply: "I’m here. Can you send that again?",
+      reply: "I’m here. Something in that felt important, but I didn’t catch it cleanly. Can you send it once more?",
       path: "empty_model_reply_fallback",
       dynamicMode: "fallback",
       humanState: {
@@ -263,7 +282,7 @@ Write a fresh reply that:
     console.error("Talkio error:", err);
 
     return {
-      reply: "Something went wrong on my end. Please try again.",
+      reply: "I’m here. That didn’t come through clearly on my side — can you send it once more?",
       path: "api_error_fallback",
       dynamicMode: "fallback",
       humanState: null,

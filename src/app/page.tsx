@@ -273,6 +273,14 @@ export default function Page() {
       });
 
       const data = await res.json().catch(() => ({}));
+
+      if (data?.remainingDaily > 0) {
+      setIsLimitReached(false);
+      }
+
+      if (res.status === 429 || data?.paywallRequired) {
+      setIsLimitReached(true);
+      }
       
       if (data?.paywallRequired) {
       window.location.href = "/paywall";
@@ -331,6 +339,18 @@ setMessages((prev): ChatMessage[] => {
 
   return (
     <main className="mx-auto flex h-screen max-w-2xl flex-col bg-white text-stone-900">
+      <style jsx global>{`
+      @keyframes paywallSlideUp {
+        from {
+          opacity: 0;
+          transform: translateY(14px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+    `}</style>
       {showSafety && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
@@ -499,15 +519,11 @@ setMessages((prev): ChatMessage[] => {
             );
           })}
 
-          {messages.some(
-  (m) =>
-    m.role === "assistant" &&
-    m.content.includes("Continue with Talkio Paid")
-) && (
+          {isLimitReached && (
   <div className="pointer-events-none fixed bottom-20 left-0 right-0 z-40 px-4">
-    <div className="pointer-events-auto mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl border bg-white/95 px-4 py-3 shadow-lg backdrop-blur">
+    <div className="pointer-events-auto mx-auto flex max-w-md animate-[paywallSlideUp_260ms_ease-out] items-center justify-between gap-3 rounded-[24px] border border-stone-200 bg-white/90 px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.12)] backdrop-blur-xl">
       <div>
-        <p className="text-sm font-medium text-stone-900">
+        <p className="text-sm font-semibold text-stone-900">
           Daily limit reached
         </p>
         <p className="text-xs text-stone-500">
@@ -518,7 +534,7 @@ setMessages((prev): ChatMessage[] => {
       <button
         type="button"
         onClick={() => (window.location.href = "/paywall")}
-        className="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
+        className="shrink-0 rounded-full bg-stone-900 px-4 py-2 text-sm font-medium text-white active:scale-95 transition"
       >
         Upgrade
       </button>

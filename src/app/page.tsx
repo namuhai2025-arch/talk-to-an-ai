@@ -499,6 +499,33 @@ setMessages((prev): ChatMessage[] => {
             );
           })}
 
+          {messages.some(
+  (m) =>
+    m.role === "assistant" &&
+    m.content.includes("Continue with Talkio Paid")
+) && (
+  <div className="pointer-events-none fixed bottom-20 left-0 right-0 z-40 px-4">
+    <div className="pointer-events-auto mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl border bg-white/95 px-4 py-3 shadow-lg backdrop-blur">
+      <div>
+        <p className="text-sm font-medium text-stone-900">
+          Daily limit reached
+        </p>
+        <p className="text-xs text-stone-500">
+          Upgrade to keep chatting with Talkio.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => (window.location.href = "/paywall")}
+        className="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
+      >
+        Upgrade
+      </button>
+    </div>
+  </div>
+)}
+
           {showTyping && (
             <div className="mr-auto max-w-[82%] rounded-[22px] rounded-bl-xl border border-stone-200 bg-stone-100 px-4 py-3 shadow-sm">
               <div className="flex gap-1">
@@ -508,7 +535,7 @@ setMessages((prev): ChatMessage[] => {
               </div>
             </div>
           )}
-
+        
           {messages.length === 1 &&
             !loading &&
             !isLimitReached &&
@@ -535,24 +562,6 @@ setMessages((prev): ChatMessage[] => {
           <div ref={bottomRef} />
         </div>
       </div>
-
-      {isLimitReached && (
-        <div className="mx-3 mb-3 flex items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-sm">
-          <div className="text-stone-700">
-            You’ve reached today’s free limit.
-            <br />
-            Keep chatting now with Talkio Pro.
-          </div>
-
-          <button
-            type="button"
-            onClick={() => (window.location.href = "/paywall")}
-            className="rounded-xl bg-emerald-500 px-3 py-2 text-white hover:bg-emerald-600"
-          >
-            Keep chatting now
-          </button>
-        </div>
-      )}
 
       {!isLimitReached && (
         <form

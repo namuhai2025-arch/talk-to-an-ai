@@ -6,12 +6,9 @@ const {
 
 const {
   loadContinuityMemory,
-  saveContinuityMemory,
   buildContinuityBlock,
   buildNativeExpressionBlock,
   buildPersonalityBlock,
-  extractContinuityPatch,
-  extractNativeExpressionPatch,
 } = require("./memoryLiteV2");
 
 const {
@@ -235,36 +232,22 @@ Write a fresh reply that:
     }
 
     if (isUsableReply(reply)) {
-
-      const continuityPatch = extractContinuityPatch({
-  latestUserMessage,
-  responseMode,
-  emotionResult,
-});
-
-const nativeExpressionPatch = extractNativeExpressionPatch(latestUserMessage);
-
-await saveContinuityMemory(uid, {
-  ...continuityPatch,
-  nativeExpressionMemory: nativeExpressionPatch,
-});
-
-      return {
-        reply,
-        path: "core_identity_direct",
-        dynamicMode: responseMode,
-        humanState: {
-          emotionResult,
-          responseMode,
-        },
-        memoryUpdate: {
-          lastEmotion: emotionResult?.primaryEmotion || null,
-          lastToneFamily: emotionResult?.toneFamily || null,
-          lastIntensity: emotionResult?.intensity || null,
-          lastResponseMode: responseMode || null,
-        },
-      };
-    }
+  return {
+    reply,
+    path: "core_identity_direct",
+    dynamicMode: responseMode,
+    humanState: {
+      emotionResult,
+      responseMode,
+    },
+    memoryUpdate: {
+      lastEmotion: emotionResult?.primaryEmotion ?? null,
+      lastToneFamily: emotionResult?.toneFamily ?? null,
+      lastIntensity: emotionResult?.intensity ?? null,
+      lastResponseMode: responseMode ?? null,
+    },
+  };
+}
 
     return {
       reply: "I’m here. Can you send that again?",

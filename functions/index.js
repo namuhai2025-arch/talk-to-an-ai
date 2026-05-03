@@ -1935,24 +1935,10 @@ console.log("ACCESS DEBUG:", {
     );
 
     const languageMeta = detectLanguageMirror(latestUserMessage);
-    const conversationState = detectConversationState(conversationMessages);
-    const toneInertia = detectToneInertia(
-      conversationState,
-      latestUserMessage
-    );
-    const groundingNeeded = detectGroundingNeed(conversationMessages);
-    const trajectory = detectTrajectory(conversationMessages);
 
-    const baseSystemPrompt = buildSystemPrompt({
-      languageMeta,
-      conversationMessages,
-      conversationState,
-      toneInertia,
-      trajectory,
-      groundingNeeded,
+    const systemPrompt = buildSystemPrompt({
+    languageMeta,
     });
-
-    const systemPrompt = baseSystemPrompt;
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const model = FREE_MODEL;
@@ -1974,13 +1960,9 @@ console.log("ACCESS DEBUG:", {
       conversationMessages,
       latestUserMessage,
       state: {
-        groundingNeeded,
-        conversationState,
-        toneInertia,
-        languageMeta,
-        trajectory,
+      languageMeta,
       },
-    });
+      });
 
     // =========================
     // 📤 10. RESPONSE

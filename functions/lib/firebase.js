@@ -6,4 +6,9 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+// Optional: settings for performance
+db.settings({
+  ignoreUndefinedProperties: true,
+});
+
 module.exports = { admin, db };

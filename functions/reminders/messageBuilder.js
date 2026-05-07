@@ -94,106 +94,107 @@ function extractPersonalAnchor(memoryItems = [], category = "general") {
   return "";
 }
 
+function inferEmotionalReminderState(memoryItems = []) {
+  const values = memoryItems.map((m) => normalize(m.value)).join(" ");
+
+  if (/\b(stressed|overwhelmed|anxious|panic|tired|exhausted|burned out)\b/i.test(values)) {
+    return "strained";
+  }
+
+  if (/\b(sad|lonely|hurt|grief|heavy|broken|empty)\b/i.test(values)) {
+    return "tender";
+  }
+
+  if (/\b(grateful|proud|happy|excited|hopeful|better)\b/i.test(values)) {
+    return "uplifted";
+  }
+
+  return "steady";
+}
+
 function buildReminderMessage(reminder, memoryItems = []) {
   const category = reminder?.category || inferReminderCategory(reminder);
   const tone = inferTone(memoryItems);
+  const emotionalState = inferEmotionalReminderState(memoryItems);
   const anchor = extractPersonalAnchor(memoryItems, category);
-  const base = String(reminder?.text || "you set a reminder").trim();
+  const base = String(reminder?.text || "this").trim();
 
-  const titleMap = {
-    health: ["Take care of yourself", "Quick health nudge", "Health reminder"],
-    work: ["Quick work nudge", "Stay on top of it", "Work reminder"],
-    wellbeing: ["Small reset", "Take a moment", "Well-being reminder"],
-    general: ["Reminder", "Quick nudge", "Just a reminder"],
-  };
+  // 🧠 Natural openers (feels human, not system)
+  const openers = [
+    "hey —",
+    "just a quick one —",
+    "a small nudge —",
+    "",
+  ];
 
-  const bodyMap = {
-    health: {
-      calm: [
-        `Just a gentle nudge — ${base}.`,
-        `A small reminder for you: ${base}.`,
-        `Time for ${base}.`,
-      ],
-      short: [
-        `${base}.`,
-        `Time for ${base}.`,
-        `Quick nudge: ${base}.`,
-      ],
-      neutral: [
-        `Hey, just a quick nudge — ${base}.`,
-        `Friendly reminder: ${base}.`,
-        `Time to do this: ${base}.`,
-      ],
-    },
-    work: {
-      calm: [
-        `Just a steady reminder — ${base}.`,
-        `A quick nudge for later: ${base}.`,
-        `Time to handle this: ${base}.`,
-      ],
-      short: [
-        `${base}.`,
-        `Quick reminder: ${base}.`,
-        `Time for ${base}.`,
-      ],
-      neutral: [
-        `Quick reminder — ${base}.`,
-        `Just a nudge: ${base}.`,
-        `This is your reminder: ${base}.`,
-      ],
-    },
-    wellbeing: {
-      calm: [
-        `Take a moment — ${base}.`,
-        `A gentle pause for you: ${base}.`,
-        `Just a soft reminder: ${base}.`,
-      ],
-      short: [
-        `${base}.`,
-        `Take a moment: ${base}.`,
-        `Quick reset: ${base}.`,
-      ],
-      neutral: [
-        `Just a quick reset reminder — ${base}.`,
-        `Here’s your reminder: ${base}.`,
-        `Time for ${base}.`,
-      ],
-    },
-    general: {
-      calm: [
-        `Just a gentle reminder — ${base}.`,
-        `A small nudge for you: ${base}.`,
-        `Time for ${base}.`,
-      ],
-      short: [
-        `${base}.`,
-        `Reminder: ${base}.`,
-        `Quick nudge: ${base}.`,
-      ],
-      neutral: [
-        `Just a quick reminder — ${base}.`,
-        `Here’s your reminder: ${base}.`,
-        `Quick nudge: ${base}.`,
-      ],
-    },
-  };
+  // 🧠 Core message (no robotic phrasing)
+  const coreLines = [
+    `${base}.`,
+    `this might be a good moment for ${base}.`,
+    `you might want to check in on ${base}.`,
+    `maybe circle back to ${base}.`,
+  ];
 
-  const title = pick(titleMap[category] || titleMap.general);
-  const bodyCore = pick(
-    (bodyMap[category] && bodyMap[category][tone]) || bodyMap.general.neutral
-  );
+  // 🧠 Soft closers (Talkio tone)
+  const closers = [
+    "",
+    "no pressure.",
+    "just keeping it light.",
+    "take it easy with it.",
+  ];
 
-  const body = anchor ? `${bodyCore} ${anchor}` : bodyCore;
+  const opener = pick(openers);
+  const core = pick(coreLines);
+  const closer = pick(closers);
+
+  let body = [opener, core, anchor, closer]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // ✨ Tone adjustment
+  if (tone === "short") {
+    body = `${base}.`;
+  }
+
+  if (tone === "calm") {
+    body = body.replace("hey —", "just gently —");
+  }
+
+  // 🧠 Title (less system-like)
+  const titles = [
+    "just a small nudge",
+    "quick reminder",
+    "hey",
+    "",
+  ];
+
+  const title = pick(titles) || "quick reminder";
+
+  if (emotionalState === "strained") {
+  body = `${body} Keep it small for now.`;
+}
+
+if (emotionalState === "tender") {
+  body = `${body} Gently, okay.`;
+}
+
+if (emotionalState === "uplifted") {
+  body = `${body} Nice to keep that momentum softly.`;
+}
 
   return {
-    title,
-    body,
-    category,
-    tone,
+  title,
+  body,
+  category,
+  tone,
+  emotionalState,
   };
 }
 
 module.exports = {
   buildReminderMessage,
   inferReminderCategory,
+  inferEmotionalReminderState,
 };

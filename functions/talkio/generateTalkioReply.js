@@ -1,19 +1,26 @@
 "use strict";
 
-const {
-  buildEmotionalGuidanceBlock,
-} = require("./emotionalDetectionLayer");
+const { buildEmotionalGuidanceBlock } = require("./emotionalDetectionLayer");
 
 const {
   loadContinuityMemory,
   buildContinuityBlock,
   buildNativeExpressionBlock,
-  buildPersonalityBlock,
 } = require("./memoryLiteV2");
 
 const {
-  debugLog,
-} = require("./debugMonitor");
+  detectLanguageEnvironment,
+} = require("./languageDetection");
+
+const {
+  incrementMetric,
+  logResponseMode,
+  logFallback,
+  logLatency,
+  logDailyUser,
+} = require("../logging/metrics");
+
+const { debugLog } = require("./debugMonitor");
 
 // ==============================
 // Helpers
@@ -23,11 +30,49 @@ function normalizeReply(reply) {
   return String(reply || "").trim();
 }
 
+function cleanReply(text = "") {
+  return String(text || "")
+    .replace(/\bAs an AI language model,?\s*/gi, "")
+    .replace(/\bAs an AI,?\s*/gi, "")
+    .replace(/\bI am not a therapist, but\s*/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function humanizeReply(reply = "") {
+  return String(reply || "")
+    .replace(/\bIt is important to note that\b/gi, "")
+    .replace(/\bAt the end of the day,?\s*/gi, "")
+    .replace(/\bIn moments like this,?\s*/gi, "")
+    .replace(/\bdefinitely\b/gi, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function isSoftUsableReply(reply) {
+  if (!reply || typeof reply !== "string") return false;
+
+  const text = reply.trim();
+
+  if (text.length < 1) return false;
+  if (text.length > 2000) return false;
+  if (/^\W+$/.test(text)) return false;
+
+  if (
+    /\b(undefined|null|NaN|\[object Object\])\b/i.test(text) ||
+    /^error[:\s]/i.test(text)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 function extractModelText(raw) {
   if (!raw) return "";
 
   if (typeof raw === "string") return raw;
-
   if (typeof raw.text === "string") return raw.text;
   if (typeof raw.reply === "string") return raw.reply;
 
@@ -56,80 +101,142 @@ function sanitizeConversationMessages(messages) {
   );
 }
 
-function isTooWeakReply(reply = "") {
-  const text = String(reply || "").trim().toLowerCase();
+function applySafetyGuard(reply, latestUserMessage = "") {
+  let text = String(reply || "").trim();
+  const userText = String(latestUserMessage || "");
 
-  return (
-    text.length < 10 ||
-    ["oh", "oh?", "hmm", "hmm.", "okay", "ok", "right"].includes(text)
-  );
-}
+  const highRisk =
+    /\b(kill myself|suicide|end my life|hurt myself|self harm|self-harm|i want to die)\b/i.test(
+      userText
+    );
 
-function isUsableReply(reply = "") {
-  const text = String(reply || "").trim();
+  if (highRisk) {
+    const hasSafetyDirection =
+      /emergency|local emergency|trusted person|someone nearby|call/i.test(text);
 
-  if (text.length < 3) return false;
-
-  if (/\b(as an ai|language model|system prompt|policy)\b/i.test(text)) {
-    return false;
+    if (!hasSafetyDirection) {
+      text +=
+        "\n\nIf you might hurt yourself or you are not safe right now, please contact local emergency services or reach out to someone nearby immediately.";
+    }
   }
 
-  return true;
+  return text;
 }
 
-async function callWithRetry(fn, retries = 2) {
-  try {
-    return await fn();
-  } catch (e) {
-    const code =
-      e?.code ||
-      e?.status ||
-      e?.response?.status ||
-      e?.error?.code;
+function buildLanguageControlBlock(latestUserMessage = "") {
+  return `
+LANGUAGE CONTROL — HIGHEST PRIORITY
 
-    console.error("RETRY_ERROR_DEBUG:", e);
+User's latest message:
+"${String(latestUserMessage || "").trim()}"
 
-    const normalizedCode = Number(code) || 0;
+Rules:
+- Infer the language directly from the user's latest message.
+- If the user mixes languages, mirror that same mix naturally.
+- Do NOT default to English unless the latest user message is clearly English.
+- Do NOT translate the user's message into English before replying.
+- Do NOT explain what language the user used.
+- The response must feel originally thought in the user's language, not translated.
+- If language control conflicts with any style rule, language control wins.
+- You MUST reply in the exact same language or language mix as the user's latest message.
 
-if (retries > 0 && [429, 500, 503].includes(normalizedCode)) {
-  await new Promise((r) => setTimeout(r, 1000));
-  return callWithRetry(fn, retries - 1);
+Before generating your response:
+1. Identify the language or mix used by the user.
+2. Lock that language.
+3. Generate your reply ONLY in that language.
+
+If you are about to respond in a different language, STOP and correct it.
+
+Wrong-language output is invalid.
+`.trim();
 }
 
-    throw e;
-  }
+function buildHumanRecovery(userMessage = "", emotionResult = null) {
+  const text = String(userMessage || "").trim();
+
+  const intensity = emotionResult?.intensity || "";
+  const tone = emotionResult?.toneFamily || "";
+
+  const looksEmotional =
+    intensity === "very_high" ||
+    intensity === "high" ||
+    tone === "distress" ||
+    /\b(sad|hurt|angry|scared|anxious|tired|alone|broken|crying|overwhelmed|can't sleep|cant sleep|trauma|pain|fear|confused)\b/i.test(
+      text
+    );
+
+  const emotionalPool = [
+    "I don’t want to miss what you’re sharing. Please send it again.",
+    "I want to respond to this properly, but something didn’t come through clearly. Please send it again.",
+    "I’m here. I just didn’t catch that clearly. Please send it again.",
+  ];
+
+  const casualPool = [
+    "I think I missed part of that. Please send it again.",
+    "That didn’t come through clearly on my end. Please send it again.",
+    "Wait, I didn’t quite catch that properly. Please send it again.",
+  ];
+
+  const pool = looksEmotional ? emotionalPool : casualPool;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 // ==============================
 // Prompt Builder
 // ==============================
 
-function buildGuardBlock() {
+function buildVariationBlock(conversationMessages = []) {
+  const recentAssistantReplies = (conversationMessages || [])
+    .filter((m) => m?.role === "assistant" && typeof m.content === "string")
+    .slice(-3)
+    .map((m) => m.content.trim())
+    .filter(Boolean);
+
+  if (!recentAssistantReplies.length) return "";
+
   return `
-STYLE RULES:
-- Speak like a real person sitting beside someone.
-- Stay close to what the user actually said.
-- Respond to one or two real things, not everything.
-- Keep it simple, grounded, and human.
-- Do not sound like a therapist, coach, essay, or chatbot.
+VARIATION CONTROL
 
-RHYTHM CONTROL:
-- Use short spoken chunks.
-- One idea per sentence.
-- Prefer 2–4 short sentences.
-- Let the reply breathe.
-- Do not overuse "oh", "wow", "hmm", or "yeah".
+Avoid repeating the structure, opening phrase, or rhythm of the recent assistant replies.
 
-QUESTION RULE:
-- Do not ask the user to explain something they already explained.
-- Ask at most one question.
-- Only ask a question if it genuinely helps.
+Recent assistant replies:
+${recentAssistantReplies.map((r, i) => `${i + 1}. ${r}`).join("\n")}
 
-REALISM CHECK:
-If the reply sounds like advice, analysis, a summary, or a template, rewrite it.
+Rules:
+- Do not start with the same first 3 words as recent replies.
+- Do not reuse sentence structure.
+- Avoid repeating openings like "you are", "this is", "that is", or "something in this".
+- Change phrasing style: statement, contrast, observation, or direct truth.
+- Keep the stoic tone: calm, direct, grounded.
+- Keep meaning consistent, but change expression.
+`.trim();
+}
 
-TARGET:
-Someone present beside the user, not someone interpreting them.
+function buildCheckinModeBlock(source = "chat") {
+  if (source !== "checkin") return "";
+
+  return `
+CHECK-IN MODE
+
+The user is replying after a Talkio check-in.
+
+Do not treat this like a random new message.
+Do not mention notifications.
+Do not say "thanks for checking in."
+
+Tone:
+- calm
+- grounded
+- familiar
+- direct
+
+Behavior:
+- acknowledge the return lightly
+- stay close to what the user says now
+- do not over-explain
+- do not restart the conversation
+- if the user answers briefly, keep it simple
+- if the user shares something heavy, become steady and clear
 `.trim();
 }
 
@@ -137,16 +244,21 @@ function buildBrainPrompt({
   systemPrompt,
   continuityBlock,
   nativeExpressionBlock,
-  personalityBlock,
   emotionalGuidanceBlock,
+  variationBlock,
+  checkinModeBlock,
+  languageInstruction,
+  latestUserMessage,
 }) {
   return [
+    buildLanguageControlBlock(latestUserMessage),
+    languageInstruction,
     systemPrompt,
+    checkinModeBlock,
     continuityBlock,
     nativeExpressionBlock,
-    personalityBlock,
     emotionalGuidanceBlock,
-    buildGuardBlock(),
+    variationBlock,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -162,8 +274,13 @@ async function generateTalkioReply({
   systemPrompt,
   conversationMessages,
   latestUserMessage,
-  state = {},
+  source = "chat",
 }) {
+  const startedAt = Date.now();
+
+  let emotionResult = null;
+  let responseMode = "reflect";
+
   if (!uid) {
     return {
       reply: "Please sign in again.",
@@ -174,7 +291,35 @@ async function generateTalkioReply({
     };
   }
 
+  if (!String(latestUserMessage || "").trim()) {
+    return {
+      reply: "I didn’t quite catch that. Please send it again.",
+      path: "empty_user_message",
+      dynamicMode: "fallback",
+      humanState: null,
+      memoryUpdate: null,
+    };
+  }
+
   const safeMessages = sanitizeConversationMessages(conversationMessages);
+  const languageEnv = detectLanguageEnvironment(latestUserMessage);
+
+  await incrementMetric("totalMessages", 1);
+  await logDailyUser(uid);
+
+  const languageInstruction = `
+LANGUAGE ENVIRONMENT
+
+Primary language: ${languageEnv.primaryLanguage}
+Detected languages: ${languageEnv.detectedLanguages.join(", ")}
+Mixed language: ${languageEnv.mixed}
+Conversational style: ${languageEnv.conversationalStyle}
+
+Mirror the user's natural language rhythm.
+Do not translate unnaturally.
+Do not default to English.
+Sound socially native.
+`;
 
   try {
     let continuityMemory = null;
@@ -190,102 +335,113 @@ async function generateTalkioReply({
 
     const continuityBlock = buildContinuityBlock(continuityMemory);
     const nativeExpressionBlock = buildNativeExpressionBlock(continuityMemory);
-    const personalityBlock = buildPersonalityBlock(continuityMemory);
 
-    const {
-      emotionResult,
-      responseMode,
-      emotionalGuidanceBlock,
-    } = buildEmotionalGuidanceBlock(latestUserMessage);
+    const emotional = buildEmotionalGuidanceBlock(latestUserMessage);
+    emotionResult = emotional.emotionResult;
+    responseMode = emotional.responseMode || "reflect";
+
+    const variationBlock = buildVariationBlock(safeMessages);
+    const checkinModeBlock = buildCheckinModeBlock(source);
 
     const prompt = buildBrainPrompt({
       systemPrompt,
       continuityBlock,
       nativeExpressionBlock,
-      personalityBlock,
-      emotionalGuidanceBlock,
+      emotionalGuidanceBlock: emotional.emotionalGuidanceBlock,
+      variationBlock,
+      checkinModeBlock,
+      languageInstruction,
+      latestUserMessage,
     });
 
-    debugLog("TALKIO_EMOTIONAL_ENGINE_DEBUG", {
-      emotionResult,
+    debugLog("TALKIO_PIPELINE_DEBUG", {
+      uid,
       responseMode,
+      emotionResult,
+      source,
+      apiCallsPlanned: 1,
     });
 
-    console.log("CLEAN_EMOTIONAL_PIPELINE_ACTIVE");
-
-    const raw = await callWithRetry(() =>
-      modelGenerate({
-        systemPrompt: prompt,
-        messages: safeMessages,
-      })
-    );
-
-    console.log("MODEL RAW OUTPUT:", JSON.stringify(raw, null, 2));
+    const raw = await modelGenerate({
+      systemPrompt: prompt,
+      messages: safeMessages,
+    });
 
     let reply = normalizeReply(extractModelText(raw));
+    reply = applySafetyGuard(reply, latestUserMessage);
+    reply = cleanReply(reply);
+    reply = humanizeReply(reply);
 
-    if (isTooWeakReply(reply) || !isUsableReply(reply)) {
-      const repairedRaw = await callWithRetry(() =>
-        modelGenerate({
-          systemPrompt: [
-            prompt,
-            `
-REPAIR INSTRUCTION:
-The previous reply was too weak, vague, invalid, or unnatural.
+    if (isSoftUsableReply(reply)) {
+      debugLog("TALKIO_PATH", {
+        path: "core_identity_soft_accept",
+        latencyMs: Date.now() - startedAt,
+      });
 
-Write a fresh reply that:
-- responds to the user's actual message
-- follows the emotional guidance
-- sounds human and present
-- does not sound scripted
-- does not explain the system
-- keeps the same emotional mode
-- asks at most one useful question
-`.trim(),
-          ].join("\n\n"),
-          messages: safeMessages,
-        })
-      );
+      await logLatency(Date.now() - startedAt);
+      await logResponseMode(responseMode);
 
-      reply = normalizeReply(extractModelText(repairedRaw));
+      return {
+        reply,
+        path: "core_identity_soft_accept",
+        dynamicMode: responseMode,
+        humanState: {
+          emotionResult,
+          responseMode,
+          source,
+        },
+        memoryUpdate: {
+          lastEmotion: emotionResult?.primaryEmotion ?? null,
+          lastToneFamily: emotionResult?.toneFamily ?? null,
+          lastIntensity: emotionResult?.intensity ?? null,
+          lastResponseMode: responseMode ?? null,
+        },
+      };
     }
 
-    if (isUsableReply(reply)) {
-  return {
-    reply,
-    path: "core_identity_direct",
-    dynamicMode: responseMode,
-    humanState: {
-      emotionResult,
-      responseMode,
-    },
-    memoryUpdate: {
-      lastEmotion: emotionResult?.primaryEmotion ?? null,
-      lastToneFamily: emotionResult?.toneFamily ?? null,
-      lastIntensity: emotionResult?.intensity ?? null,
-      lastResponseMode: responseMode ?? null,
-    },
-  };
-}
+    const path = source === "checkin" ? "checkin_recovery" : "core_recovery";
 
-    return {
-      reply: "I’m here. Something in that felt important, but I didn’t catch it cleanly. Can you send it once more?",
-      path: "empty_model_reply_fallback",
-      dynamicMode: "fallback",
+    debugLog("TALKIO_PATH", {
+      path,
+      latencyMs: Date.now() - startedAt,
+    });
+
+    await logFallback(path);
+
+        return {
+      reply: buildHumanRecovery(latestUserMessage, emotionResult),
+      path,
+      dynamicMode: responseMode,
       humanState: {
         emotionResult,
         responseMode,
+        source,
       },
       memoryUpdate: null,
     };
   } catch (err) {
-    console.error("Talkio error:", err);
+    console.error("Talkio error:", {
+      message: err?.message || String(err),
+      latencyMs: Date.now() - startedAt,
+    });
+
+    const path = source === "checkin" ? "checkin_recovery" : "core_recovery";
+
+    debugLog("TALKIO_PATH", {
+      path,
+      latencyMs: Date.now() - startedAt,
+      error: err?.message || String(err),
+    });
 
     return {
-      reply: "I’m here. That didn’t come through clearly on my side — can you send it once more?",
-      path: "api_error_fallback",
-      dynamicMode: "fallback",
-      humanState: null,
+      reply: buildHumanRecovery(latestUserMessage, emotionResult),
+      path,
+      dynamicMode: responseMode || "reflect",
+      humanState: {
+        emotionResult,
+        responseMode,
+        source,
+      },
       memoryUpdate: null,
     };
   }

@@ -80,6 +80,14 @@ export default function Page() {
   );
 
   useEffect(() => {
+  const done = localStorage.getItem("talkio_onboarding_complete");
+
+  if (!done) {
+    window.location.href = "/onboarding";
+  }
+}, []);
+
+  useEffect(() => {
     setMounted(true);
   }, []);
 
@@ -166,6 +174,50 @@ export default function Page() {
   }, [displayName, mounted]);
 
   useEffect(() => {
+  if (!mounted) return;
+
+  const params = new URLSearchParams(window.location.search);
+  const source = params.get("source");
+  const message = params.get("message");
+
+  if (source === "checkin") {
+    sessionStorage.setItem("talkio_checkin_opened", "true");
+
+    if (message) {
+      sessionStorage.setItem("talkio_checkin_message", message);
+    }
+  }
+}, [mounted]);
+
+  useEffect(() => {
+  if (!mounted) return;
+
+  const checkinMessage =
+    sessionStorage.getItem("talkio_checkin_message") ||
+    "how did today feel for you";
+
+  sessionStorage.removeItem("talkio_checkin_opened");
+  sessionStorage.removeItem("talkio_checkin_message");
+
+  setMessages((prev) => {
+    const alreadyInserted = prev.some(
+      (m) => m.role === "assistant" && m.content === checkinMessage
+    );
+
+    if (alreadyInserted) return prev;
+
+    return [
+      ...prev,
+      {
+        role: "assistant" as const,
+        content: checkinMessage,
+        timestamp: Date.now(),
+      },
+    ];
+  });
+}, [mounted]);
+
+  useEffect(() => {
     async function ensureUser() {
       const auth = getFirebaseAuth();
 
@@ -183,6 +235,30 @@ export default function Page() {
       setUserId("guest");
     });
   }, [mounted]);
+
+  useEffect(() => {
+  if (!mounted) return;
+
+  const handler = (event: any) => {
+    const url = event?.detail?.url || "";
+    if (!url) return;
+
+    const parsed = new URL(url);
+    const message = parsed.searchParams.get("message");
+
+    sessionStorage.setItem("talkio_checkin_opened", "true");
+
+    if (message) {
+      sessionStorage.setItem("talkio_checkin_message", message);
+    }
+  };
+
+  window.addEventListener("talkioCheckinOpened", handler);
+
+  return () => {
+    window.removeEventListener("talkioCheckinOpened", handler);
+  };
+}, [mounted]);
 
   useEffect(() => {
   const shouldOpenNickname = localStorage.getItem("openNicknamePrompt");
@@ -211,6 +287,19 @@ export default function Page() {
       inputRef.current?.focus();
     });
   }
+  const openedFromCheckin =
+  typeof window !== "undefined" &&
+  sessionStorage.getItem("talkio_checkin_reply_context") === "true";
+
+const payload = {
+  message: input,
+  messages,
+  source: openedFromCheckin ? "checkin" : "chat",
+};
+
+if (typeof window !== "undefined") {
+  sessionStorage.removeItem("talkio_checkin_reply_context");
+}
 
   function saveNickname() {
     const clean = draftNickname.trim().slice(0, 40);
@@ -247,8 +336,14 @@ export default function Page() {
     }
 
     const typingTimer = window.setTimeout(() => {
-      setShowTyping(true);
-    }, 450);
+  setShowTyping(true);
+}, 300);
+
+const humanDelay = Math.floor(Math.random() * 700) + 300;
+
+await new Promise((resolve) =>
+  setTimeout(resolve, humanDelay)
+);
 
     try {
       const auth = getFirebaseAuth();

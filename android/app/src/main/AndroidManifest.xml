@@ -20,10 +20,37 @@
             android:exported="true"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density">
 
+            <!-- 1. Firebase click action -->
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="OPEN_TALKIO_CHAT" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+
+            <!-- 2. Custom scheme (talkio://chat) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="talkio"
+                    android:host="chat" />
+            </intent-filter>
+
+            <!-- 3. HTTPS deep link -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="https"
+                    android:host="talkiochat.com"
+                    android:pathPrefix="/chat" />
+            </intent-filter>
+
         </activity>
 
         <service

@@ -1,5 +1,7 @@
 package com.talkio.app;
 
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -16,6 +18,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        handleDeepLink(getIntent());
 
         FirebaseAuth auth = FirebaseAuth.getInstance();
 
@@ -35,6 +39,34 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleDeepLink(intent);
+    }
+
+    private void handleDeepLink(Intent intent) {
+        if (intent == null) return;
+
+        Uri uri = intent.getData();
+        if (uri == null) return;
+
+        String source = uri.getQueryParameter("source");
+        String url = uri.toString();
+
+        Log.d("TalkioDeepLink", "Opened URL: " + url);
+
+        if ("checkin".equals(source)) {
+            String safeUrl = url.replace("\\", "\\\\").replace("\"", "\\\"");
+
+            getBridge().triggerWindowJSEvent(
+                    "talkioCheckinOpened",
+                    "{ \"url\": \"" + safeUrl + "\" }"
+            );
+        }
+    }
+
     private void requestAndSaveFcmToken() {
         FirebaseMessaging.getInstance().getToken()
                 .addOnCompleteListener(task -> {
@@ -51,40 +83,41 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void saveTokenToFirestore(String token) {
-    FirebaseAuth auth = FirebaseAuth.getInstance();
+        FirebaseAuth auth = FirebaseAuth.getInstance();
 
-    String uid = (auth.getCurrentUser() != null)
-            ? auth.getCurrentUser().getUid()
-            : null;
+        String uid = (auth.getCurrentUser() != null)
+                ? auth.getCurrentUser().getUid()
+                : null;
 
-    if (uid == null) {
-        Log.e("FCM_SAVE", "User not logged in. Skipping token save.");
-        return;
+        if (uid == null) {
+            Log.e("FCM_SAVE", "User not logged in. Skipping token save.");
+            return;
+        }
+
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+
+        db.collection("users")
+                .document(uid)
+                .set(new HashMap<String, Object>() {{
+                    put("updatedAt", FieldValue.serverTimestamp());
+                    put("lastPlatform", "android");
+                }}, com.google.firebase.firestore.SetOptions.merge());
+
+        db.collection("users")
+                .document(uid)
+                .collection("device_tokens")
+                .document(token)
+                .set(new HashMap<String, Object>() {{
+                    put("token", token);
+                    put("platform", "android");
+                    put("createdAt", FieldValue.serverTimestamp());
+                    put("updatedAt", FieldValue.serverTimestamp());
+                }}, com.google.firebase.firestore.SetOptions.merge())
+                .addOnSuccessListener(unused ->
+                        Log.d("TalkioFCM", "Token saved successfully for UID: " + uid)
+                )
+                .addOnFailureListener(e ->
+                        Log.e("TalkioFCM", "Failed to save token", e)
+                );
     }
-
-    FirebaseFirestore db = FirebaseFirestore.getInstance();
-
-    db.collection("users")
-            .document(uid)
-            .set(new HashMap<String, Object>() {{
-                put("updatedAt", FieldValue.serverTimestamp());
-                put("lastPlatform", "android");
-            }}, com.google.firebase.firestore.SetOptions.merge());
-
-    db.collection("users")
-            .document(uid)
-            .collection("device_tokens")
-            .document(token)
-            .set(new HashMap<String, Object>() {{
-                put("token", token);
-                put("platform", "android");
-                put("createdAt", FieldValue.serverTimestamp());
-                put("updatedAt", FieldValue.serverTimestamp());
-            }}, com.google.firebase.firestore.SetOptions.merge())
-            .addOnSuccessListener(unused ->
-                    Log.d("TalkioFCM", "Token saved successfully for UID: " + uid)
-            )
-            .addOnFailureListener(e ->
-                    Log.e("TalkioFCM", "Failed to save token", e)
-            );
 }

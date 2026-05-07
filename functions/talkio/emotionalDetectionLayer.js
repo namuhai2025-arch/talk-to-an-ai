@@ -252,127 +252,72 @@ function detectEmotions(userMessage = "") {
   };
 }
 
-function chooseResponseMode(emotionResult) {
-  const {
-    primaryEmotion,
-    toneFamily,
-    intensity,
-    isMixed,
-  } = emotionResult;
+function buildStoicEmotionalGuidanceBlock({ emotionResult, responseMode }) {
+  return `
+STOIC EMOTIONAL GUIDANCE
 
-  if (intensity === "very_high" || intensity === "high") {
-    if (primaryEmotion === "joy" || primaryEmotion === "pride") return "uplift";
-    if (primaryEmotion === "anger") return "steady";
-    return "stabilize";
-  }
+Detected state:
+- primaryEmotion: ${emotionResult?.primaryEmotion || "unclear"}
+- toneFamily: ${emotionResult?.toneFamily || "neutral"}
+- intensity: ${emotionResult?.intensity || "low"}
+- responseMode: ${responseMode || "reflect"}
 
-  if (isMixed) return "hold_complexity";
+Respond with calm clarity.
 
-  if (toneFamily === "positive") {
-    if (primaryEmotion === "joy") return "uplift";
-    if (primaryEmotion === "pride") return "uplift";
-    if (primaryEmotion === "gratitude") return "receive";
-    if (primaryEmotion === "relief") return "settle";
-    if (primaryEmotion === "calm") return "soft_reflect";
-    if (primaryEmotion === "curiosity") return "clear_answer";
-  }
+Mode behavior:
 
-  if (primaryEmotion === "fear") return "ground";
-  if (primaryEmotion === "stress") return "ground";
-  if (primaryEmotion === "anger") return "steady";
-  if (primaryEmotion === "grief") return "hold_space";
-  if (primaryEmotion === "worry") return "narrow";
-  if (primaryEmotion === "shame") return "stabilize";
-  if (primaryEmotion === "loneliness") return "reflect";
-  if (primaryEmotion === "numbness") return "hold_space";
+reflect:
+- name what is happening plainly
+- do not over-comfort
+- do not use poetic language
+- do not ask unless needed
 
-  return "reflect";
+ground:
+- reduce the emotional noise
+- use short direct sentences
+- bring attention to what is real now
+- separate feeling from fact
+
+stabilize:
+- be firm, calm, and protective
+- do not mirror panic
+- do not intensify the emotion
+- give one clear next anchor
+
+narrow:
+- focus on one part only
+- do not analyze the whole situation
+- make the moment smaller
+
+interrupt_loop:
+- do not repeat the user’s spiral
+- interrupt the pattern gently
+- point to one controllable action or truth
+
+Tone rules:
+- no metaphors
+- no “that sounds hard”
+- no “I understand how you feel”
+- no dramatic reassurance
+- no therapy-style wording
+- no motivational language
+
+Use one clear thought. Keep it grounded.
+`.trim();
 }
 
-function buildEmotionalGuidanceBlock(userMessage = "") {
-  const emotionResult = detectEmotions(userMessage);
-  const responseMode = chooseResponseMode(emotionResult);
+function buildEmotionalGuidanceBlock(latestUserMessage = "") {
+  const emotionResult = detectEmotions(latestUserMessage);
 
-  const emotionalGuidanceBlock = `
-EMOTIONAL SPECTRUM ENGINE
+  const responseMode = chooseStoicResponseMode(
+    emotionResult,
+    latestUserMessage
+  );
 
-Detected tone family: ${emotionResult.toneFamily}
-Detected primary emotion: ${emotionResult.primaryEmotion}
-Detected secondary emotion: ${emotionResult.secondaryEmotion || "none"}
-Mixed emotional state: ${emotionResult.isMixed ? "yes" : "no"}
-Intensity: ${emotionResult.intensity}
-Recommended response mode: ${responseMode}
-
-Use this only as guidance.
-Do not announce emotion labels.
-Do not say "you are feeling X" with certainty.
-Do not make the reply sound diagnostic.
-Let the Talkio brain respond naturally.
-
-MODE BEHAVIOR
-
-- reflect:
-  acknowledge clearly, stay natural, deepen gently
-
-- soft_reflect:
-  mirror calm or lightness without making it dramatic
-
-- uplift:
-  celebrate with the user
-  match positive energy without sounding fake
-  do not overanalyze joy
-  do not rush into advice
-
-- receive:
-  warmly receive gratitude
-  keep it humble, grounded, and brief
-
-- settle:
-  honor relief
-  let the nervous system come down
-  do not immediately add pressure
-
-- clear_answer:
-  answer clearly and helpfully
-  keep warmth but prioritize clarity
-
-- ground:
-  reduce emotional intensity
-  use short steady sentences
-  anchor the present moment
-
-- stabilize:
-  respond directly and calmly
-  do not reinforce identity collapse
-  separate pain from identity
-
-- steady:
-  validate the boundary or frustration
-  do not fuel blame
-  keep the reply firm but non-reactive
-
-- hold_space:
-  slow down
-  give emotional room
-  do not rush meaning or solutions
-
-- narrow:
-  reduce the scope
-  focus on one manageable part
-
-- hold_complexity:
-  recognize that more than one emotion may be present
-  do not flatten the moment into only happy or only sad
-  hold both sides gently
-
-GENERAL RULES
-
-Never over-question.
-Ask at most one question only when useful.
-Do not turn every positive moment into a lesson.
-Do not turn every painful moment into advice.
-Stay human, specific, and present.
-`.trim();
+  const emotionalGuidanceBlock = buildStoicEmotionalGuidanceBlock({
+    emotionResult,
+    responseMode,
+  });
 
   return {
     emotionResult,
@@ -381,8 +326,53 @@ Stay human, specific, and present.
   };
 }
 
+function chooseStoicResponseMode(emotionResult = {}, latestUserMessage = "") {
+  const text = String(latestUserMessage || "").toLowerCase();
+
+  const intensityMap = {
+    very_high: 0.9,
+    high: 0.8,
+    medium: 0.6,
+    low: 0.4,
+    minimal: 0.2,
+  };
+
+  const intensity = intensityMap[emotionResult?.intensity] || 0.3;
+
+  const primary = String(emotionResult?.primaryEmotion || "").toLowerCase();
+
+  const looping =
+  /\b(over and over|keep replaying|can't stop thinking|same thought|again and again|spiral|keep thinking|keeps coming back|can't let it go)\b/i.test(text);
+
+  const confusion =
+    /\b(confused|don't know|don’t know|who i am|what to do|lost|unsure)\b/i.test(text);
+
+  const highRisk =
+    /\b(kill myself|suicide|end my life|hurt myself|self harm|i want to die)\b/i.test(text);
+ 
+  if (highRisk) return "stabilize";
+if (looping) return "interrupt_loop";
+if (intensity >= 0.8) return "stabilize";
+if (confusion) return "narrow";
+
+if (
+  primary === "fear" ||
+  primary === "shame" ||
+  primary === "stress" ||
+  primary === "grief" ||
+  primary === "numbness"
+) {
+  return "ground";
+}
+
+if (primary === "anger") {
+  return "ground";
+}
+
+return "reflect";
+}
+
 module.exports = {
   detectEmotions,
-  chooseResponseMode,
   buildEmotionalGuidanceBlock,
 };

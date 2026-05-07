@@ -20,7 +20,12 @@ const processDueReminders = onSchedule("every 1 minutes", async () => {
         text: reminder.text,
       });
 
-      const memoryItems = await getRelevantMemory(reminder.userId, reminder.text, 5);
+      const memoryItems = await getRelevantMemory(
+  reminder.userId,
+  reminder.text,
+  5
+);
+
 const message = buildReminderMessage(reminder, memoryItems);
 
 await sendPushToUser(

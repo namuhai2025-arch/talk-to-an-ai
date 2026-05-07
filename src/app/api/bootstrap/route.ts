@@ -21,11 +21,14 @@ export async function GET(req: Request) {
       return reply(
         {
           error: "Unauthorized",
-          reply: "Please sign in again and try once more.",
+          reply: "Looks like your session expired. Just sign in again and you’re good.",
         },
         401
       );
     }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
 
     const firebaseRes = await fetch(FIREBASE_BOOTSTRAP_URL, {
       method: "GET",
@@ -34,7 +37,10 @@ export async function GET(req: Request) {
         "x-talkio-app-key": process.env.INTERNAL_APP_KEY || "",
       },
       cache: "no-store",
+      signal: controller.signal,
     });
+
+    clearTimeout(timeout);
 
     const rawText = await firebaseRes.text();
 
@@ -51,7 +57,7 @@ export async function GET(req: Request) {
           error: data?.error || "Bootstrap upstream error",
           reply:
             data?.reply ||
-            "Something went wrong while loading your profile.",
+            "Something didn’t load right. Give it a second and try again.",
         },
         firebaseRes.status
       );
@@ -64,7 +70,7 @@ export async function GET(req: Request) {
     return reply(
       {
         error: "Server error",
-        reply: "Something went wrong while loading your profile.",
+        reply: "Something didn’t load right. Give it a second and try again.",
       },
       500
     );

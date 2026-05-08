@@ -69,6 +69,8 @@ export default function Page() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isLimitReached, setIsLimitReached] = useState(false);
 
+  const [crisisLock, setCrisisLock] = useState(false);
+
   const storageKeys = useMemo(
     () => ({
       messages: "talkio_messages",
@@ -274,33 +276,21 @@ export default function Page() {
   }, [messages, showTyping]);
 
   function clearChat() {
-    const greeting = buildGreeting(displayName);
+  const greeting = buildGreeting(displayName);
 
-    setMessages([greeting]);
-    setConversationTitle("New conversation");
-    setInput("");
-    setShowTyping(false);
-    setLoading(false);
-    setIsLimitReached(false);
+  setMessages([greeting]);
+  setConversationTitle("New conversation");
+  setInput("");
+  setShowTyping(false);
+  setLoading(false);
+  setIsLimitReached(false);
+  setCrisisLock(false);
 
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-  }
-  const openedFromCheckin =
-  typeof window !== "undefined" &&
-  sessionStorage.getItem("talkio_checkin_reply_context") === "true";
-
-const payload = {
-  message: input,
-  messages,
-  source: openedFromCheckin ? "checkin" : "chat",
-};
-
-if (typeof window !== "undefined") {
-  sessionStorage.removeItem("talkio_checkin_reply_context");
+  requestAnimationFrame(() => {
+    inputRef.current?.focus();
+  });
 }
-
+  
   function saveNickname() {
     const clean = draftNickname.trim().slice(0, 40);
     setDisplayName(clean);
@@ -310,7 +300,7 @@ if (typeof window !== "undefined") {
 
   async function sendMessage(overrideText?: string) {
     const text = (overrideText ?? input).trim();
-    if (!text || loading || isLimitReached || showSafety) return;
+    if (!text || loading || isLimitReached || showSafety || crisisLock) return;
 
     setLoading(true);
     setShowTyping(false);
@@ -368,6 +358,10 @@ await new Promise((resolve) =>
       });
 
       const data = await res.json().catch(() => ({}));
+
+      if (data?.crisisLock === true) {
+      setCrisisLock(true);
+      }
 
       if (data?.remainingDaily > 0) {
       setIsLimitReached(false);
@@ -588,7 +582,7 @@ setMessages((prev): ChatMessage[] => {
               if (sameAsNext) bubbleClass += " rounded-bl-md";
             }
 
-            return (
+            return (              
               <div key={i} className="flex flex-col">
                 <div className={bubbleClass}>
                   <div className="whitespace-pre-wrap break-words text-[16px] leading-7">
@@ -675,47 +669,70 @@ setMessages((prev): ChatMessage[] => {
       </div>
 
       {!isLimitReached && (
-        <form
-          className="flex gap-2 border-t p-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            sendMessage();
-          }}
-        >
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = `${e.target.scrollHeight}px`;
-            }}
-            placeholder={
-              showSafety
-                ? "Please review the safety notice first."
-                : "Type your message..."
-            }
-            disabled={loading || showSafety}
-            rows={1}
-            className="max-h-[120px] min-h-[50px] flex-1 resize-none rounded-[28px] border border-stone-300 px-4 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-400"
-            style={{ overflowY: "auto" }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                (e.target as HTMLTextAreaElement).form?.requestSubmit();
-              }
-            }}
-          />
+  <>
+    {crisisLock && (
+      <div className="mx-3 mb-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
+        <p>
+          Because this sounded serious, Talkio paused the conversation to prioritize your safety.
+        </p>
 
-          <button
-            type="submit"
-            disabled={loading || showSafety || !input.trim()}
-            className="h-[50px] rounded-full bg-emerald-500 px-5 text-white disabled:opacity-50"
-          >
-            Send
-                    </button>
-        </form>
-      )}
-    </main>
-  );
+        <button
+          type="button"
+          onClick={clearChat}
+          className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm"
+        >
+          Start new conversation
+        </button>
+      </div>
+    )}
+
+    <form
+      className="flex gap-2 border-t p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        sendMessage();
+      }}
+    >
+      <textarea
+        ref={inputRef}
+        value={input}
+        onChange={(e) => {
+          setInput(e.target.value);
+          e.target.style.height = "auto";
+          e.target.style.height = `${e.target.scrollHeight}px`;
+        }}
+        placeholder={crisisLock ? "Chat paused for safety" : "Type your message..."}
+        disabled={loading || showSafety || crisisLock}
+        rows={1}
+        className="max-h-[120px] min-h-[50px] flex-1 resize-none rounded-[28px] border border-stone-300 px-4 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-400"
+        style={{ overflowY: "auto" }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            (e.target as HTMLTextAreaElement).form?.requestSubmit();
+          }
+        }}
+      />
+
+      <button
+        type="button"
+        onClick={() => (window.location.href = "/paywall")}
+        className="rounded-full border border-stone-300 px-4 py-2 text-sm hover:bg-stone-100"
+      >
+        View plans
+      </button>
+
+      <button
+        type="submit"
+        disabled={loading || showSafety || crisisLock || !input.trim()}
+        className="h-[50px] rounded-full bg-emerald-500 px-5 text-white disabled:opacity-50"
+      >
+        Send
+      </button>
+       </form>
+  </>
+)}
+
+</main>
+);
 }

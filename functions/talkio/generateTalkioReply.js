@@ -249,11 +249,53 @@ function buildBrainPrompt({
   checkinModeBlock,
   languageInstruction,
   latestUserMessage,
+  planConfig,
 }) {
   return [
     buildLanguageControlBlock(latestUserMessage),
+
     languageInstruction,
+
     systemPrompt,
+
+    `
+USER PLAN
+
+Plan: ${planConfig?.label || "Free"}
+
+Plan behavior:
+- Reply length: ${planConfig?.replyLength}
+- Reply depth: ${planConfig?.replyDepth}
+- Memory level: ${planConfig?.memoryLevel}
+- Context retention: ${planConfig?.contextRetention}
+- Mood awareness: ${planConfig?.moodAwareness}
+- Stoic / grounding access: ${planConfig?.stoicGroundingModes}
+
+Rules:
+- Free users still deserve warmth and emotional safety.
+- Pro users can receive more layered and personalized replies.
+- Do not mention subscription plans naturally in conversation.
+`.trim(),
+
+    `
+LENGTH NATURALITY
+
+Do not force every reply to be short.
+
+Match reply length to the moment:
+- casual/simple message → short is okay
+- emotional or identity-level message → medium-length often feels more natural
+- meaningful sharing → respond with enough emotional presence
+- serious conversations should not feel compressed into one tiny reply
+
+Natural conversational flow matters more than strict brevity.
+
+Avoid:
+- emotionally empty one-line replies
+- overly compressed empathy
+- cutting off meaningful reflections too early
+`.trim(),
+
     checkinModeBlock,
     continuityBlock,
     nativeExpressionBlock,
@@ -262,6 +304,28 @@ function buildBrainPrompt({
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+function isTooSimilar(a = "", b = "") {
+  const normalize = (text) =>
+    text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, "")
+      .trim();
+
+  const aa = normalize(a);
+  const bb = normalize(b);
+
+  if (!aa || !bb) return false;
+
+  if (aa === bb) return true;
+
+  const aWords = aa.split(" ");
+  const bWords = bb.split(" ");
+
+  const overlap = aWords.filter((w) => bWords.includes(w)).length;
+
+  return overlap >= Math.min(aWords.length, bWords.length) * 0.75;
 }
 
 // ==============================
@@ -275,6 +339,7 @@ async function generateTalkioReply({
   conversationMessages,
   latestUserMessage,
   source = "chat",
+  planConfig = {},
 }) {
   const startedAt = Date.now();
 
@@ -344,15 +409,16 @@ Sound socially native.
     const checkinModeBlock = buildCheckinModeBlock(source);
 
     const prompt = buildBrainPrompt({
-      systemPrompt,
-      continuityBlock,
-      nativeExpressionBlock,
-      emotionalGuidanceBlock: emotional.emotionalGuidanceBlock,
-      variationBlock,
-      checkinModeBlock,
-      languageInstruction,
-      latestUserMessage,
-    });
+  systemPrompt,
+  continuityBlock,
+  nativeExpressionBlock,
+  emotionalGuidanceBlock: emotional.emotionalGuidanceBlock,
+  variationBlock,
+  checkinModeBlock,
+  languageInstruction,
+  latestUserMessage,
+  planConfig,
+});
 
     debugLog("TALKIO_PIPELINE_DEBUG", {
       uid,
@@ -368,36 +434,94 @@ Sound socially native.
     });
 
     let reply = normalizeReply(extractModelText(raw));
+
+    debugLog("TALKIO_MODEL_RAW", {
+    rawType: typeof raw,
+    rawPreview: JSON.stringify(raw)?.slice(0, 500),
+    extractedReply: reply?.slice(0, 200),
+    extractedLength: reply?.length || 0,
+    });
+
     reply = applySafetyGuard(reply, latestUserMessage);
     reply = cleanReply(reply);
     reply = humanizeReply(reply);
 
-    if (isSoftUsableReply(reply)) {
-      debugLog("TALKIO_PATH", {
-        path: "core_identity_soft_accept",
-        latencyMs: Date.now() - startedAt,
-      });
+    const lastAssistantMessage =
+  [...safeMessages]
+    .reverse()
+    .find((m) => m.role === "assistant")?.content || "";
 
-      await logLatency(Date.now() - startedAt);
-      await logResponseMode(responseMode);
+if (isTooSimilar(reply, lastAssistantMessage)) {
+  const rewriteRaw = await modelGenerate({
+    systemPrompt: `
+You are rewriting a Talkio response.
 
-      return {
-        reply,
-        path: "core_identity_soft_accept",
-        dynamicMode: responseMode,
-        humanState: {
-          emotionResult,
-          responseMode,
-          source,
-        },
-        memoryUpdate: {
-          lastEmotion: emotionResult?.primaryEmotion ?? null,
-          lastToneFamily: emotionResult?.toneFamily ?? null,
-          lastIntensity: emotionResult?.intensity ?? null,
-          lastResponseMode: responseMode ?? null,
-        },
-      };
-    }
+Rules:
+- keep the same emotional meaning
+- avoid repeating wording
+- avoid repeating sentence rhythm
+- sound human and emotionally natural
+- keep the same language as the user
+- do not become robotic
+- do not explain the rewrite
+- do not use the same opening words
+`,
+    messages: [
+      {
+        role: "user",
+        content: `
+Original reply:
+"${reply}"
+
+Previous assistant reply:
+"${lastAssistantMessage}"
+
+User message:
+"${latestUserMessage}"
+
+Rewrite the ORIGINAL REPLY naturally.
+`,
+      },
+    ],
+  });
+
+  const rewritten = cleanReply(
+    humanizeReply(
+      extractModelText(rewriteRaw)
+    )
+  );
+
+  if (isSoftUsableReply(rewritten)) {
+    reply = rewritten;
+  }
+}
+
+if (isSoftUsableReply(reply)) {
+  debugLog("TALKIO_PATH", {
+    path: "core_identity_soft_accept",
+    latencyMs: Date.now() - startedAt,
+  });
+
+  await logLatency(Date.now() - startedAt);
+  await logResponseMode(responseMode);
+
+  return {
+    reply,
+    path: "core_identity_soft_accept",
+    dynamicMode: responseMode,
+    humanState: {
+      emotionResult,
+      responseMode,
+      source,
+    },
+    memoryUpdate: {
+      lastEmotion: emotionResult?.primaryEmotion ?? null,
+      lastToneFamily: emotionResult?.toneFamily ?? null,
+      lastIntensity: emotionResult?.intensity ?? null,
+      lastResponseMode: responseMode ?? null,
+    },
+  };
+}
 
     const path = source === "checkin" ? "checkin_recovery" : "core_recovery";
 

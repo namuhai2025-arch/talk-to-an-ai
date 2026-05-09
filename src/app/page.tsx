@@ -636,9 +636,15 @@ setMessages((prev): ChatMessage[] => {
         <p className="text-sm font-semibold text-stone-900">
           Daily limit reached
         </p>
-        <p className="text-xs text-stone-500">
-          Upgrade to keep chatting with Talkio.
-        </p>
+        <div className="mt-1 space-y-1">
+  <p className="text-xs font-medium text-stone-800">
+    Your free messages for today are finished.
+  </p>
+
+  <p className="text-xs leading-5 text-stone-500">
+    Talkio Pro keeps the conversation going with higher limits, deeper memory, and scheduled check-ins.
+  </p>
+</div>
       </div>
 
       <button

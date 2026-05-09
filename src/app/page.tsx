@@ -737,8 +737,21 @@ setMessages((prev): ChatMessage[] => {
           e.target.style.height = "auto";
           e.target.style.height = `${e.target.scrollHeight}px`;
         }}
-        placeholder={crisisLock ? "Chat paused for safety" : "Type your message..."}
-        disabled={loading || showSafety || crisisLock}
+        placeholder={
+  crisisLock
+    ? "Chat paused for safety"
+    : isLimitReached
+      ? "Daily free limit reached."
+      : "Type your message..."
+}
+
+disabled={
+  loading ||
+  showSafety ||
+  crisisLock ||
+  isLimitReached
+}
+
         rows={1}
         className="max-h-[120px] min-h-[50px] flex-1 resize-none rounded-[28px] border border-stone-300 px-4 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-400 disabled:bg-stone-100 disabled:text-stone-400"
         style={{ overflowY: "auto" }}
@@ -752,7 +765,13 @@ setMessages((prev): ChatMessage[] => {
 
       <button
         type="submit"
-        disabled={loading || showSafety || crisisLock || !input.trim()}
+        disabled={
+  loading ||
+  showSafety ||
+  crisisLock ||
+  isLimitReached ||
+  !input.trim()
+}
         className="h-[50px] rounded-full bg-emerald-500 px-5 text-white disabled:cursor-not-allowed disabled:bg-stone-300 disabled:opacity-70"
       >
         Send

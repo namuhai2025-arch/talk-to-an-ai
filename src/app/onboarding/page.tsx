@@ -81,11 +81,14 @@ export default function TalkioOnboarding() {
           )}
         </div>
 
-        <div className="rounded-[32px] bg-white p-8 shadow-sm border border-stone-200 min-h-[420px] flex flex-col justify-between">
+        <div
+  key={index}
+  className="animate-[onboardingFade_280ms_ease-out] rounded-[32px] bg-white p-8 shadow-sm border border-stone-200 min-h-[420px] flex flex-col justify-between"
+>
           <div>
-            <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-2xl">
-              💬
-            </div>
+            <div className="mb-6 inline-flex h-14 w-14 animate-[softPulse_2.8s_ease-in-out_infinite] items-center justify-center rounded-2xl bg-emerald-100 text-2xl">
+  💬
+</div>
 
             <h1 className="text-3xl font-semibold leading-tight tracking-tight text-stone-900">
               {current.title}
@@ -118,6 +121,27 @@ export default function TalkioOnboarding() {
           Talkio • calm conversations for heavy moments
         </p>
       </div>
+      <style jsx>{`
+  @keyframes onboardingFade {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes softPulse {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.06);
+    }
+  }
+`}</style>
     </main>
   );
 }

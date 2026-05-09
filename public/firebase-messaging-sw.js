@@ -26,13 +26,23 @@ messaging.onBackgroundMessage((payload) => {
     "Hey... just checking in.";
 
   self.registration.showNotification(title, {
-    body,
-    icon: "/icon.png",
-    badge: "/icon.png",
-    data: {
-      url: payload?.data?.url || "/",
-    },
-  });
+  body,
+  icon: "/icon.png",
+  badge: "/icon.png",
+
+  vibrate: [120, 40, 120],
+
+  requireInteraction: false,
+
+  silent: false,
+
+  tag: "talkio-checkin",
+
+  renotify: true,
+
+  data: {
+    url: payload?.data?.url || "/",
+  },
 });
 
 self.addEventListener("notificationclick", (event) => {

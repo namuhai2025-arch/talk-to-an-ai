@@ -233,8 +233,11 @@ export default function Page() {
 
       if (!auth.currentUser) {
   await signInAnonymously(auth);
-  await registerTalkioPushToken().catch(console.error);
 }
+
+await auth.authStateReady();
+
+await registerTalkioPushToken().catch(console.error);
 
       const user = auth.currentUser;
       setUserId(user?.uid || "guest");

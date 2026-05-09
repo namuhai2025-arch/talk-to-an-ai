@@ -97,6 +97,7 @@ export async function POST(req: Request) {
         error: data?.error || null,
         model: data?.model || null,
         path: data?.path || null,
+        crisisLock: data?.crisisLock === true,
         remainingDaily: data?.remainingDaily ?? null,
         upstreamStatus: firebaseRes.status,
       },

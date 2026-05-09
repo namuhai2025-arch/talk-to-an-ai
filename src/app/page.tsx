@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { signInAnonymously } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
+import { registerTalkioPushToken } from "@/lib/registerPushToken";
 
 type ChatRole = "user" | "assistant";
 
@@ -92,6 +93,10 @@ export default function Page() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+  registerTalkioPushToken().catch(console.error);
+}, []);
 
   useEffect(() => {
     if (!mounted) return;

@@ -1073,6 +1073,12 @@ export const saveTalkioProfile = onRequest({ cors: true }, async (req, res) => {
         ? body.timezone.trim().slice(0, 80)
         : "";
 
+    const fcmToken =
+      typeof body.fcmToken === "string" &&
+      body.fcmToken.trim()
+        ? body.fcmToken.trim()
+        : "";
+    
     const update = {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -1081,6 +1087,19 @@ export const saveTalkioProfile = onRequest({ cors: true }, async (req, res) => {
     else if (body.nickname === "") update.nickname = "";
 
     if (timezone) update.timezone = timezone;
+
+    if (fcmToken) {
+      await db
+        .collection("users")
+        .doc(uid)
+        .collection("device_tokens")
+        .doc(fcmToken)
+        .set({
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+          platform: "web",
+        });
+    }
 
     await db.collection("users").doc(uid).set(update, { merge: true });
 
@@ -1233,7 +1252,7 @@ export const processDueCheckins = onSchedule(
         const uid = doc.id;
         const timeZone = checkin.timezone || "Asia/Manila";
         const localHour =
-          typeof checkin.localHour === "number" ? checkin.localHour : 19;
+          typeof checkin.localHour === "number" ? checkin.localHour : 12;
         const localMinute =
           typeof checkin.localMinute === "number" ? checkin.localMinute : 0;
 

@@ -35,6 +35,9 @@ export async function POST(req: Request) {
     const timezone =
       typeof body?.timezone === "string" ? body.timezone.trim().slice(0, 80) : "";
 
+    const fcmToken =
+      typeof body?.fcmToken === "string" ? body.fcmToken.trim().slice(0, 500) : "";
+
     const firebaseRes = await fetch(FIREBASE_PROFILE_URL, {
       method: "POST",
       headers: {
@@ -45,6 +48,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         nickname,
         timezone,
+        fcmToken,
       }),
       cache: "no-store",
     });

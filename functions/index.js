@@ -201,6 +201,9 @@ function normalizeEmail(email) {
 const IP_DAILY_CAP = 120;
 const IP_MINUTE_CAP = 30;
 
+const FREE_TRIAL_DAYS = 3;
+const FREE_TRIAL_DAILY_LIMIT = 10;
+
 const FREE_MODEL = "gemini-2.5-flash-lite";
 const PREMIUM_MODEL = "gemini-2.5-flash";
 const ULTRA_MODEL = "gemini-2.5-pro";
@@ -1089,17 +1092,32 @@ export const saveTalkioProfile = onRequest({ cors: true }, async (req, res) => {
     if (timezone) update.timezone = timezone;
 
     if (fcmToken) {
-      await db
-        .collection("users")
-        .doc(uid)
-        .collection("device_tokens")
-        .doc(fcmToken)
-        .set({
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
-          platform: "web",
-        });
-    }
+  const userAgent = req.headers["user-agent"] || "";
+
+  const platform =
+    /android/i.test(userAgent)
+      ? "android"
+      : /iphone|ipad|ios/i.test(userAgent)
+        ? "ios"
+        : "web";
+
+  await db
+    .collection("users")
+    .doc(uid)
+    .collection("device_tokens")
+    .doc(fcmToken)
+    .set(
+      {
+        token: fcmToken,
+        timezone: timezone || "",
+        platform,
+        lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+}
 
     await db.collection("users").doc(uid).set(update, { merge: true });
 
@@ -1298,6 +1316,52 @@ export const processDueCheckins = onSchedule(
   }
 );
 
+async function getOrCreateFreeTrial(uid) {
+  const userRef = db.collection("users").doc(uid);
+  const snap = await userRef.get();
+
+  const now = new Date();
+  const nowMs = now.getTime();
+
+  const data = snap.exists ? snap.data() || {} : {};
+
+  let trialStartedAt = data.trialStartedAt?.toDate?.() || null;
+  let trialEndsAt = data.trialEndsAt?.toDate?.() || null;
+
+  if (!trialStartedAt || !trialEndsAt) {
+    trialStartedAt = now;
+    trialEndsAt = new Date(nowMs + FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000);
+
+    await userRef.set(
+      {
+        trialStartedAt: admin.firestore.Timestamp.fromDate(trialStartedAt),
+        trialEndsAt: admin.firestore.Timestamp.fromDate(trialEndsAt),
+        trialStatus: "active",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
+  const isTrialExpired = nowMs > trialEndsAt.getTime();
+
+  if (isTrialExpired && data.trialStatus !== "expired") {
+    await userRef.set(
+      {
+        trialStatus: "expired",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
+  return {
+    trialStartedAt,
+    trialEndsAt,
+    isTrialExpired,
+  };
+}
+
 async function deleteCollection(path, batchSize = 100) {
   const ref = db.collection(path);
 
@@ -1429,6 +1493,8 @@ export const generateTalkioReply = onRequest(async (req, res) => {
 
     const access = await getUserAccessProfile(uid, decodedToken);
 
+    const freeTrial = await getOrCreateFreeTrial(uid);
+
     const userPlan =
   access?.quotaTier === "ultra"
     ? "ultra"
@@ -1438,12 +1504,16 @@ export const generateTalkioReply = onRequest(async (req, res) => {
 
     const planConfig = getTalkioPlan(userPlan);
 
-    const {
+    let {
     dailyLimit,
     perMinuteLimit,
     limitLabel,
     bypassIpLimits,
     } = getLimitsForAccess(access);
+
+    if (limitLabel === "free") {
+    dailyLimit = FREE_TRIAL_DAILY_LIMIT;
+    }
 
     const [userDailyCount, userMinuteCount, ipDailyCount, ipMinuteCount] =
     await Promise.all([
@@ -1459,6 +1529,20 @@ export const generateTalkioReply = onRequest(async (req, res) => {
   redis.expire(ipDailyKey, secondsUntilUtcMidnight()),
   redis.expire(ipMinuteKey, 120),
 ]);
+
+if (limitLabel === "free" && freeTrial.isTrialExpired) {
+  res.status(429).json({
+    error: "Free trial expired",
+    paywallRequired: true,
+    reply:
+      "Your 3-day free Talkio trial has ended. Upgrade to Talkio Pro to keep chatting with higher limits and better memory.",
+    remainingDaily: 0,
+    dailyLimit,
+    quotaTier: "free_trial_expired",
+  });
+
+  return;
+}
   
   if (userDailyCount > dailyLimit) {
   const isFree = limitLabel === "free";

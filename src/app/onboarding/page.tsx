@@ -4,33 +4,33 @@ import React from "react";
 
 export default function TalkioOnboarding() {
   const screens = [
-    {
-      title: "Some thoughts stay too heavy to carry alone.",
-      body:
-        "Talkio is a calm space to think, vent, reflect, and breathe.",
-    },
-    {
-      title: "You don’t always need advice.",
-      body:
-        "Sometimes you just need to feel understood.",
-    },
-    {
-      title: "A grounded human conversation.",
-      body:
-        "Not a productivity tool. Not a therapy script. Just a calm space to talk naturally.",
-    },
-    {
-      title: "No pressure. No judgment.",
-      body:
-        "You don’t need perfect words here.",
-    },
-    {
-      title: "What’s been on your mind lately?",
-      body:
-        "Start where you are. Even small thoughts matter.",
-      cta: "Start Talking",
-    },
-  ];
+  {
+    title: "Some thoughts stay too heavy to carry alone.",
+    body:
+      "Talkio is a calm space to think, vent, reflect, and breathe.",
+  },
+  {
+    title: "You don’t always need advice.",
+    body:
+      "Sometimes you just need to feel understood.",
+  },
+  {
+    title: "A grounded human conversation.",
+    body:
+      "Not a productivity tool. Not a therapy script. Just a calm space to talk naturally.",
+  },
+  {
+    title: "No pressure. No judgment.",
+    body:
+      "You don’t need perfect words here.",
+  },
+  {
+    title: "Try Talkio freely for 3 days",
+    body:
+      "10 messages daily included.\n\nUpgrade to Talkio Pro for higher limits, deeper memory, scheduled check-ins, and priority access.",
+    cta: "Start Talking",
+  },
+];
 
   const [index, setIndex] = React.useState(0);
 
@@ -91,9 +91,9 @@ export default function TalkioOnboarding() {
               {current.title}
             </h1>
 
-            <p className="mt-5 text-base leading-7 text-stone-600">
-              {current.body}
-            </p>
+            <p className="mt-5 whitespace-pre-line text-base leading-7 text-stone-600">
+  {current.body}
+</p>
           </div>
 
           <div className="mt-10">

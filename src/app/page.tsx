@@ -588,6 +588,15 @@ setMessages((prev): ChatMessage[] => {
             const sameAsNext = next?.role === m.role;
             const showTimestamp = !next || next.role !== m.role;
 
+            if (
+  isLimitReached &&
+  m.role === "assistant" &&
+  typeof m.content === "string" &&
+  m.content.includes("free limit")
+) {
+  return null;
+}
+
             let bubbleClass =
               m.role === "user"
                 ? "self-end max-w-[82%] bg-emerald-500 px-4 py-3 text-white shadow-sm"

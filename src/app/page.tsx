@@ -194,6 +194,11 @@ export default function Page() {
   useEffect(() => {
   if (!mounted) return;
 
+  const openedFromCheckin =
+    sessionStorage.getItem("talkio_checkin_opened") === "true";
+
+  if (!openedFromCheckin) return;
+
   const checkinMessage =
     sessionStorage.getItem("talkio_checkin_message") ||
     "how did today feel for you";
@@ -203,7 +208,9 @@ export default function Page() {
 
   setMessages((prev) => {
     const alreadyInserted = prev.some(
-      (m) => m.role === "assistant" && m.content === checkinMessage
+      (m) =>
+        m.role === "assistant" &&
+        m.content === checkinMessage
     );
 
     if (alreadyInserted) return prev;
@@ -352,12 +359,21 @@ await new Promise((resolve) =>
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          message: text,
-          messages: nextMessages,
-        }),
+  message: text,
+  messages: nextMessages,
+  source:
+    typeof window !== "undefined" &&
+    sessionStorage.getItem("talkio_checkin_reply_context") === "true"
+      ? "checkin"
+      : "chat",
+}),
       });
 
       const data = await res.json().catch(() => ({}));
+
+      if (typeof window !== "undefined") {
+      sessionStorage.removeItem("talkio_checkin_reply_context");
+      }
 
       if (data?.crisisLock === true) {
       setCrisisLock(true);
@@ -704,7 +720,7 @@ setMessages((prev): ChatMessage[] => {
         placeholder={crisisLock ? "Chat paused for safety" : "Type your message..."}
         disabled={loading || showSafety || crisisLock}
         rows={1}
-        className="max-h-[120px] min-h-[50px] flex-1 resize-none rounded-[28px] border border-stone-300 px-4 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-400"
+        className="max-h-[120px] min-h-[50px] flex-1 resize-none rounded-[28px] border border-stone-300 px-4 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-400 disabled:bg-stone-100 disabled:text-stone-400"
         style={{ overflowY: "auto" }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
@@ -717,11 +733,11 @@ setMessages((prev): ChatMessage[] => {
       <button
         type="submit"
         disabled={loading || showSafety || crisisLock || !input.trim()}
-        className="h-[50px] rounded-full bg-emerald-500 px-5 text-white disabled:opacity-50"
+        className="h-[50px] rounded-full bg-emerald-500 px-5 text-white disabled:cursor-not-allowed disabled:bg-stone-300 disabled:opacity-70"
       >
         Send
       </button>
-       </form>
+    </form>
   </>
 )}
 

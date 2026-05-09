@@ -759,7 +759,7 @@ async function upsertCheckin(uid, data = {}) {
   const payload = {
     enabled: typeof data.enabled === "boolean" ? data.enabled : true,
     timezone: data.timezone || "Asia/Manila",
-    localHour: typeof data.localHour === "number" ? data.localHour : 19,
+    localHour: typeof data.localHour === "number" ? data.localHour : 12,
     localMinute: typeof data.localMinute === "number" ? data.localMinute : 0,
     message:
       typeof data.message === "string" && data.message.trim()
@@ -807,7 +807,7 @@ function isWithinCheckinWindow(nowParts, targetHour, targetMinute, windowMinutes
   );
 }
 
-function wasRecentlyActive(userDoc, minutes = 30) {
+function wasRecentlyActive(userDoc, minutes = 180) {
   const lastUserMessageAt = userDoc?.lastUserMessageAt?.toDate?.();
   if (!lastUserMessageAt) return false;
 
@@ -1162,7 +1162,7 @@ export const createCheckin = onRequest({ cors: true }, async (req, res) => {
       body.localHour >= 0 &&
       body.localHour <= 23
         ? body.localHour
-        : 19;
+        : 12;
 
     const localMinute =
       typeof body.localMinute === "number" &&

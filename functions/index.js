@@ -1390,6 +1390,7 @@ export const generateTalkioReply = onRequest(async (req, res) => {
     reply: crisisReplyGlobal(),
     model: "crisis-guardrail",
     path: "crisis_guardrail",
+    crisisLock: true,
     remainingDaily: 0,
   });
   return;

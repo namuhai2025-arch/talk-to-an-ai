@@ -715,14 +715,6 @@ setMessages((prev): ChatMessage[] => {
       />
 
       <button
-        type="button"
-        onClick={() => (window.location.href = "/paywall")}
-        className="rounded-full border border-stone-300 px-4 py-2 text-sm hover:bg-stone-100"
-      >
-        View plans
-      </button>
-
-      <button
         type="submit"
         disabled={loading || showSafety || crisisLock || !input.trim()}
         className="h-[50px] rounded-full bg-emerald-500 px-5 text-white disabled:opacity-50"

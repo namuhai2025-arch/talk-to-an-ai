@@ -38,6 +38,11 @@ export async function POST(req: Request) {
     const fcmToken =
       typeof body?.fcmToken === "string" ? body.fcmToken.trim().slice(0, 500) : "";
 
+    console.log("PROFILE_INTERNAL_KEY_DEBUG", {
+      hasKey: Boolean(process.env.INTERNAL_APP_KEY),
+      keyLength: process.env.INTERNAL_APP_KEY?.length || 0,
+      });
+
     const firebaseRes = await fetch(FIREBASE_PROFILE_URL, {
       method: "POST",
       headers: {

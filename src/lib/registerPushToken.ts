@@ -37,8 +37,15 @@ export async function registerTalkioPushToken() {
   const idToken = await user.getIdToken();
 
   const registration = await navigator.serviceWorker.register(
-    "/firebase-messaging-sw.js"
-  );
+  "/firebase-messaging-sw.js"
+);
+
+await navigator.serviceWorker.ready;
+
+const fcmToken = await getToken(messaging, {
+  vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+  serviceWorkerRegistration: registration,
+});
 
   const messaging = getMessaging(getFirebaseApp());
 

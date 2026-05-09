@@ -95,10 +95,6 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-  registerTalkioPushToken().catch(console.error);
-}, []);
-
-  useEffect(() => {
     if (!mounted) return;
 
     const acknowledged = localStorage.getItem(storageKeys.safety);
@@ -236,8 +232,9 @@ export default function Page() {
       const auth = getFirebaseAuth();
 
       if (!auth.currentUser) {
-        await signInAnonymously(auth);
-      }
+  await signInAnonymously(auth);
+  await registerTalkioPushToken().catch(console.error);
+}
 
       const user = auth.currentUser;
       setUserId(user?.uid || "guest");

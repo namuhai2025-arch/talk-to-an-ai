@@ -1,5 +1,10 @@
-importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js");
+importScripts(
+  "https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"
+);
+
+importScripts(
+  "https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js"
+);
 
 firebase.initializeApp({
   apiKey: "AIzaSyBYZA2jaXAzhYW5aFA7LcCkBLBJM5oqFfk",
@@ -10,16 +15,15 @@ firebase.initializeApp({
   appId: "1:813406735573:web:9d2cf247852f36266ee65c",
 });
 
-INTERNAL_APP_KEY=72425e3c-d736-46ee-8c57-81434d82866c
-
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const title = payload?.notification?.title || "Talkio";
+  const title =
+    payload?.notification?.title || "Talkio";
 
   const body =
     payload?.notification?.body ||
-    "Hey… just checking in. How are you feeling today?";
+    "Hey... just checking in.";
 
   self.registration.showNotification(title, {
     body,
@@ -27,8 +31,6 @@ messaging.onBackgroundMessage((payload) => {
     badge: "/icon.png",
     data: {
       url: payload?.data?.url || "/",
-      type: payload?.data?.type || "checkin",
-      message: body,
     },
   });
 });
@@ -36,7 +38,8 @@ messaging.onBackgroundMessage((payload) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const url = event.notification?.data?.url || "/";
+  const url =
+    event.notification?.data?.url || "/";
 
   event.waitUntil(
     clients.matchAll({
@@ -46,13 +49,6 @@ self.addEventListener("notificationclick", (event) => {
       for (const client of clientList) {
         if ("focus" in client) {
           client.focus();
-
-          client.postMessage({
-            type: "TALKIO_CHECKIN_OPENED",
-            message:
-              event.notification?.data?.message || "",
-          });
-
           return;
         }
       }

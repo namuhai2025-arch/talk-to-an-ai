@@ -24,10 +24,13 @@ export async function registerTalkioPushToken() {
   }
 
   const auth = getFirebaseAuth();
+
+  await auth.authStateReady();
+
   const user = auth.currentUser;
 
   if (!user) {
-    console.log("No signed-in user.");
+    console.log("No signed-in user after authStateReady.");
     return null;
   }
 

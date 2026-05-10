@@ -12,6 +12,12 @@ const {
   detectLanguageEnvironment,
 } = require("./languageDetection");
 
+const { analyzeBehavioralSafety } = require("./behavioralSafety");
+
+const {
+  HARMFUL_INTENT_STEERING_PROMPT,
+} = require("./prompts");
+
 const {
   incrementMetric,
   logResponseMode,
@@ -250,6 +256,7 @@ function buildBrainPrompt({
   languageInstruction,
   latestUserMessage,
   planConfig,
+  behavioralSafety,
 }) {
   return [
     buildLanguageControlBlock(latestUserMessage),
@@ -302,6 +309,12 @@ Avoid:
     continuityBlock,
     nativeExpressionBlock,
     emotionalGuidanceBlock,
+
+    behavioralSafety?.shouldRedirect === true &&
+    ["medium", "high"].includes(behavioralSafety?.riskLevel)
+      ? HARMFUL_INTENT_STEERING_PROMPT
+      : "",
+
     variationBlock,
   ]
     .filter(Boolean)
@@ -452,6 +465,11 @@ Sound socially native.
     emotionResult = emotional.emotionResult;
     responseMode = emotional.responseMode || "reflect";
 
+    const behavioralSafety = await analyzeBehavioralSafety({
+    modelGenerate,
+    latestUserMessage,
+    });
+
     const variationBlock = buildVariationBlock(safeMessages);
     const checkinModeBlock = buildCheckinModeBlock(source);
 
@@ -465,6 +483,7 @@ Sound socially native.
   languageInstruction,
   latestUserMessage,
   planConfig,
+  behavioralSafety,
 });
 
     debugLog("TALKIO_PIPELINE_DEBUG", {
@@ -557,15 +576,18 @@ if (isSoftUsableReply(reply)) {
     path: "core_identity_soft_accept",
     dynamicMode: responseMode,
     humanState: {
-      emotionResult,
-      responseMode,
-      source,
-    },
+  emotionResult,
+  responseMode,
+  source,
+  behavioralSafety,
+},
     memoryUpdate: {
       lastEmotion: emotionResult?.primaryEmotion ?? null,
       lastToneFamily: emotionResult?.toneFamily ?? null,
       lastIntensity: emotionResult?.intensity ?? null,
       lastResponseMode: responseMode ?? null,
+      lastBehavioralRisk: behavioralSafety?.riskLevel ?? "none",
+      lastBehavioralCategory: behavioralSafety?.category ?? "none",
     },
   };
 }
@@ -612,6 +634,7 @@ if (isSoftUsableReply(reply)) {
         emotionResult,
         responseMode,
         source,
+        behavioralSafety,
       },
       memoryUpdate: null,
     };

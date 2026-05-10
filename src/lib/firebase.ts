@@ -1,5 +1,6 @@
 import { getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
+import { getAnalytics, logEvent, type Analytics } from "firebase/analytics";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -12,6 +13,8 @@ const firebaseConfig = {
 
 let app: FirebaseApp | null = null;
 let authInstance: Auth | null = null;
+
+let analyticsInstance: Analytics | null = null;
 
 export function getFirebaseApp(): FirebaseApp {
   if (typeof window === "undefined") {
@@ -34,3 +37,17 @@ export function getFirebaseAuth(): Auth {
   authInstance = getAuth(getFirebaseApp());
   return authInstance;
 }
+
+export function getFirebaseAnalytics(): Analytics {
+  if (typeof window === "undefined") {
+    throw new Error("Firebase analytics should only be initialized in the browser");
+  }
+
+  if (analyticsInstance) return analyticsInstance;
+
+  analyticsInstance = getAnalytics(getFirebaseApp());
+
+  return analyticsInstance;
+}
+
+export { logEvent };

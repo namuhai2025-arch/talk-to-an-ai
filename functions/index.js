@@ -3,7 +3,6 @@
 import admin from "firebase-admin";
 import { onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import * as functions from "firebase-functions";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
@@ -26,10 +25,7 @@ const {
 } = require("./talkio/generateTalkioReply");
 
 const {
-  CORE_IDENTITY_PROMPT,
-  TALKIO_SOUL_LAYER,
-  RELATIONAL_INTELLIGENCE_LAYER,
-  HUMAN_REALISM_LAYER,
+  BASE_SYSTEM_PROMPT,
 } = require("./talkio/prompts");
 
 if (!admin.apps.length) {
@@ -479,22 +475,12 @@ function detectLanguageMirror(text = "") {
       "Reply in the same language the user is currently using, even if the language is not explicitly recognized. If the language is unclear or mixed, follow the dominant language of the message. Do not default to English unless the user is clearly using English. If the user's language is unclear, respond in simple, neutral English.",
   };
 }
-
-
-const SYSTEM_PROMPT = `
-${CORE_IDENTITY_PROMPT}
-
-${TALKIO_SOUL_LAYER}
-
-${RELATIONAL_INTELLIGENCE_LAYER}
-
-${HUMAN_REALISM_LAYER}
-`.trim();
+const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT;
 
 // ==============================
 // SYSTEM PROMPT BUILDER
 // ==============================
-function buildSystemPrompt({ languageMeta }) {
+function buildRuntimeSystemPrompt ({ languageMeta }) {
   return [
     SYSTEM_PROMPT,
     `LANGUAGE MIRRORING
@@ -594,20 +580,6 @@ async function generateModelText({ ai, model, systemPrompt, messages }) {
 
     throw new Error(`generate_model_text_failed: ${realMessage}`);
   }
-}
-
-function buildGenerateTalkioSuccessResponse({
-  result,
-  model,
-  dailyLimit,
-  userDailyCount,
-}) {
-  return {
-    reply: typeof result?.reply === "string" ? result.reply : "",
-    model,
-    path: result?.path || result?.dynamicMode || "unknown",
-    remainingDaily: Math.max(0, dailyLimit - userDailyCount),
-  };
 }
 
 function detectMoodSignal(text) {
@@ -1554,7 +1526,7 @@ if (limitLabel === "free" && freeTrial.isTrialExpired) {
     paywallRequired: isFree,
 
     reply: isFree
-      ? "You’ve reached today’s free limit. Continue with Talkio Paid to keep chatting."
+      ? "You’ve reached today’s free limit. Continue with Talkio Pro to keep chatting."
       : "You've reached today's message limit. Please come back later.",
 
     remainingDaily: 0,
@@ -1598,9 +1570,10 @@ console.log("ACCESS DEBUG:", {
 
     const languageMeta = detectLanguageMirror(latestUserMessage);
 
-    const systemPrompt = buildSystemPrompt({
+    const runtimeSystemPrompt =
+  buildRuntimeSystemPrompt({
     languageMeta,
-    });
+  });
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const model =
@@ -1623,7 +1596,7 @@ console.log("ACCESS DEBUG:", {
           messages,
         });
       },
-      systemPrompt,
+      systemPrompt: runtimeSystemPrompt,
       conversationMessages,
       latestUserMessage,
       source: body?.source || "chat",

@@ -2,7 +2,11 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { signInAnonymously } from "firebase/auth";
-import { getFirebaseAuth } from "@/lib/firebase";
+import {
+  getFirebaseAuth,
+  getFirebaseAnalytics,
+  logEvent,
+} from "@/lib/firebase";
 import { registerTalkioPushToken } from "@/lib/registerPushToken";
 
 type ChatRole = "user" | "assistant";
@@ -375,6 +379,10 @@ await new Promise((resolve) =>
       });
 
       const data = await res.json().catch(() => ({}));
+
+      logEvent(getFirebaseAnalytics(), "chat_message_sent", {
+  source: "chat",
+});
 
       if (typeof window !== "undefined") {
       sessionStorage.removeItem("talkio_checkin_reply_context");

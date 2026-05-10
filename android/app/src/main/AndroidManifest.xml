@@ -20,6 +20,12 @@
             android:exported="true"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density">
 
+            <!-- 0. App launcher -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            
             <!-- 1. Firebase click action -->
             <intent-filter>
                 <action android:name="OPEN_TALKIO_CHAT" />

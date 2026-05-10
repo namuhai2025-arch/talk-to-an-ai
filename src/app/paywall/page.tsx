@@ -149,7 +149,7 @@ export default function PaywallPage() {
               "Enhanced emotional depth",
               "Better memory continuity",
               "Smart scheduled check-ins",
-              "Full stoic / grounding modes",
+              "Calm guidance during difficult moments",
               "Priority access during traffic",
               "Early access to future features",
             ].map((feature) => (

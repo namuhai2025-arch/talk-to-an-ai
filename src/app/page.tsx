@@ -429,6 +429,12 @@ await new Promise((resolve) =>
 
   return nextMessages.slice(-MAX_MESSAGES);
 });
+
+logEvent(getFirebaseAnalytics(), "reply_generated", {
+  mode: data?.dynamicMode || "unknown",
+  path: data?.path || "unknown",
+});
+
 } catch {
 setMessages((prev): ChatMessage[] => {
   const nextMessages: ChatMessage[] = [
@@ -441,7 +447,8 @@ setMessages((prev): ChatMessage[] => {
   ];
 
   return nextMessages.slice(-MAX_MESSAGES);
-});
+
+  }); 
     } finally {
       clearTimeout(typingTimer);
       setShowTyping(false);

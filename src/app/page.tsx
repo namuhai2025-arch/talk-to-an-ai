@@ -15,6 +15,7 @@ type ChatMessage = {
   role: ChatRole;
   content: string;
   timestamp: number;
+  isFeedbackPrompt?: boolean;
 };
 
 const MAX_MESSAGES = 30;
@@ -75,6 +76,8 @@ export default function Page() {
   const [isLimitReached, setIsLimitReached] = useState(false);
 
   const [crisisLock, setCrisisLock] = useState(false);
+
+  const [feedbackAsked, setFeedbackAsked] = useState(false);
 
   const storageKeys = useMemo(
     () => ({
@@ -418,6 +421,9 @@ await new Promise((resolve) =>
       await new Promise((resolve) => setTimeout(resolve, replyDelay));
 
       setMessages((prev): ChatMessage[] => {
+  const assistantCount = prev.filter((m) => m.role === "assistant").length;
+  const shouldAskFeedback = assistantCount >= 7 && !feedbackAsked;
+
   const nextMessages: ChatMessage[] = [
     ...prev,
     {
@@ -425,6 +431,17 @@ await new Promise((resolve) =>
       content: assistantReply,
       timestamp: Date.now(),
     },
+    ...(shouldAskFeedback
+      ? [
+          {
+            role: "assistant" as const,
+            content:
+              "Before you go — how has Talkio felt for you so far?\n\nAnything you wish felt better, more human, or more helpful?",
+            timestamp: Date.now() + 1,
+            isFeedbackPrompt: true,
+          },
+        ]
+      : []),
   ];
 
   return nextMessages.slice(-MAX_MESSAGES);
@@ -434,6 +451,10 @@ logEvent(getFirebaseAnalytics(), "reply_generated", {
   mode: data?.dynamicMode || "unknown",
   path: data?.path || "unknown",
 });
+
+if (!feedbackAsked && messages.filter((m) => m.role === "assistant").length >= 7) {
+  setFeedbackAsked(true);
+}
 
 } catch {
 setMessages((prev): ChatMessage[] => {
@@ -445,6 +466,8 @@ setMessages((prev): ChatMessage[] => {
       timestamp: Date.now(),
     },
   ];
+
+  
 
   return nextMessages.slice(-MAX_MESSAGES);
 

@@ -434,12 +434,12 @@ await new Promise((resolve) =>
     ...(shouldAskFeedback
       ? [
           {
-            role: "assistant" as const,
-            content:
-              "Before you go — how has Talkio felt for you so far?\n\nAnything you wish felt better, more human, or more helpful?",
-            timestamp: Date.now() + 1,
-            isFeedbackPrompt: true,
-          },
+  role: "assistant" as const,
+  content:
+    "Before you go — if Talkio has helped you even a little, would you mind leaving a quick review on Google Play?\n\nhttps://play.google.com/store/apps/details?id=com.talkio.app",
+  timestamp: Date.now() + 1,
+  isFeedbackPrompt: true,
+},
         ]
       : []),
   ];

@@ -78,6 +78,7 @@ export default function Page() {
   const [crisisLock, setCrisisLock] = useState(false);
 
   const [feedbackAsked, setFeedbackAsked] = useState(false);
+  const [showReviewPrompt, setShowReviewPrompt] = useState(false);
 
   const storageKeys = useMemo(
     () => ({
@@ -430,18 +431,7 @@ await new Promise((resolve) =>
       role: "assistant" as const,
       content: assistantReply,
       timestamp: Date.now(),
-    },
-    ...(shouldAskFeedback
-      ? [
-          {
-  role: "assistant" as const,
-  content:
-    "Before you go — if Talkio has helped you even a little, would you mind leaving a quick review on Google Play?\n\nhttps://play.google.com/store/apps/details?id=com.talkio.app",
-  timestamp: Date.now() + 1,
-  isFeedbackPrompt: true,
-},
-        ]
-      : []),
+    },    
   ];
 
   return nextMessages.slice(-MAX_MESSAGES);
@@ -452,8 +442,17 @@ logEvent(getFirebaseAnalytics(), "reply_generated", {
   path: data?.path || "unknown",
 });
 
-if (!feedbackAsked && messages.filter((m) => m.role === "assistant").length >= 7) {
+const reviewCompleted =
+  typeof window !== "undefined" &&
+  localStorage.getItem("talkio_review_prompt_completed") === "true";
+
+if (
+  !feedbackAsked &&
+  !reviewCompleted &&
+  messages.filter((m) => m.role === "assistant").length >= 7
+) {
   setFeedbackAsked(true);
+  setShowReviewPrompt(true);
 }
 
 } catch {
@@ -589,6 +588,89 @@ setMessages((prev): ChatMessage[] => {
           </div>
         </div>
       )}
+      {showReviewPrompt && (
+  <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-sm rounded-[28px] border border-stone-200 bg-white/95 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
+    <button
+      type="button"
+      onClick={() => setShowReviewPrompt(false)}
+      className="absolute right-4 top-4 text-lg text-stone-400 hover:text-stone-700"
+      aria-label="Close review prompt"
+    >
+      ×
+    </button>
+
+    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-2xl">
+      💗
+    </div>
+
+    <h2 className="text-lg font-semibold text-stone-900">
+      Enjoying Talkio?
+    </h2>
+
+    <p className="mt-2 text-sm leading-6 text-stone-600">
+      If Talkio has helped you even a little, would you mind leaving a quick review?
+    </p>
+
+    <div className="mt-5 space-y-3">
+      <button
+        type="button"
+        onClick={() => {
+  localStorage.setItem("talkio_review_prompt_completed", "true");
+  window.open(
+    "https://play.google.com/store/apps/details?id=com.talkio.app",
+    "_blank"
+  );
+  setShowReviewPrompt(false);
+}}
+        className="flex w-full items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left shadow-sm active:scale-[0.99]"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">▶️</span>
+          <div>
+            <p className="text-sm font-semibold text-stone-900">
+              Review on Google Play
+            </p>
+            <p className="text-xs text-stone-500">
+              It really helps us grow
+            </p>
+          </div>
+        </div>
+        <span className="text-xl text-stone-400">›</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+  localStorage.setItem("talkio_review_prompt_completed", "true");
+  window.open("https://apps.apple.com/", "_blank");
+  setShowReviewPrompt(false);
+}}
+        className="flex w-full items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left shadow-sm active:scale-[0.99]"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-2xl"></span>
+          <div>
+            <p className="text-sm font-semibold text-stone-900">
+              Review on App Store
+            </p>
+            <p className="text-xs text-stone-500">
+              It really helps us grow
+            </p>
+          </div>
+        </div>
+        <span className="text-xl text-stone-400">›</span>
+      </button>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => setShowReviewPrompt(false)}
+      className="mt-5 w-full text-center text-sm font-medium text-stone-500 hover:text-stone-800"
+    >
+      Maybe later
+    </button>
+  </div>
+)}
 
       <div className="flex items-center justify-between gap-3 px-4 py-3">
   <div>

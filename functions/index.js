@@ -1625,7 +1625,8 @@ console.log("ACCESS DEBUG:", {
 
 res.status(500).json({
   error: "Server error",
-  reply: "Something went wrong. Please try again.",
+  reply:
+  "I'm still here. Something interrupted my reply for a moment — could you try sending that again?",
   path: "handler_error",
 });
   }

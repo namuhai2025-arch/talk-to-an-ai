@@ -320,6 +320,25 @@ await registerTalkioPushToken().catch(console.error);
 
   async function sendMessage(overrideText?: string) {
     const text = (overrideText ?? input).trim();
+    const normalizedText = text.toLowerCase();
+
+const positiveSignals = [
+  "thank you",
+  "thanks",
+  "helped",
+  "i feel better",
+  "that helped",
+  "glad",
+  "appreciate",
+  "needed that",
+  "feel calmer",
+  "feel okay",
+];
+
+const isPositiveMoment = positiveSignals.some((signal) =>
+  normalizedText.includes(signal)
+);
+
     if (!text || loading || isLimitReached || showSafety || crisisLock) return;
 
     setLoading(true);
@@ -422,16 +441,13 @@ await new Promise((resolve) =>
       await new Promise((resolve) => setTimeout(resolve, replyDelay));
 
       setMessages((prev): ChatMessage[] => {
-  const assistantCount = prev.filter((m) => m.role === "assistant").length;
-  const shouldAskFeedback = assistantCount >= 7 && !feedbackAsked;
-
   const nextMessages: ChatMessage[] = [
     ...prev,
     {
       role: "assistant" as const,
       content: assistantReply,
       timestamp: Date.now(),
-    },    
+    },
   ];
 
   return nextMessages.slice(-MAX_MESSAGES);
@@ -449,10 +465,14 @@ const reviewCompleted =
 if (
   !feedbackAsked &&
   !reviewCompleted &&
-  messages.filter((m) => m.role === "assistant").length >= 7
+  messages.filter((m) => m.role === "assistant").length >= 7 &&
+  isPositiveMoment
 ) {
   setFeedbackAsked(true);
-  setShowReviewPrompt(true);
+
+  setTimeout(() => {
+    setShowReviewPrompt(true);
+  }, 1800);
 }
 
 } catch {

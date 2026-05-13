@@ -8,6 +8,7 @@ import {
   logEvent,
 } from "@/lib/firebase";
 import { registerTalkioPushToken } from "@/lib/registerPushToken";
+import { Share } from "@capacitor/share";
 
 type ChatRole = "user" | "assistant";
 
@@ -320,6 +321,19 @@ await registerTalkioPushToken().catch(console.error);
     window.removeEventListener("resize", handleResize);
   };
 }, [messages, showTyping, mounted]);
+
+  async function shareTalkio() {
+  try {
+    await Share.share({
+      title: "Talkio",
+      text: "Talkio helped me organize my thoughts and emotions.",
+      url: "https://play.google.com/store/apps/details?id=com.talkio.app",
+      dialogTitle: "Share Talkio",
+    });
+  } catch (err) {
+    console.error(err);
+  }
+}
 
   function clearChat() {
   const greeting = buildGreeting(displayName);
@@ -725,25 +739,32 @@ setMessages((prev): ChatMessage[] => {
   </div>
 
   <div className="flex items-center gap-2">
-    <button
-      type="button"
-      className="rounded-xl border px-3 py-2 text-sm"
-      onClick={() => (window.location.href = "/settings")}
-    >
-      ⚙️
-    </button>
+  <button
+    type="button"
+    className="rounded-xl border px-3 py-2 text-sm"
+    onClick={() => (window.location.href = "/settings")}
+  >
+    ⚙️
+  </button>
 
-    <button
-      type="button"
-      className="rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
-      disabled={loading || messages.length <= 1}
-      onClick={clearChat}
-    >
-      Clear chat
-    </button>
-  </div>
+  <button
+  type="button"
+  className="rounded-xl border px-3 py-2 text-sm"
+  onClick={shareTalkio}
+>
+  Share
+</button>
+
+  <button
+    type="button"
+    className="rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
+    disabled={loading || messages.length <= 1}
+    onClick={clearChat}
+  >
+    Clear chat
+  </button>
 </div>
-
+</div>
       <div className="flex-1 overflow-y-auto px-3 pb-52">
         <div className="flex flex-col gap-3">
           {messages.map((m, i) => {
@@ -952,8 +973,7 @@ disabled={
       </button>
     </form>
   </>
-)}
-
-</main>
-);
+      )}
+    </main>
+  );
 }

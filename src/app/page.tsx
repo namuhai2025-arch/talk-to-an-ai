@@ -331,7 +331,20 @@ await registerTalkioPushToken().catch(console.error);
       dialogTitle: "Share Talkio",
     });
   } catch (err) {
-    console.error(err);
+    console.error("Share failed:", err);
+
+    if (navigator.share) {
+      await navigator.share({
+        title: "Talkio",
+        text: "Talkio helped me organize my thoughts and emotions.",
+        url: "https://play.google.com/store/apps/details?id=com.talkio.app",
+      });
+    } else {
+      window.open(
+        "https://play.google.com/store/apps/details?id=com.talkio.app",
+        "_blank"
+      );
+    }
   }
 }
 
@@ -741,7 +754,7 @@ setMessages((prev): ChatMessage[] => {
   <div className="flex items-center gap-2">
   <button
     type="button"
-    className="rounded-xl border px-3 py-2 text-sm"
+    className="rounded-xl border px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
     onClick={() => (window.location.href = "/settings")}
   >
     ⚙️
@@ -749,7 +762,7 @@ setMessages((prev): ChatMessage[] => {
 
   <button
   type="button"
-  className="rounded-xl border px-3 py-2 text-sm"
+  className="rounded-xl border px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
   onClick={shareTalkio}
 >
   Share
@@ -757,7 +770,7 @@ setMessages((prev): ChatMessage[] => {
 
   <button
     type="button"
-    className="rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
+    className="rounded-xl border px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
     disabled={loading || messages.length <= 1}
     onClick={clearChat}
   >

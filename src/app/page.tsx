@@ -294,14 +294,31 @@ await registerTalkioPushToken().catch(console.error);
   useEffect(() => {
   if (!mounted) return;
 
-  const timer = window.setTimeout(() => {
+  const scrollToBottom = () => {
     bottomRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "end",
     });
-  }, 80);
+  };
 
-  return () => window.clearTimeout(timer);
+  const timers = [
+    window.setTimeout(scrollToBottom, 80),
+    window.setTimeout(scrollToBottom, 250),
+    window.setTimeout(scrollToBottom, 500),
+  ];
+
+  const handleResize = () => {
+    window.setTimeout(scrollToBottom, 120);
+  };
+
+  window.visualViewport?.addEventListener("resize", handleResize);
+  window.addEventListener("resize", handleResize);
+
+  return () => {
+    timers.forEach((timer) => window.clearTimeout(timer));
+    window.visualViewport?.removeEventListener("resize", handleResize);
+    window.removeEventListener("resize", handleResize);
+  };
 }, [messages, showTyping, mounted]);
 
   function clearChat() {
@@ -879,8 +896,16 @@ setMessages((prev): ChatMessage[] => {
       }}
     >
       <textarea
-        ref={inputRef}
-        value={input}
+  ref={inputRef}
+  onFocus={() => {
+    window.setTimeout(() => {
+      bottomRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+      });
+    }, 300);
+  }}
+  value={input}
         onChange={(e) => {
           setInput(e.target.value);
           e.target.style.height = "auto";

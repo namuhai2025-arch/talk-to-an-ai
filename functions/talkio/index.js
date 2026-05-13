@@ -45,15 +45,11 @@ function buildConversationMessages(messages = [], latestUserMessage = "") {
 function buildTalkioSystemPrompt({
   coreIdentityPrompt,
   latestUserMessage,
-  detectedLanguage,
-  languageMode,
 }) {
   return `
 ${coreIdentityPrompt}
 
 RUNTIME CONTEXT
-- Current detected language: ${detectedLanguage}
-- Current language mode: ${languageMode}
 - Mirror the user's current language naturally.
 - If the user mixes languages, mirror that naturally.
 

@@ -292,8 +292,17 @@ await registerTalkioPushToken().catch(console.error);
 }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, showTyping]);
+  if (!mounted) return;
+
+  const timer = window.setTimeout(() => {
+    bottomRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, 80);
+
+  return () => window.clearTimeout(timer);
+}, [messages, showTyping, mounted]);
 
   function clearChat() {
   const greeting = buildGreeting(displayName);
@@ -505,7 +514,7 @@ setMessages((prev): ChatMessage[] => {
   if (!mounted) return null;
 
   return (
-    <main className="mx-auto flex h-screen max-w-2xl flex-col bg-white text-stone-900">
+    <main className="mx-auto flex h-[100dvh] max-w-2xl flex-col bg-white text-stone-900">
       <style jsx global>{`
       @keyframes paywallSlideUp {
         from {
@@ -718,7 +727,7 @@ setMessages((prev): ChatMessage[] => {
   </div>
 </div>
 
-      <div className="flex-1 overflow-y-auto px-3 pb-3">
+      <div className="flex-1 overflow-y-auto px-3 pb-52">
         <div className="flex flex-col gap-3">
           {messages.map((m, i) => {
             const prev = messages[i - 1];
@@ -863,7 +872,7 @@ setMessages((prev): ChatMessage[] => {
     )}
 
     <form
-      className="flex gap-2 border-t p-3"
+      className="sticky bottom-0 flex gap-2 border-t bg-white p-3"
       onSubmit={(e) => {
         e.preventDefault();
         sendMessage();

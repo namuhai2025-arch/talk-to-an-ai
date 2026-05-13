@@ -9,6 +9,14 @@ function personDocId(person = {}) {
   return name ? `${role}__${name}` : role;
 }
 
+function emotionalDocId(item = {}) {
+  return String(item.key || item.type || item.label || "emotional_pattern")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
+}
+
 async function upsertPeopleMemory(uid, people = []) {
   if (!uid || !Array.isArray(people) || people.length === 0) return;
 
@@ -80,7 +88,90 @@ async function upsertStyleMemory(uid, expressions = []) {
   await batch.commit();
 }
 
+async function upsertEmotionalMemory(uid, memories = []) {
+  if (!uid || !Array.isArray(memories) || memories.length === 0) return;
+
+  const batch = db.batch();
+
+  for (const memory of memories) {
+    const id = String(
+      memory.key ||
+      memory.label ||
+      memory.type ||
+      memory.value ||
+      ""
+    )
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .slice(0, 80);
+
+    if (!id) continue;
+
+    const ref = db
+      .collection("users")
+      .doc(uid)
+      .collection("memory")
+      .doc("emotional_root")
+      .collection("items")
+      .doc(id);
+
+    batch.set(
+      ref,
+      {
+        type: memory.type || "emotional_pattern",
+        value: memory.value || "",
+        confidence: memory.confidence || 0.75,
+        mentionCount: admin.firestore.FieldValue.increment(1),
+        lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
+  await batch.commit();
+}
+
+async function upsertEmotionalMemory(uid, memories = []) {
+  if (!uid || !Array.isArray(memories) || memories.length === 0) return;
+
+  const batch = db.batch();
+
+  for (const item of memories) {
+    const id = emotionalDocId(item);
+    if (!id) continue;
+
+    const ref = db
+      .collection("users")
+      .doc(uid)
+      .collection("memory")
+      .doc("emotional_root")
+      .collection("items")
+      .doc(id);
+
+    batch.set(
+      ref,
+      {
+        type: item.type || "emotional_pattern",
+        key: item.key || id,
+        label: item.label || "",
+        value: item.value || "",
+        tags: Array.isArray(item.tags) ? item.tags : [],
+        mentionCount: admin.firestore.FieldValue.increment(1),
+        confidence: item.confidence || 0.7,
+        safeToReference: item.safeToReference !== false,
+        lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
+  await batch.commit();
+}
+
 module.exports = {
   upsertPeopleMemory,
   upsertStyleMemory,
+  upsertEmotionalMemory,
 };

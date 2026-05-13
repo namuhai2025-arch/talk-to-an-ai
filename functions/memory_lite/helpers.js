@@ -30,7 +30,21 @@ async function loadStyleMemory(uid, limit = 5) {
   return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
-function buildMemoryPromptBlock({ people = [], style = [] }) {
+async function loadEmotionalMemory(uid, limit = 5) {
+  const snap = await db
+    .collection("users")
+    .doc(uid)
+    .collection("memory")
+    .doc("emotional_root")
+    .collection("items")
+    .orderBy("lastSeenAt", "desc")
+    .limit(limit)
+    .get();
+
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+function buildMemoryPromptBlock({ people = [], style = [], emotional = [] }) {
   const lines = [];
 
   if (people.length) {
@@ -50,13 +64,27 @@ function buildMemoryPromptBlock({ people = [], style = [] }) {
     }
   }
 
+  if (emotional.length) {
+  lines.push("");
+  lines.push("EMOTIONAL CONTINUITY MEMORY:");
+  for (const item of emotional) {
+    lines.push(`- ${item.label || item.type}: ${item.value}`);
+  }
+}
+
   if (!lines.length) return "";
 
   lines.push("");
-  lines.push("Use memory only when relevant.");
-  lines.push("Do not force references.");
-  lines.push("Use familiar expressions lightly and naturally.");
-  lines.push("Do not use playful style in crisis, grief, panic, or heavy emotional moments.");
+  lines.push("Use memory only when emotionally relevant.");
+  lines.push("Do not randomly bring up memories.");
+  lines.push("Use memories to improve emotional understanding, continuity, and emotional protection.");
+  lines.push("If the user is blaming themselves unfairly, gently separate the event from their identity.");
+  lines.push("If emotional patterns repeat across conversations, acknowledge the pattern naturally.");
+  lines.push("If environmental stress appears connected to the user's emotional state, recognize the connection carefully without sounding clinical.");
+  lines.push("Do not over-reference memory.");
+  lines.push("Do not sound robotic or analytical.");
+  lines.push("Do not use playful style in crisis, grief, panic, shame, humiliation, or emotional breakdown moments.");
+ 
 
   return lines.join("\n");
 }
@@ -64,5 +92,6 @@ function buildMemoryPromptBlock({ people = [], style = [] }) {
 module.exports = {
   loadRelationalMemory,
   loadStyleMemory,
+  loadEmotionalMemory,
   buildMemoryPromptBlock,
 };

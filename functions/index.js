@@ -21,6 +21,25 @@ const {
 } = require("./lib/talkioMemory");
 
 const {
+  extractPeopleFromMessage,
+  extractStyleExpressions,
+  extractEmotionalContinuity,
+} = require("./memory_lite/extractors");
+
+const {
+  upsertPeopleMemory,
+  upsertStyleMemory,
+  upsertEmotionalMemory,
+} = require("./memory_lite/update");
+
+const {
+  loadRelationalMemory,
+  loadStyleMemory,
+  loadEmotionalMemory,
+  buildMemoryPromptBlock,
+} = require("./memory_lite/helpers");
+
+const {
   generateTalkioReply: generateTalkioReplyEngine,
 } = require("./talkio/generateTalkioReply");
 
@@ -1568,12 +1587,50 @@ console.log("ACCESS DEBUG:", {
       latestUserMessage
     );
 
+    // =========================
+// MEMORY EXTRACTION
+// =========================
+
+const extractedPeople =
+  extractPeopleFromMessage(latestUserMessage);
+
+const extractedStyle =
+  extractStyleExpressions(latestUserMessage);
+
+const extractedEmotional =
+  extractEmotionalContinuity(latestUserMessage);
+
+// fire-and-forget memory persistence
+Promise.allSettled([
+  upsertPeopleMemory(uid, extractedPeople),
+  upsertStyleMemory(uid, extractedStyle),
+  upsertEmotionalMemory(uid, extractedEmotional),
+]).catch(console.error);
+
     const languageMeta = detectLanguageMirror(latestUserMessage);
+
+    // =========================
+// MEMORY RETRIEVAL
+// =========================
+
+const [peopleMemory, styleMemory, emotionalMemory] = await Promise.all([
+  loadRelationalMemory(uid, 8),
+  loadStyleMemory(uid, 8),
+  loadEmotionalMemory(uid, 8),
+]);
+
+const memoryPromptBlock = buildMemoryPromptBlock({
+  people: peopleMemory,
+  style: styleMemory,
+  emotional: emotionalMemory,
+});
 
     const runtimeSystemPrompt =
   buildRuntimeSystemPrompt({
     languageMeta,
-  });
+  }) +
+  "\n\n" +
+  memoryPromptBlock;
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const model =

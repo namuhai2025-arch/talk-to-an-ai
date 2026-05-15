@@ -325,11 +325,11 @@ await registerTalkioPushToken().catch(console.error);
   async function shareTalkio() {
   try {
     await Share.share({
-  title: "Talkio",
-  text: "Talkio helped me organize my thoughts and emotions.",
-  url: "https://talkiochat.com",
-  dialogTitle: "Share Talkio",
-});
+      title: "Talkio",
+      text: "Talkio helped me organize my thoughts and emotions.",
+      url: "https://talkiochat.com/download",
+      dialogTitle: "Share Talkio",
+    });
   } catch (err) {
     console.error("Share failed:", err);
     alert("Sharing is not available on this device yet.");

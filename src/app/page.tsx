@@ -325,26 +325,14 @@ await registerTalkioPushToken().catch(console.error);
   async function shareTalkio() {
   try {
     await Share.share({
-      title: "Talkio",
-      text: "Talkio helped me organize my thoughts and emotions.",
-      url: "https://play.google.com/store/apps/details?id=com.talkio.app",
-      dialogTitle: "Share Talkio",
-    });
+  title: "Talkio",
+  text:
+    "Talkio helped me organize my thoughts and emotions.\n\nhttps://play.google.com/store/apps/details?id=com.talkio.app",
+  dialogTitle: "Share Talkio",
+});
   } catch (err) {
     console.error("Share failed:", err);
-
-    if (navigator.share) {
-      await navigator.share({
-        title: "Talkio",
-        text: "Talkio helped me organize my thoughts and emotions.",
-        url: "https://play.google.com/store/apps/details?id=com.talkio.app",
-      });
-    } else {
-      window.open(
-        "https://play.google.com/store/apps/details?id=com.talkio.app",
-        "_blank"
-      );
-    }
+    alert("Sharing is not available on this device yet.");
   }
 }
 

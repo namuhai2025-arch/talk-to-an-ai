@@ -246,6 +246,16 @@ function logError(event, error, data = {}) {
   });
 }
 
+function isFallbackPath(path = "") {
+  return /fallback|quota|error|guardrail|safety|crisis|limit|failed/i.test(
+    String(path || "")
+  );
+}
+
+function getReplyPath(result = {}) {
+  return result?.path || result?.dynamicMode || "unknown";
+}
+
 function secondsUntilUtcMidnight() {
   const now = new Date();
   const midnight = new Date(
@@ -1460,13 +1470,20 @@ export const generateTalkioReply = onRequest(async (req, res) => {
     // crisis guard continues here...
 
     if (looksLikeCrisis(latestUserMessage)) {
-  res.status(200).json({
-    reply: crisisReplyGlobal(),
-    model: "crisis-guardrail",
-    path: "crisis_guardrail",
-    crisisLock: true,
-    remainingDaily: 0,
+  logWarn("talkio_crisis_guardrail", {
+    uid,
+    source: body?.source || "chat",
   });
+
+  res.status(200).json({
+  reply: crisisReplyGlobal(),
+  model: "crisis-guardrail",
+  path: "crisis_guardrail",
+  fallbackTriggered: true,
+  analyticsType: "crisis_guardrail",
+  crisisLock: true,
+  remainingDaily: 0,
+});
   return;
 }
 
@@ -1522,15 +1539,31 @@ export const generateTalkioReply = onRequest(async (req, res) => {
 ]);
 
 if (limitLabel === "free" && freeTrial.isTrialExpired) {
-  res.status(429).json({
-    error: "Free trial expired",
-    paywallRequired: true,
-    reply:
-      "Your 3-day free Talkio trial has ended. Upgrade to Talkio Pro to keep chatting with higher limits and better memory.",
-    remainingDaily: 0,
-    dailyLimit,
-    quotaTier: "free_trial_expired",
+  logWarn("talkio_quota_hit", {
+    uid,
+    type: "free_trial_expired",
+    quotaTier: limitLabel,
+    source: body?.source || "chat",
+    path: "free_trial_expired",
+    fallbackTriggered: true,
+    analyticsType: "quota_hit",
   });
+
+  res.status(429).json({
+  error: "Free trial expired",
+  paywallRequired: true,
+
+  path: "free_trial_expired",
+  fallbackTriggered: true,
+  analyticsType: "quota_hit",
+
+  reply:
+    "Your 3-day free Talkio trial has ended. Upgrade to Talkio Pro to keep chatting with higher limits and better memory.",
+
+  remainingDaily: 0,
+  dailyLimit,
+  quotaTier: "free_trial_expired",
+});
 
   return;
 }
@@ -1538,20 +1571,35 @@ if (limitLabel === "free" && freeTrial.isTrialExpired) {
   if (userDailyCount > dailyLimit) {
   const isFree = limitLabel === "free";
 
-  res.status(429).json({
-    error: "Daily message limit reached",
-
-    // 🔥 THIS is the important addition
-    paywallRequired: isFree,
-
-    reply: isFree
-      ? "You’ve reached today’s free limit. Continue with Talkio Pro to keep chatting."
-      : "You've reached today's message limit. Please come back later.",
-
-    remainingDaily: 0,
-    dailyLimit,
-    quotaTier: limitLabel,
+  logWarn("talkio_quota_hit", {
+  uid,
+  type: "daily_limit",
+  quotaTier: limitLabel,
+  userDailyCount,
+  dailyLimit,
+  source: body?.source || "chat",
+  path: "daily_limit_reached",
+  fallbackTriggered: true,
+  analyticsType: "quota_hit",
   });
+
+  res.status(429).json({
+  error: "Daily message limit reached",
+
+  paywallRequired: isFree,
+
+  path: "daily_limit_reached",
+  fallbackTriggered: true,
+  analyticsType: "quota_hit",
+
+  reply: isFree
+    ? "You’ve reached today’s free limit. Continue with Talkio Pro to keep chatting."
+    : "You've reached today's message limit. Please come back later.",
+
+  remainingDaily: 0,
+  dailyLimit,
+  quotaTier: limitLabel,
+});
 
   return;
 }   
@@ -1560,13 +1608,33 @@ if (
   userMinuteCount > perMinuteLimit ||
   (!bypassIpLimits && (ipDailyCount > IP_DAILY_CAP || ipMinuteCount > IP_MINUTE_CAP))
 ) {
-  res.status(429).json({
-    error: "Rate limit reached",
-    reply: "Please wait a bit before sending another message.",
-    remainingDaily: Math.max(0, dailyLimit - userDailyCount),
-    dailyLimit,
-    quotaTier: limitLabel,
+
+  logWarn("talkio_rate_limit_hit", {
+  uid,
+  quotaTier: limitLabel,
+  userMinuteCount,
+  perMinuteLimit,
+  ipDailyCount,
+  ipMinuteCount,
+  source: body?.source || "chat",
+  path: "rate_limit_reached",
+  fallbackTriggered: true,
+  analyticsType: "rate_limit",
   });
+
+  res.status(429).json({
+  error: "Rate limit reached",
+
+  path: "rate_limit_reached",
+  fallbackTriggered: true,
+  analyticsType: "rate_limit",
+
+  reply: "Please wait a bit before sending another message.",
+
+  remainingDaily: Math.max(0, dailyLimit - userDailyCount),
+  dailyLimit,
+  quotaTier: limitLabel,
+});
   return;
 }
 
@@ -1663,17 +1731,38 @@ const memoryPromptBlock = buildMemoryPromptBlock({
       },
       });
 
+      const replyPath = getReplyPath(result);
+const fallbackTriggered = isFallbackPath(replyPath);
+
+logInfo("talkio_reply_generated", {
+  uid,
+  model,
+  path: replyPath,
+  mode: result?.dynamicMode || "unknown",
+  fallbackTriggered,
+  source: body?.source || "chat",
+  quotaTier: limitLabel,
+  remainingDaily: Math.max(0, dailyLimit - userDailyCount),
+});
+
     // =========================
     // 📤 10. RESPONSE
     // =========================
     res.status(200).json({
-      reply: result?.reply || "",
-      model,
-      path: result?.path || result?.dynamicMode || "unknown",
-      remainingDaily: Math.max(0, dailyLimit - userDailyCount),
-    });
+  reply: result?.reply || "",
+  model,
+  path: replyPath,
+  mode: result?.dynamicMode || "unknown",
+  fallbackTriggered,
+  analyticsType: fallbackTriggered ? "fallback_triggered" : "normal_reply",
+  remainingDaily: Math.max(0, dailyLimit - userDailyCount),
+});
 
   } catch (error) {
+    logError("talkio_backend_error", error, {
+  uid,
+  source: body?.source || "chat",
+});
     console.error("generateTalkioReply failed:", {
   message: error?.message,
   stack: error?.stack,
@@ -1683,8 +1772,10 @@ const memoryPromptBlock = buildMemoryPromptBlock({
 res.status(500).json({
   error: "Server error",
   reply:
-  "I'm still here. Something interrupted my reply for a moment — could you try sending that again?",
+    "I'm still here. Something interrupted my reply for a moment — could you try sending that again?",
   path: "handler_error",
+  fallbackTriggered: true,
+  analyticsType: "backend_error",
 });
   }
 });

@@ -326,8 +326,8 @@ await registerTalkioPushToken().catch(console.error);
   try {
     await Share.share({
   title: "Talkio",
-  text:
-    "Talkio helped me organize my thoughts and emotions.\n\nhttps://play.google.com/store/apps/details?id=com.talkio.app",
+  text: "Talkio helped me organize my thoughts and emotions.",
+  url: "https://talkiochat.com",
   dialogTitle: "Share Talkio",
 });
   } catch (err) {

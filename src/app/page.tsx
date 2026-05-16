@@ -21,6 +21,48 @@ type ChatMessage = {
 
 const MAX_MESSAGES = 30;
 
+type SafetyInterruption = {
+  blocked: boolean;
+  reason?: "violent_admission" | "violent_threat" | "coverup_request";
+};
+
+function normalizeSafetyText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/1/g, "i")
+    .replace(/0/g, "o")
+    .replace(/@/g, "a")
+    .replace(/3/g, "e")
+    .replace(/[^a-z\s']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function classifySafetyInterruption(input: string): SafetyInterruption {
+  const text = normalizeSafetyText(input);
+
+  const violentAdmission =
+  /\b(i|we)\b.{0,40}\b(killed|kill|k1lled|murdered|murderd|murdr|shot|shoot|stabbed|stab|stabb|poisoned|poison|strangled|strangle|choked|choke|beat)\b.{0,20}\b(someone|somebody|person|him|her|them|wife|husband|girlfriend|boyfriend|boss|coworker|friend|child)\b/i.test(text) ||
+
+  /\b(i|we)\b.{0,20}\b(committed murder|killed a person|murdered a person)\b/i.test(text) ||
+
+  /\b(yes|yeah|yep|actually|honestly|seriously)\b.{0,20}\b(i|we)\b.{0,20}\b(killed|murdered|shot|stabbed)\b/i.test(text);
+
+  const violentThreat =
+  /\b(i|im|i'm|we)\b.{0,20}\b(will|wil|gonna|going to|am going to|are going to|want to|wanna|plan to|planning to|about to)?\b.{0,20}\b(kill|kil|k1ll|murder|murdr|shoot|shot|stab|stabb|poison|poizon|strangle|hurt)\b.{0,20}\b(him|her|them|someone|somebody|person|people|wife|husband|boyfriend|girlfriend|boss|friend)?\b/i.test(text);
+
+  const coverupRequest =
+    /\b(hide|bury|dispose of|get rid of|cover up|clean up)\b.*\b(body|corpse|evidence|weapon|blood)\b/.test(text) ||
+    /\bhow\s+(do|can)\s+i\s+(hide|bury|dispose of|get rid of|cover up)\b/.test(text);
+
+  if (violentAdmission) return { blocked: true, reason: "violent_admission" };
+  if (violentThreat) return { blocked: true, reason: "violent_threat" };
+  if (coverupRequest) return { blocked: true, reason: "coverup_request" };
+
+  return { blocked: false };
+}
+
 function buildGreeting(displayName: string): ChatMessage {
   const name = displayName.trim();
 
@@ -382,6 +424,41 @@ const isPositiveMoment = positiveSignals.some((signal) =>
 
     if (!text || loading || isLimitReached || showSafety || crisisLock) return;
 
+    const safetyInterruption = classifySafetyInterruption(text);
+
+if (safetyInterruption.blocked) {
+  if (!overrideText) {
+    setInput("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
+  }
+
+  const nextMessages: ChatMessage[] = [
+    ...messages,
+    {
+      role: "user" as const,
+      content: text,
+      timestamp: Date.now(),
+    },
+  ].slice(-MAX_MESSAGES);
+
+  setMessages(nextMessages);
+
+  if (conversationTitle === "New conversation") {
+    setConversationTitle(buildConversationTitle(nextMessages));
+  }
+
+  setCrisisLock(true);
+  setShowTyping(false);
+  setLoading(false);
+
+  logEvent(getFirebaseAnalytics(), "safety_interruption_triggered", {
+    reason: safetyInterruption.reason || "unknown",
+    source: "frontend",
+  });
+
+  return;
+}
+
     setLoading(true);
     setShowTyping(false);
 
@@ -443,6 +520,13 @@ await new Promise((resolve) =>
       });
 
       const data = await res.json().catch(() => ({}));
+
+      if (data?.safetyBlocked === true) {
+  setCrisisLock(true);
+  setShowTyping(false);
+  setLoading(false);
+  return;
+}
 
       logEvent(getFirebaseAnalytics(), "chat_message_sent", {
   source: "chat",
@@ -897,7 +981,7 @@ setMessages((prev): ChatMessage[] => {
     {crisisLock && (
       <div className="mx-3 mb-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
         <p>
-          Because this sounded serious, Talkio paused the conversation to prioritize your safety.
+          Talkio paused this conversation because it mentioned serious violence or immediate harm. If anyone may be in danger, contact local emergency services now.
         </p>
 
         <button

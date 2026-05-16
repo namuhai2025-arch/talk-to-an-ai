@@ -348,6 +348,55 @@ function looksLikeCrisis(text) {
   return patterns.some((re) => re.test(t));
 }
 
+function normalizeSafetyText(value = "") {
+  return String(value)
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/[^a-z0-9\s']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function classifySafetyInterruption(input = "") {
+  const text = normalizeSafetyText(input);
+
+  const violentAdmission =
+    /\b(i|we)\s+(just\s+)?(killed|murdered|shot|stabbed|poisoned|strangled|choked|beat)\s+(someone|somebody|a person|him|her|them|my wife|my husband|my girlfriend|my boyfriend|my boss|my coworker|my friend|my child|a child)\b/i.test(text) ||
+    /\b(i|we)\s+(committed murder|killed a person|murdered a person)\b/i.test(text);
+
+  const violentThreat =
+    /\b(i|we)\s+(will|want to|wanna|am going to|are going to|plan to|planning to|about to)\s+(kill|murder|shoot|stab|poison|strangle|hurt)\b/i.test(text);
+
+  const coverupRequest =
+    /\b(hide|bury|dispose of|get rid of|cover up|clean up)\b.*\b(body|corpse|evidence|weapon|blood)\b/i.test(text) ||
+    /\bhow\s+(do|can)\s+i\s+(hide|bury|dispose of|get rid of|cover up)\b/i.test(text);
+
+  if (violentAdmission) {
+    return {
+      blocked: true,
+      reason: "violent_admission",
+    };
+  }
+
+  if (violentThreat) {
+    return {
+      blocked: true,
+      reason: "violent_threat",
+    };
+  }
+
+  if (coverupRequest) {
+    return {
+      blocked: true,
+      reason: "coverup_request",
+    };
+  }
+
+  return {
+    blocked: false,
+  };
+}
+
 function crisisReplyGlobal() {
   return `
 I’m really sorry you’re feeling this way. I want to take this seriously.
@@ -1466,6 +1515,35 @@ export const generateTalkioReply = onRequest(async (req, res) => {
       });
       return;
     }
+
+    const safetyInterruption =
+  classifySafetyInterruption(latestUserMessage);
+
+if (safetyInterruption.blocked) {
+  logWarn("talkio_violent_safety_interruption", {
+    uid,
+    reason: safetyInterruption.reason,
+    source: body?.source || "chat",
+  });
+
+  res.status(200).json({
+    safetyBlocked: true,
+    crisisLock: true,
+
+    reply: "",
+
+    model: "violent-safety-guardrail",
+
+    path: "safety_interruption_violent_harm",
+
+    fallbackTriggered: true,
+    analyticsType: "violent_safety_interruption",
+
+    remainingDaily: 0,
+  });
+
+  return;
+}
 
     // crisis guard continues here...
 

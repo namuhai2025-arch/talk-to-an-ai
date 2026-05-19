@@ -88,6 +88,41 @@ export default function SettingsPage() {
           </button>
         </section>
 
+        <section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-sm">
+  <button
+    type="button"
+    onClick={async () => {
+      const shareData = {
+        title: "Talkio",
+        text: "Talkio is a calm AI companion that listens and helps you think clearly.",
+        url: "https://talkiochat.com",
+      };
+
+      try {
+        if (navigator.share) {
+          await navigator.share(shareData);
+        } else {
+          await navigator.clipboard.writeText(shareData.url);
+          alert("Talkio link copied to clipboard.");
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    }}
+    className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+  >
+    <div>
+      <p className="font-medium text-stone-900">Share Talkio</p>
+
+      <p className="mt-1 text-sm text-stone-500">
+        Invite someone to try Talkio.
+      </p>
+    </div>
+
+    <span className="text-stone-400">↗</span>
+  </button>
+</section>
+
         <p className="mt-8 text-center text-xs leading-5 text-stone-400">
           Talkio is an AI conversation tool, not emergency or medical care.
         </p>

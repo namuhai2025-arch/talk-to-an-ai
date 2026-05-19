@@ -630,7 +630,7 @@ setMessages((prev): ChatMessage[] => {
   if (!mounted) return null;
 
   return (
-    <main className="mx-auto flex h-[100dvh] max-w-2xl flex-col bg-white text-stone-900">
+    <main className="mx-auto flex h-[100dvh] max-w-2xl flex-col bg-[#F8F8F6] text-stone-900">
       <style jsx global>{`
       @keyframes paywallSlideUp {
         from {
@@ -817,13 +817,15 @@ setMessages((prev): ChatMessage[] => {
   </div>
 )}
 
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
+  <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+18px)]">
   <div>
     <h1 className="text-2xl font-semibold tracking-tight">Talkio</h1>
-    <p className="text-sm text-stone-500">{conversationTitle}</p>
+    <p className="mt-1 text-sm text-stone-500">
+  Reflect, breathe, move forward
+</p>
   </div>
 
-  <div className="flex items-center gap-2">
+  <div className="flex shrink-0 items-center gap-1.5 pt-1">
   <button
     type="button"
     className="rounded-xl border px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
@@ -833,25 +835,17 @@ setMessages((prev): ChatMessage[] => {
   </button>
 
   <button
-  type="button"
-  className="rounded-xl border px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
-  onClick={shareTalkio}
->
-  Share
-</button>
-
-  <button
     type="button"
     className="rounded-xl border px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
     disabled={loading || messages.length <= 1}
     onClick={clearChat}
   >
-    Clear chat
+    Clear 
   </button>
 </div>
 </div>
-      <div className="flex-1 overflow-y-auto px-3 pb-52">
-        <div className="flex flex-col gap-3">
+      <div className="flex-1 overflow-y-auto px-5 pb-36 pt-2">
+        <div className="flex flex-col gap-4">
           {messages.map((m, i) => {
             const prev = messages[i - 1];
             const next = messages[i + 1];
@@ -871,8 +865,8 @@ setMessages((prev): ChatMessage[] => {
 
             let bubbleClass =
               m.role === "user"
-                ? "self-end max-w-[82%] bg-emerald-500 px-4 py-3 text-white shadow-sm"
-                : "self-start max-w-[82%] bg-stone-100 px-4 py-3 text-stone-900 shadow-sm";
+                ? "self-end max-w-[78%] bg-emerald-500 px-4 py-3 text-white shadow-sm"
+                : "self-start max-w-[78%] bg-white border border-stone-200 px-4 py-3 text-stone-900 shadow-sm";
 
             if (m.role === "user") {
               bubbleClass += " rounded-[22px] rounded-br-xl";
@@ -887,7 +881,7 @@ setMessages((prev): ChatMessage[] => {
             return (              
               <div key={i} className="flex flex-col">
                 <div className={bubbleClass}>
-                  <div className="whitespace-pre-wrap break-words text-[16px] leading-7">
+                  <div className="whitespace-pre-wrap break-words text-[16.5px] leading-7">
                     {m.content}
                   </div>
                 </div>
@@ -940,7 +934,7 @@ setMessages((prev): ChatMessage[] => {
 )}
 
           {showTyping && (
-            <div className="mr-auto max-w-[82%] rounded-[22px] rounded-bl-xl border border-stone-200 bg-stone-100 px-4 py-3 shadow-sm">
+            <div className="mr-auto max-w-[78%] rounded-[22px] rounded-bl-xl border border-stone-200 bg-stone-100 px-4 py-3 shadow-sm">
               <div className="flex gap-1">
                 <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.3s]" />
                 <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.15s]" />
@@ -963,7 +957,7 @@ setMessages((prev): ChatMessage[] => {
                   <button
                     key={prompt}
                     type="button"
-                    className="rounded-full border px-3 py-1.5 text-sm hover:bg-stone-100"
+                    className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
                     onClick={() => sendMessage(prompt)}
                   >
                     {prompt}
@@ -995,7 +989,7 @@ setMessages((prev): ChatMessage[] => {
     )}
 
     <form
-      className="sticky bottom-0 flex gap-2 border-t bg-white p-3"
+      className="sticky bottom-0 flex gap-2 border-t border-stone-200 bg-white/90 px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 backdrop-blur-xl"
       onSubmit={(e) => {
         e.preventDefault();
         sendMessage();
@@ -1033,7 +1027,7 @@ disabled={
 }
 
         rows={1}
-        className="max-h-[120px] min-h-[50px] flex-1 resize-none rounded-[28px] border border-stone-300 px-4 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-400 disabled:bg-stone-100 disabled:text-stone-400"
+        className="max-h-[120px] min-h-[50px] flex-1 resize-none rounded-[28px] border border-stone-200 px-4 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-400 disabled:bg-stone-100 disabled:text-stone-400"
         style={{ overflowY: "auto" }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
@@ -1052,7 +1046,7 @@ disabled={
   isLimitReached ||
   !input.trim()
 }
-        className="h-[50px] rounded-full bg-emerald-500 px-5 text-white disabled:cursor-not-allowed disabled:bg-stone-300 disabled:opacity-70"
+        className="h-[52px] min-w-[56px] rounded-full bg-emerald-500 px-5 text-sm font-medium shadow-sm transition-all active:scale-95"
       >
         Send
       </button>

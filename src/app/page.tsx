@@ -368,7 +368,7 @@ await registerTalkioPushToken().catch(console.error);
   try {
     await Share.share({
       title: "Talkio",
-      text: "Talkio helped me organize my thoughts and emotions.",
+      text: "A calm AI space to think, breathe, and talk things through.",
       url: "https://talkiochat.com/download",
       dialogTitle: "Share Talkio",
     });

@@ -1,5 +1,7 @@
 "use client";
 
+import { Share } from "@capacitor/share";
+
 export default function SettingsPage() {
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6">
@@ -92,23 +94,17 @@ export default function SettingsPage() {
   <button
     type="button"
     onClick={async () => {
-      const shareData = {
-        title: "Talkio",
-        text: "Talkio is a calm AI companion that listens and helps you think clearly.",
-        url: "https://talkiochat.com",
-      };
-
-      try {
-        if (navigator.share) {
-          await navigator.share(shareData);
-        } else {
-          await navigator.clipboard.writeText(shareData.url);
-          alert("Talkio link copied to clipboard.");
-        }
-      } catch (err) {
-        console.log(err);
-      }
-    }}
+  try {
+    await Share.share({
+      title: "Talkio",
+      text: "A calm AI space to think, breathe, and talk things through.",
+      url: "https://talkiochat.com/download",
+      dialogTitle: "Share Talkio",
+    });
+  } catch (err) {
+    console.log(err);
+  }
+}}
     className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
   >
     <div>

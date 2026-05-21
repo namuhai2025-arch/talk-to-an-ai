@@ -1,8 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f1e8;
+  --foreground: #2f2a24;
+
+  --talkio-user-bubble: #dfe8d2;
+  --talkio-ai-bubble: rgba(255, 255, 255, 0.88);
+
+  --talkio-shadow: rgba(70, 60, 45, 0.08);
+
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
   --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -14,9 +20,16 @@
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(circle at 18% 22%, rgba(122, 148, 113, 0.14), transparent 30%),
+    radial-gradient(circle at 82% 74%, rgba(214, 178, 130, 0.16), transparent 34%),
+    var(--background);
+
   color: var(--foreground);
+
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+
+  min-height: 100vh;
 }
 
 @keyframes pop {
@@ -33,4 +46,46 @@ body {
   100% {
     transform: scale(1);
   }
+}
+
+/* TALKIO CHAT FEEL */
+
+.talkio-user-bubble {
+  background: var(--talkio-user-bubble);
+  color: #273226;
+
+  border-radius: 22px 22px 8px 22px;
+
+  box-shadow:
+    0 6px 18px rgba(70, 80, 60, 0.08);
+
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.talkio-ai-bubble {
+  background: var(--talkio-ai-bubble);
+  color: #2f2a24;
+
+  border-radius: 22px 22px 22px 8px;
+
+  box-shadow:
+    0 6px 18px rgba(70, 60, 45, 0.07);
+
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.talkio-input {
+  background: rgba(255, 255, 255, 0.82);
+
+  border: 1px solid rgba(120, 100, 80, 0.08);
+
+  border-radius: 999px;
+
+  box-shadow:
+    0 8px 24px rgba(80, 70, 55, 0.10);
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }

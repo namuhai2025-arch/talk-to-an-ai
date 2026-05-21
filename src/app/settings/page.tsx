@@ -4,7 +4,7 @@ import { Share } from "@capacitor/share";
 
 export default function SettingsPage() {
   return (
-    <main className="min-h-screen bg-stone-50 px-5 py-6">
+    <main className="min-h-screen bg-stone-50 px-5 pb-6 pt-[calc(env(safe-area-inset-top)+3.5rem)]">
       <div className="mx-auto max-w-md">
         <button
           type="button"
@@ -51,7 +51,7 @@ export default function SettingsPage() {
             onClick={() => (window.location.href = "/paywall")}
             className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-600 hover:shadow-lg"
           >
-            Upgrade to Paid
+            Upgrade to Talkio Pro
           </button>
         </section>
 
@@ -98,7 +98,7 @@ export default function SettingsPage() {
     await Share.share({
       title: "Talkio",
       text: "A calm AI space to think, breathe, and talk things through.",
-      url: "https://talkiochat.com/download",
+      url: "https://talkiochat.com",
       dialogTitle: "Share Talkio",
     });
   } catch (err) {
@@ -111,7 +111,7 @@ export default function SettingsPage() {
       <p className="font-medium text-stone-900">Share Talkio</p>
 
       <p className="mt-1 text-sm text-stone-500">
-        Invite someone to try Talkio.
+        Send Talkio to someone who could use a calm space to talk.
       </p>
     </div>
 

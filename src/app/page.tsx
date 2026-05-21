@@ -630,7 +630,7 @@ setMessages((prev): ChatMessage[] => {
   if (!mounted) return null;
 
   return (
-    <main className="mx-auto flex h-[100dvh] max-w-2xl flex-col bg-[#F8F8F6] text-stone-900">
+    <main className="mx-auto flex h-[100dvh] max-w-2xl flex-col text-stone-900">
       <style jsx global>{`
       @keyframes paywallSlideUp {
         from {
@@ -817,18 +817,18 @@ setMessages((prev): ChatMessage[] => {
   </div>
 )}
 
-  <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+18px)]">
+  <div className="relative z-20 flex items-start justify-between gap-3 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+56px)]">
   <div>
-    <h1 className="text-2xl font-semibold tracking-tight">Talkio</h1>
+    <h1 className="text-[2.15rem] font-semibold tracking-[-0.04em]">Talkio</h1>
     <p className="mt-1 text-sm text-stone-500">
   Reflect, breathe, move forward
 </p>
   </div>
 
-  <div className="flex shrink-0 items-center gap-1.5 pt-1">
+  <div className="relative z-30 flex shrink-0 items-center gap-2 pt-1">
   <button
     type="button"
-    className="rounded-xl border px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
+    className="rounded-2xl border border-stone-200 bg-white/60 backdrop-blur-md px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
     onClick={() => (window.location.href = "/settings")}
   >
     ⚙️
@@ -836,7 +836,7 @@ setMessages((prev): ChatMessage[] => {
 
   <button
     type="button"
-    className="rounded-xl border px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
+    className="rounded-2xl border border-stone-200 bg-white/60 backdrop-blur-md px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
     disabled={loading || messages.length <= 1}
     onClick={clearChat}
   >
@@ -844,8 +844,8 @@ setMessages((prev): ChatMessage[] => {
   </button>
 </div>
 </div>
-      <div className="flex-1 overflow-y-auto px-5 pb-36 pt-2">
-        <div className="flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto px-5 pb-44 pt-2">
+        <div className="flex flex-col gap-[2px]">
           {messages.map((m, i) => {
             const prev = messages[i - 1];
             const next = messages[i + 1];
@@ -864,19 +864,17 @@ setMessages((prev): ChatMessage[] => {
 }
 
             let bubbleClass =
-              m.role === "user"
-                ? "self-end max-w-[78%] bg-emerald-500 px-4 py-3 text-white shadow-sm"
-                : "self-start max-w-[78%] bg-white border border-stone-200 px-4 py-3 text-stone-900 shadow-sm";
+  m.role === "user"
+    ? "talkio-user-bubble mr-6 self-end max-w-[72%] px-4 py-3"
+    : "talkio-ai-bubble ml-6 self-start max-w-[72%] px-4 py-3";
 
-            if (m.role === "user") {
-              bubbleClass += " rounded-[22px] rounded-br-xl";
-              if (sameAsPrev) bubbleClass += " rounded-tr-md";
-              if (sameAsNext) bubbleClass += " rounded-br-md";
-            } else {
-              bubbleClass += " rounded-[22px] rounded-bl-xl";
-              if (sameAsPrev) bubbleClass += " rounded-tl-md";
-              if (sameAsNext) bubbleClass += " rounded-bl-md";
-            }
+if (m.role === "user") {
+  if (sameAsPrev) bubbleClass += " rounded-tr-md";
+  if (sameAsNext) bubbleClass += " rounded-br-md";
+} else {
+  if (sameAsPrev) bubbleClass += " rounded-tl-md";
+  if (sameAsNext) bubbleClass += " rounded-bl-md";
+}
 
             return (              
               <div key={i} className="flex flex-col">
@@ -890,8 +888,8 @@ setMessages((prev): ChatMessage[] => {
                   <div
                     className={
                       m.role === "user"
-                        ? "mt-1 self-end px-2 text-[12px] text-stone-400"
-                        : "mt-1 self-start px-2 text-[12px] text-stone-400"
+                        ? "mt-[2px] mr-6 self-end px-2 text-[12px] text-stone-300"
+                        : "mt-[2px] ml-6 self-start px-2 text-[12px] text-stone-300"
                     }
                   >
                     {new Date(m.timestamp).toLocaleTimeString([], {
@@ -934,7 +932,7 @@ setMessages((prev): ChatMessage[] => {
 )}
 
           {showTyping && (
-            <div className="mr-auto max-w-[78%] rounded-[22px] rounded-bl-xl border border-stone-200 bg-stone-100 px-4 py-3 shadow-sm">
+            <div className="talkio-ai-bubble ml-6 self-start max-w-[72%] px-4 py-3">
               <div className="flex gap-1">
                 <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.3s]" />
                 <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.15s]" />
@@ -989,7 +987,7 @@ setMessages((prev): ChatMessage[] => {
     )}
 
     <form
-      className="sticky bottom-0 flex gap-2 border-t border-stone-200 bg-white/90 px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 backdrop-blur-xl"
+      className="sticky bottom-0 flex gap-2 border-t border-stone-200 bg-[#f7f1e8]/80 px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 backdrop-blur-xl"
       onSubmit={(e) => {
         e.preventDefault();
         sendMessage();
@@ -1027,7 +1025,7 @@ disabled={
 }
 
         rows={1}
-        className="max-h-[120px] min-h-[50px] flex-1 resize-none rounded-[28px] border border-stone-200 px-4 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-400 disabled:bg-stone-100 disabled:text-stone-400"
+        className="talkio-input max-h-[120px] min-h-[54px] flex-1 resize-none px-5 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-300 disabled:bg-stone-100 disabled:text-stone-400"
         style={{ overflowY: "auto" }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
@@ -1046,7 +1044,7 @@ disabled={
   isLimitReached ||
   !input.trim()
 }
-        className="h-[52px] min-w-[56px] rounded-full bg-emerald-500 px-5 text-sm font-medium shadow-sm transition-all active:scale-95"
+        className="h-[54px] min-w-[58px] rounded-full bg-[#78906f] px-5 text-sm font-medium text-white shadow-[0_8px_24px_rgba(80,70,55,0.14)] transition-all active:scale-95"
       >
         Send
       </button>

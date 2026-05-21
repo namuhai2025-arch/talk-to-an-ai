@@ -45,6 +45,7 @@ const {
 
 const {
   BASE_SYSTEM_PROMPT,
+  TRUST_SAFE_MODE_PROMPT,
 } = require("./talkio/prompts");
 
 if (!admin.apps.length) {
@@ -558,11 +559,14 @@ const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT;
 // ==============================
 // SYSTEM PROMPT BUILDER
 // ==============================
-function buildRuntimeSystemPrompt ({ languageMeta }) {
+function buildRuntimeSystemPrompt({ languageMeta, isTrustConcern }) {
   return [
     SYSTEM_PROMPT,
+
     `LANGUAGE MIRRORING
 ${languageMeta?.mirrorInstruction || "Reply in the same language the user is using."}`.trim(),
+
+    isTrustConcern ? TRUST_SAFE_MODE_PROMPT : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -711,6 +715,43 @@ function shouldCreateOpenLoop(text) {
   ];
 
   return patterns.some((p) => t.includes(p));
+}
+
+function detectTrustConcern(text = "") {
+  const t = String(text || "").toLowerCase();
+
+  return [
+    "trust you",
+    "dont trust you",
+    "don't trust you",
+    "why should i trust",
+    "should i trust",
+    "use this against me",
+    "use that against me",
+    "open up to you",
+    "i dont know you",
+    "i don't know you",
+    "you dont know me",
+    "you don't know me",
+    "are my messages private",
+    "privacy",
+    "personal information",
+    "cautious",
+  ].some((phrase) => t.includes(phrase));
+}
+
+function violatesTrustSafeMode(reply = "") {
+  const r = String(reply || "").toLowerCase();
+
+  return [
+    "you are right not to trust me",
+    "you're right not to trust me",
+    "you should not trust me",
+    "you’re right to be cautious of me",
+    "you're right to be cautious of me",
+    "i might use",
+    "i could use that against you",
+  ].some((bad) => r.includes(bad));
 }
 
 async function updateSmartCheckinState(uid, message) {
@@ -1771,9 +1812,12 @@ const memoryPromptBlock = buildMemoryPromptBlock({
   emotional: emotionalMemory,
 });
 
-    const runtimeSystemPrompt =
+    const isTrustConcern = detectTrustConcern(latestUserMessage);
+
+const runtimeSystemPrompt =
   buildRuntimeSystemPrompt({
     languageMeta,
+    isTrustConcern,
   }) +
   "\n\n" +
   memoryPromptBlock;
@@ -1809,6 +1853,14 @@ const memoryPromptBlock = buildMemoryPromptBlock({
       },
       });
 
+      let finalReply = result?.reply || "";
+
+if (isTrustConcern && violatesTrustSafeMode(finalReply)) {
+  finalReply = `You do not have to force trust here.
+
+You can share only what feels comfortable, and we can go slowly. Trust is something that should feel earned over time, not demanded in one conversation.`;
+}
+
       const replyPath = getReplyPath(result);
 const fallbackTriggered = isFallbackPath(replyPath);
 
@@ -1827,7 +1879,7 @@ logInfo("talkio_reply_generated", {
     // 📤 10. RESPONSE
     // =========================
     res.status(200).json({
-  reply: result?.reply || "",
+  reply: finalReply,
   model,
   path: replyPath,
   mode: result?.dynamicMode || "unknown",

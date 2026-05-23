@@ -43,7 +43,7 @@ function classifySafetyInterruption(input: string): SafetyInterruption {
   const text = normalizeSafetyText(input);
 
   const emotionalHurtOnly =
-  /\bhurt\b/i.test(text) &&
+  /\b(hurt me|hurt my feelings|i feel hurt|felt hurt|they hurt me|he hurt me|she hurt me|acted like i hurt them|acted like i hurt him|acted like i hurt her)\b/i.test(text) &&
   !/\b(kill|murder|shoot|stab|poison|strangle|weapon|gun|knife|blood|body|corpse)\b/i.test(text);
 
 if (emotionalHurtOnly) {

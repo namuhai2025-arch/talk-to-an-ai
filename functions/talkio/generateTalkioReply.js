@@ -479,6 +479,14 @@ Do not default to English.
 Sound socially native.
 `;
 
+  let behavioralSafety = {
+  riskLevel: "none",
+  category: "none",
+  shouldRedirect: false,
+  recommendedMode: "normal",
+  reason: "safe_default",
+};
+
   try {
     let continuityMemory = null;
 
@@ -498,10 +506,14 @@ Sound socially native.
     emotionResult = emotional.emotionResult;
     responseMode = emotional.responseMode || "reflect";
 
-    const behavioralSafety = await analyzeBehavioralSafety({
+    try {
+  behavioralSafety = await analyzeBehavioralSafety({
     modelGenerate,
     latestUserMessage,
-    });
+  });
+} catch (err) {
+  console.error("behavioral_safety_non_blocking_failed", err?.message || err);
+}
 
     const variationBlock = buildVariationBlock(safeMessages);
     const checkinModeBlock = buildCheckinModeBlock(source);
@@ -550,9 +562,10 @@ Sound socially native.
     .reverse()
     .find((m) => m.role === "assistant")?.content || "";
 
-if (isTooSimilar(reply, lastAssistantMessage)) {
-  const rewriteRaw = await modelGenerate({
-    systemPrompt: `
+  if (isTooSimilar(reply, lastAssistantMessage)) {
+  try {
+    const rewriteRaw = await modelGenerate({
+      systemPrompt: `
 You are rewriting a Talkio response.
 
 Rules:
@@ -565,10 +578,10 @@ Rules:
 - do not explain the rewrite
 - do not use the same opening words
 `,
-    messages: [
-      {
-        role: "user",
-        content: `
+      messages: [
+        {
+          role: "user",
+          content: `
 Original reply:
 "${reply}"
 
@@ -580,18 +593,21 @@ User message:
 
 Rewrite the ORIGINAL REPLY naturally.
 `,
-      },
-    ],
-  });
+        },
+      ],
+    });
 
-  const rewritten = cleanReply(
-    humanizeReply(
-      extractModelText(rewriteRaw)
-    )
-  );
+    const rewritten = cleanReply(
+      humanizeReply(
+        extractModelText(rewriteRaw)
+      )
+    );
 
-  if (isSoftUsableReply(rewritten)) {
-    reply = rewritten;
+    if (isSoftUsableReply(rewritten)) {
+      reply = rewritten;
+    }
+  } catch (err) {
+    console.error("rewrite_generation_failed", err?.message || err);
   }
 }
 

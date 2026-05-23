@@ -91,6 +91,14 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!data?.reply || typeof data.reply !== "string") {
+      console.error("Empty Firebase reply:", {
+        status: firebaseRes.status,
+        data,
+        rawText: rawText.slice(0, 500),
+      });
+    }
+
     return reply(
       {
         reply: typeof data?.reply === "string" ? data.reply : "",

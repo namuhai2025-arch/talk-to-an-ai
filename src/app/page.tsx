@@ -42,6 +42,21 @@ function normalizeSafetyText(value: string) {
 function classifySafetyInterruption(input: string): SafetyInterruption {
   const text = normalizeSafetyText(input);
 
+  const emotionalHurtOnly =
+  /\bhurt\b/i.test(text) &&
+  !/\b(kill|murder|shoot|stab|poison|strangle|weapon|gun|knife|blood|body|corpse)\b/i.test(text);
+
+if (emotionalHurtOnly) {
+  return { blocked: false };
+}
+
+const emotionalManipulationOnly =
+  /\b(gaslight|gaslighting|manipulate|manipulated|narcissist|narcissistic|emotionally abusive|toxic relationship|they blamed me|made me feel crazy|made me doubt myself)\b/i.test(text);
+
+if (emotionalManipulationOnly) {
+  return { blocked: false };
+}
+
   const violentAdmission =
   /\b(i|we)\b.{0,40}\b(killed|kill|k1lled|murdered|murderd|murdr|shot|shoot|stabbed|stab|stabb|poisoned|poison|strangled|strangle|choked|choke|beat)\b.{0,20}\b(someone|somebody|person|him|her|them|wife|husband|girlfriend|boyfriend|boss|coworker|friend|child)\b/i.test(text) ||
 
@@ -50,7 +65,7 @@ function classifySafetyInterruption(input: string): SafetyInterruption {
   /\b(yes|yeah|yep|actually|honestly|seriously)\b.{0,20}\b(i|we)\b.{0,20}\b(killed|murdered|shot|stabbed)\b/i.test(text);
 
   const violentThreat =
-  /\b(i|im|i'm|we)\b.{0,20}\b(will|wil|gonna|going to|am going to|are going to|want to|wanna|plan to|planning to|about to)?\b.{0,20}\b(kill|kil|k1ll|murder|murdr|shoot|shot|stab|stabb|poison|poizon|strangle|hurt)\b.{0,20}\b(him|her|them|someone|somebody|person|people|wife|husband|boyfriend|girlfriend|boss|friend)?\b/i.test(text);
+  /\b(i|im|i'm|we)\b.{0,20}\b(will|wil|gonna|going to|am going to|are going to|want to|wanna|plan to|planning to|about to)?\b.{0,20}\b(kill|kil|k1ll|murder|murdr|shoot|shot|stab|stabb|poison|poizon|strangle)\b.{0,20}\b(him|her|them|someone|somebody|person|people|wife|husband|boyfriend|girlfriend|boss|friend)?\b/i.test(text);
 
   const coverupRequest =
     /\b(hide|bury|dispose of|get rid of|cover up|clean up)\b.*\b(body|corpse|evidence|weapon|blood)\b/.test(text) ||
@@ -817,7 +832,7 @@ setMessages((prev): ChatMessage[] => {
   </div>
 )}
 
-  <div className="relative z-20 flex items-start justify-between gap-3 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+56px)]">
+  <div className="relative z-20 flex items-start justify-between gap-3 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+64px)]">
   <div>
     <h1 className="text-[2.15rem] font-semibold tracking-[-0.04em]">Talkio</h1>
     <p className="mt-1 text-sm text-stone-500">
@@ -844,8 +859,8 @@ setMessages((prev): ChatMessage[] => {
   </button>
 </div>
 </div>
-      <div className="flex-1 overflow-y-auto px-5 pb-44 pt-2">
-        <div className="flex flex-col gap-[2px]">
+      <div className="flex-1 overflow-y-auto px-1 pb-52 pt-2">
+        <div className="flex flex-col gap-2">
           {messages.map((m, i) => {
             const prev = messages[i - 1];
             const next = messages[i + 1];
@@ -863,10 +878,17 @@ setMessages((prev): ChatMessage[] => {
   return null;
 }
 
-            let bubbleClass =
+const isFirstUserReply =
+  m.role === "user" &&
+  i === 1 &&
+  messages[0]?.role === "assistant";
+
+let bubbleClass =
   m.role === "user"
-    ? "talkio-user-bubble mr-6 self-end max-w-[72%] px-4 py-3"
-    : "talkio-ai-bubble ml-6 self-start max-w-[72%] px-4 py-3";
+    ? isFirstUserReply
+      ? "talkio-user-bubble self-end mr-6 max-w-[70%] px-5 py-4"
+      : "talkio-user-bubble self-end mr-3 max-w-[74%] px-5 py-4"
+    : "talkio-ai-bubble self-start ml-1 max-w-[74%] px-5 py-4";
 
 if (m.role === "user") {
   if (sameAsPrev) bubbleClass += " rounded-tr-md";
@@ -879,7 +901,7 @@ if (m.role === "user") {
             return (              
               <div key={i} className="flex flex-col">
                 <div className={bubbleClass}>
-                  <div className="whitespace-pre-wrap break-words text-[16.5px] leading-7">
+                  <div className="whitespace-pre-wrap break-words text-[17px] leading-[1.85]">
                     {m.content}
                   </div>
                 </div>
@@ -888,8 +910,8 @@ if (m.role === "user") {
                   <div
                     className={
                       m.role === "user"
-                        ? "mt-[2px] mr-6 self-end px-2 text-[12px] text-stone-300"
-                        : "mt-[2px] ml-6 self-start px-2 text-[12px] text-stone-300"
+                        ? "mt-2 self-end px-1 text-[12px] text-stone-300"
+                        : "mt-2 self-start px-1 text-[12px] text-stone-300"
                     }
                   >
                     {new Date(m.timestamp).toLocaleTimeString([], {
@@ -932,7 +954,7 @@ if (m.role === "user") {
 )}
 
           {showTyping && (
-            <div className="talkio-ai-bubble ml-6 self-start max-w-[72%] px-4 py-3">
+            <div className="talkio-ai-bubble ml-6 self-start max-w-[78%] px-5 py-4">
               <div className="flex gap-1">
                 <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.3s]" />
                 <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.15s]" />
@@ -1025,7 +1047,7 @@ disabled={
 }
 
         rows={1}
-        className="talkio-input max-h-[120px] min-h-[54px] flex-1 resize-none px-5 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-300 disabled:bg-stone-100 disabled:text-stone-400"
+        className="talkio-input max-h-[120px] min-h-[58px] flex-1 resize-none px-5 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-300 disabled:bg-stone-100 disabled:text-stone-400"
         style={{ overflowY: "auto" }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
@@ -1044,7 +1066,7 @@ disabled={
   isLimitReached ||
   !input.trim()
 }
-        className="h-[54px] min-w-[58px] rounded-full bg-[#78906f] px-5 text-sm font-medium text-white shadow-[0_8px_24px_rgba(80,70,55,0.14)] transition-all active:scale-95"
+        className="h-[58px] min-w-[58px] rounded-full bg-[#78906f] px-5 text-sm font-medium text-white shadow-[0_8px_24px_rgba(80,70,55,0.14)] transition-all active:scale-95"
       >
         Send
       </button>

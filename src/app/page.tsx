@@ -901,7 +901,7 @@ if (m.role === "user") {
             return (              
               <div key={i} className="flex flex-col">
                 <div className={bubbleClass}>
-                  <div className="whitespace-pre-wrap break-words text-[17px] leading-[1.85]">
+                  <div className="whitespace-pre-wrap break-words text-[17px] leading-[1.45]">
                     {m.content}
                   </div>
                 </div>

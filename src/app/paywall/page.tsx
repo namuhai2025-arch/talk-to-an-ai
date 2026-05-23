@@ -47,7 +47,7 @@ export default function PaywallPage() {
         <button
           type="button"
           onClick={() => (window.location.href = "/")}
-          className="mb-8 text-sm text-stone-500 hover:text-stone-800"
+          className="relative z-50 mb-8 text-sm text-stone-500 hover:text-stone-800"
         >
           ← Back to chat
         </button>

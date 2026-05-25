@@ -64,60 +64,40 @@ const TALKIO_LIMITS = {
     perMinute: 10,
   },
 
-  premium: {
+  companion: {
     daily: 300,
     perMinute: 30,
   },
 
-  ultra: {
-    daily: 1000,
-    perMinute: 60,
+  presence: {
+    daily: 800,
+    perMinute: 50,
   },
 
-  earlyAccess: {
-    daily: 1000,
-    perMinute: 60,
+  professionals: {
+    daily: 2000,
+    perMinute: 80,
+  },
+
+  elite: {
+    daily: 5000,
+    perMinute: 120,
   },
 };
 
 function getLimitsForAccess(access = {}) {
-  const quotaTier = access?.quotaTier || "free";
+  const plan = access?.plan || "free";
 
-  if (quotaTier === "ultra") {
-    return {
-      dailyLimit: TALKIO_LIMITS.ultra.daily,
-      perMinuteLimit: TALKIO_LIMITS.ultra.perMinute,
-      limitLabel: "ultra",
-      bypassIpLimits: true,
-    };
-  }
-
-  if (
-    quotaTier === "premium" ||
-    access?.plan === "pro"
-  ) {
-    return {
-      dailyLimit: TALKIO_LIMITS.premium.daily,
-      perMinuteLimit: TALKIO_LIMITS.premium.perMinute,
-      limitLabel: "premium",
-      bypassIpLimits: false,
-    };
-  }
-
-  if (quotaTier === "early_access") {
-    return {
-      dailyLimit: TALKIO_LIMITS.earlyAccess.daily,
-      perMinuteLimit: TALKIO_LIMITS.earlyAccess.perMinute,
-      limitLabel: "early_access",
-      bypassIpLimits: true,
-    };
-  }
+  const config =
+    TALKIO_LIMITS[plan] || TALKIO_LIMITS.free;
 
   return {
-    dailyLimit: TALKIO_LIMITS.free.daily,
-    perMinuteLimit: TALKIO_LIMITS.free.perMinute,
-    limitLabel: "free",
-    bypassIpLimits: false,
+    dailyLimit: config.daily,
+    perMinuteLimit: config.perMinute,
+    limitLabel: plan,
+    bypassIpLimits:
+      plan === "professionals" ||
+      plan === "elite",
   };
 }
 
@@ -133,8 +113,7 @@ async function getUserAccessProfile(uid, decodedToken = {}) {
     const created = {
       uid,
       email,
-      plan: "free",         // free | premium | ultra
-      quotaTier: "free",    // free | premium | ultra | early_access
+      plan: "free",
       role: "user",         // user | tester | admin
       subscriptionStatus: "none",  // none | active | trialing | cancelled
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -159,7 +138,6 @@ async function getUserAccessProfile(uid, decodedToken = {}) {
     uid,
     email: update.email,
     plan: data.plan || "free",
-    quotaTier: data.quotaTier || data.plan || "free",
     role: data.role || "user",
     subscriptionStatus: data.subscriptionStatus || "none",
   };
@@ -195,8 +173,7 @@ export const activateTestPaid = onRequest(async (req, res) => {
     await admin.firestore().collection("users").doc(uid).set(
       {
         subscriptionActive: true,
-        plan: "premium",
-        quotaTier: "premium",
+        plan: "presence",
         subscriptionProvider: "manual_test",
         paidActivatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -204,7 +181,7 @@ export const activateTestPaid = onRequest(async (req, res) => {
       { merge: true }
     );
 
-    res.status(200).json({ ok: true, plan: "paid" });
+    res.status(200).json({ ok: true, plan: "presence" });
   } catch (error) {
     console.error("activateTestPaid failed:", error);
     res.status(500).json({ error: "Failed to activate test paid" });
@@ -221,7 +198,7 @@ const IP_MINUTE_CAP = 30;
 const FREE_TRIAL_DAYS = 3;
 const FREE_TRIAL_DAILY_LIMIT = 10;
 
-const FREE_MODEL = "gemini-2.5-flash-lite";
+const FREE_MODEL = "gemini-2.5-flash";
 const PREMIUM_MODEL = "gemini-2.5-flash";
 const ULTRA_MODEL = "gemini-2.5-pro";
 
@@ -1733,12 +1710,7 @@ if (safetyInterruption.blocked) {
 
     const freeTrial = await getOrCreateFreeTrial(uid);
 
-    const userPlan =
-  access?.quotaTier === "ultra"
-    ? "ultra"
-    : access?.quotaTier === "premium" || access?.plan === "pro" || access?.plan === "premium"
-      ? "pro"
-      : "free";
+    const userPlan = access?.plan || "free";
 
     const planConfig = getTalkioPlan(userPlan);
 
@@ -1772,7 +1744,7 @@ if (limitLabel === "free" && freeTrial.isTrialExpired) {
   logWarn("talkio_quota_hit", {
     uid,
     type: "free_trial_expired",
-    quotaTier: limitLabel,
+    plan: limitLabel,
     source: body?.source || "chat",
     path: "free_trial_expired",
     fallbackTriggered: true,
@@ -1788,11 +1760,11 @@ if (limitLabel === "free" && freeTrial.isTrialExpired) {
   analyticsType: "quota_hit",
 
   reply:
-    "Your 3-day free Talkio trial has ended. Upgrade to Talkio Pro to keep chatting with higher limits and better memory.",
+    "Your 3-day free Talkio trial has ended. Upgrade to Talkio Companion or Presence to keep chatting.",
 
   remainingDaily: 0,
   dailyLimit,
-  quotaTier: "free_trial_expired",
+  plan: "free_trial_expired",
 });
 
   return;
@@ -1804,7 +1776,7 @@ if (limitLabel === "free" && freeTrial.isTrialExpired) {
   logWarn("talkio_quota_hit", {
   uid,
   type: "daily_limit",
-  quotaTier: limitLabel,
+  plan: limitLabel,
   userDailyCount,
   dailyLimit,
   source: body?.source || "chat",
@@ -1823,12 +1795,12 @@ if (limitLabel === "free" && freeTrial.isTrialExpired) {
   analyticsType: "quota_hit",
 
   reply: isFree
-    ? "You’ve reached today’s free limit. Continue with Talkio Pro to keep chatting."
+    ? "You’ve reached today’s free limit. Continue with Talkio Companion or Presence to keep chatting."
     : "You've reached today's message limit. Please come back later.",
 
   remainingDaily: 0,
   dailyLimit,
-  quotaTier: limitLabel,
+  plan: limitLabel,
 });
 
   return;
@@ -1841,7 +1813,7 @@ if (
 
   logWarn("talkio_rate_limit_hit", {
   uid,
-  quotaTier: limitLabel,
+  plan: limitLabel,
   userMinuteCount,
   perMinuteLimit,
   ipDailyCount,
@@ -1863,7 +1835,7 @@ if (
 
   remainingDaily: Math.max(0, dailyLimit - userDailyCount),
   dailyLimit,
-  quotaTier: limitLabel,
+  plan: limitLabel,
 });
   return;
 }
@@ -1935,11 +1907,13 @@ const runtimeSystemPrompt =
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const model =
-  access?.quotaTier === "ultra"
-    ? ULTRA_MODEL
-    : access?.plan === "pro" || access?.quotaTier === "premium"
-      ? PREMIUM_MODEL
-      : FREE_MODEL;
+    access?.plan === "professionals" ||
+    access?.plan === "elite"
+      ? ULTRA_MODEL
+      : access?.plan === "presence" ||
+        access?.plan === "companion"
+        ? PREMIUM_MODEL
+        : FREE_MODEL;
 
     // =========================
     // 🤖 9. CALL BRAIN ENGINE
@@ -1997,7 +1971,7 @@ logInfo("talkio_reply_generated", {
   mode: result?.dynamicMode || "unknown",
   fallbackTriggered,
   source: body?.source || "chat",
-  quotaTier: limitLabel,
+  plan: limitLabel,
   remainingDaily: Math.max(0, dailyLimit - userDailyCount),
 });
 

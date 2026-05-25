@@ -7,6 +7,7 @@ const TALKIO_PLANS = {
 
     // limits
     dailyMessageLimit: 10,
+    trialDays: 3,
 
     // behavior
     replyLength: "moderate",
@@ -29,7 +30,7 @@ const TALKIO_PLANS = {
     queuePriority: "normal",
 
     // modes
-    scheduledCheckins: "basic",
+    scheduledCheckins: false,
     stoicGroundingModes: "limited",
 
     // extras
@@ -38,8 +39,8 @@ const TALKIO_PLANS = {
     voiceFeatures: false,
   },
 
-  pro: {
-    label: "Talkio Pro",
+  companion: {
+    label: "Companion",
     price: 4.99,
 
     // limits
@@ -66,13 +67,96 @@ const TALKIO_PLANS = {
     queuePriority: "priority",
 
     // modes
-    scheduledCheckins: "smart",
+    scheduledCheckins: true,
     stoicGroundingModes: "full",
 
     // extras
     customization: "expanded",
     experimentalFeatures: true,
-    voiceFeatures: "planned",
+    voiceFeatures: false,
+  },
+
+  presence: {
+    label: "Presence",
+    price: 9.99,
+
+    // limits
+    dailyMessageLimit: 800,
+
+    // behavior
+    replyLength: "deep",
+    replyDepth: "immersive",
+    emotionalPacing: "human",
+    recoveryBehavior: "advanced",
+
+    // intelligence
+    modelQuality: "advanced",
+    moodAwareness: "deep_adaptive",
+    personalityAdaptation: "contextual",
+
+    // memory
+    memoryLevel: "advanced",
+    contextRetention: "long",
+
+    // experience
+    speedPriority: "high_priority",
+    retryRepairPriority: "advanced",
+    queuePriority: "high",
+
+    // modes
+    scheduledCheckins: true,
+    stoicGroundingModes: "full",
+
+    // extras
+    customization: "full",
+    experimentalFeatures: true,
+    voiceFeatures: true,
+  },
+
+  professionals: {
+    label: "Professionals",
+    price: 49.99,
+
+    // limits
+    dailyMessageLimit: 2000,
+
+    // behavior
+    replyLength: "strategic",
+    replyDepth: "professional",
+    emotionalPacing: "high_awareness",
+    recoveryBehavior: "advanced",
+
+    // intelligence
+    modelQuality: "elite",
+    moodAwareness: "executive",
+    personalityAdaptation: "strategic",
+
+    // memory
+    memoryLevel: "professional",
+    contextRetention: "extended",
+
+    // experience
+    speedPriority: "highest",
+    retryRepairPriority: "elite",
+    queuePriority: "highest",
+
+    // modes
+    scheduledCheckins: true,
+    stoicGroundingModes: "full",
+
+    // extras
+    customization: "full",
+    experimentalFeatures: true,
+    voiceFeatures: true,
+    strategicReflection: true,
+  },
+
+  elite: {
+    label: "Elite",
+    price: null,
+
+    // future
+    comingSoon: true,
   },
 };
 

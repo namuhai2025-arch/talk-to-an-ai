@@ -2,9 +2,11 @@
 
 import {
   GoogleAuthProvider,
-  linkWithPopup,
-  signInWithPopup,
+  linkWithRedirect,
+  signInWithRedirect,
+  getRedirectResult,
 } from "firebase/auth";
+
 import { getFirebaseAuth } from "@/lib/firebase";
 
 export default function PaywallPage() {
@@ -16,19 +18,19 @@ export default function PaywallPage() {
 
     if (auth.currentUser && auth.currentUser.isAnonymous) {
       try {
-        await linkWithPopup(auth.currentUser, provider);
+        await linkWithRedirect(auth.currentUser, provider);
         return;
       } catch (error: any) {
         if (error?.code === "auth/credential-already-in-use") {
-          await signInWithPopup(auth, provider);
-          return;
-        }
+  await signInWithRedirect(auth, provider);
+  return;
+}
 
         throw error;
       }
     }
 
-    await signInWithPopup(auth, provider);
+    await signInWithRedirect(auth, provider);
   };
 
   const selectPlan = async (plan: "monthly" | "yearly") => {
@@ -37,7 +39,7 @@ export default function PaywallPage() {
       window.location.href = `/checkout?plan=${plan}`;
     } catch (error: any) {
       console.error("Upgrade sign-in failed:", error);
-      alert(`Google sign-in failed: ${error?.code || "unknown"}`);
+      alert("Google sign in failed. Please try again.");
     }
   };
 

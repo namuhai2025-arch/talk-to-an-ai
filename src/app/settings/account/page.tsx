@@ -1,77 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   GoogleAuthProvider,
-  linkWithPopup,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
 } from "firebase/auth";
-import { getFirebaseAuth } from "@/lib/firebase";
 
+import { getFirebaseAuth } from "@/lib/firebase";
 
 export default function AccountSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          console.log("Google sign in success");
+        }
+      })
+      .catch((error) => {
+        console.error("Google redirect failed:", error);
+      });
+  }, []);
 
   const handleGoogleSignIn = async () => {
+    if (isSigningIn) return;
+
+    setIsSigningIn(true);
+
     const auth = getFirebaseAuth();
     const provider = new GoogleAuthProvider();
 
     try {
-      if (auth.currentUser && auth.currentUser.isAnonymous) {
-        const oldUid = auth.currentUser.uid;
-
-        try {
-          await linkWithPopup(auth.currentUser, provider);
-          alert("Google account connected.");
-          return;
-        } catch (error: any) {
-          console.error("Google link failed:", error);
-
-          if (error?.code === "auth/credential-already-in-use") {
-            const result = await signInWithPopup(auth, provider);
-            const token = await result.user.getIdToken();
-
-            const mergeRes = await fetch(
-              "https://generatetalkioreply-ndury54xsq-uc.a.run.app/mergeUserData",
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ oldUid }),
-              }
-            );
-
-            if (!mergeRes.ok) throw new Error("Merge failed");
-
-            alert("Google account connected and data merged.");
-            return;
-          }
-
-          throw error;
-        }
-      }
-
-      await signInWithPopup(auth, provider);
-      alert("Signed in with Google.");
+      await signInWithRedirect(auth, provider);
     } catch (error: any) {
       console.error("Google sign-in failed:", error);
-      alert(`Error: ${error?.code || "unknown"} | ${error?.message || ""}`);
+
+      if (error?.code !== "auth/cancelled-popup-request") {
+        alert("Google sign in failed. Please try again.");
+      }
+
+      setIsSigningIn(false);
     }
   };
 
   const handleSignOut = async () => {
-  const auth = getFirebaseAuth();
+    const auth = getFirebaseAuth();
 
-  await signOut(auth);
-
-  window.location.href = "/";
-};
+    await signOut(auth);
+    window.location.href = "/";
+  };
 
   const handleDeleteAccount = async () => {
-    
     const auth = getFirebaseAuth();
     const user = auth.currentUser;
 
@@ -106,8 +91,6 @@ export default function AccountSettingsPage() {
     }
   };
 
-  const canDelete = !isDeleting;
-
   return (
     <main className="min-h-screen bg-stone-50 px-5 pb-6 pt-[calc(env(safe-area-inset-top)+3.5rem)]">
       <div className="mx-auto max-w-md">
@@ -131,12 +114,13 @@ export default function AccountSettingsPage() {
           <button
             type="button"
             onClick={handleGoogleSignIn}
-            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-medium text-stone-900 shadow-sm transition hover:bg-stone-50"
+            disabled={isSigningIn}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-medium text-stone-900 shadow-sm transition hover:bg-stone-50 disabled:pointer-events-none disabled:opacity-50"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xl font-semibold text-blue-500">
               G
             </span>
-            Continue with Google
+            {isSigningIn ? "Opening Google..." : "Continue with Google"}
           </button>
 
           <button
@@ -150,32 +134,33 @@ export default function AccountSettingsPage() {
         </section>
 
         <section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-sm">
-  <button
-    type="button"
-    onClick={() => {
-      const confirmed = window.confirm(
-        "Delete your Talkio account?\n\nThis permanently removes your account and conversations."
-      );
+          <button
+            type="button"
+            disabled={!isDeleting ? false : true}
+            onClick={() => {
+              const confirmed = window.confirm(
+                "Delete your Talkio account?\n\nThis permanently removes your account and conversations."
+              );
 
-      if (confirmed) {
-        handleDeleteAccount();
-      }
-    }}
-    className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
-  >
-    <div>
-      <p className="font-medium text-red-600">
-        Delete account
-      </p>
+              if (confirmed) {
+                handleDeleteAccount();
+              }
+            }}
+            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50 disabled:pointer-events-none disabled:opacity-50"
+          >
+            <div>
+              <p className="font-medium text-red-600">
+                {isDeleting ? "Deleting..." : "Delete account"}
+              </p>
 
-      <p className="mt-1 text-sm text-stone-500">
-        Permanently remove your account and conversations.
-      </p>
-    </div>
+              <p className="mt-1 text-sm text-stone-500">
+                Permanently remove your account and conversations.
+              </p>
+            </div>
 
-    <span className="text-stone-400">›</span>
-  </button>
-</section>
+            <span className="text-stone-400">›</span>
+          </button>
+        </section>
 
         <section className="mt-6 rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
           <p className="font-medium text-stone-900">

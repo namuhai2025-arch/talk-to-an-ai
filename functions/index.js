@@ -45,6 +45,7 @@ const {
 
 const {
   BASE_SYSTEM_PROMPT,
+  COSMOPOLITANISM_PROMPT,
   TRUST_SAFE_MODE_PROMPT,
 } = require("./talkio/prompts");
 
@@ -554,7 +555,20 @@ function detectLanguageMirror(text = "") {
       "Reply in the same language the user is currently using, even if the language is not explicitly recognized. If the language is unclear or mixed, follow the dominant language of the message. Do not default to English unless the user is clearly using English. If the user's language is unclear, respond in simple, neutral English.",
   };
 }
-const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT;
+const SYSTEM_PROMPT = `
+${BASE_SYSTEM_PROMPT}
+
+${COSMOPOLITANISM_PROMPT}
+
+RUNTIME COSMOPOLITANISM GUARDRAILS
+- Preserve the dignity of the user and all people involved.
+- Validate feelings, not harmful behavior.
+- Be compassionate without enabling manipulation, cruelty, revenge, abuse, or exploitation.
+- If the user avoids responsibility, add a gentle mirror without shame.
+- Never dehumanize anyone.
+- Never create romantic or dependency language.
+- Talkio should feel like a calm, humane mirror: warm, honest, grounded, and responsible.
+`.trim();
 
 // ==============================
 // SYSTEM PROMPT BUILDER
@@ -563,6 +577,13 @@ function buildRuntimeSystemPrompt({ languageMeta, isTrustConcern }) {
   return [
     SYSTEM_PROMPT,
 
+    `MIRROR BALANCE
+- Do not blindly agree with the user.
+- Do not automatically take the user's side.
+- Understand the user's pain while still recognizing the humanity of others involved.
+- If needed, gently reflect contradictions, repeating patterns, avoidance, or impact on others.
+- Reflection should feel calm and human, not like therapy or interrogation.`,
+
     `LANGUAGE MIRRORING
 ${languageMeta?.mirrorInstruction || "Reply in the same language the user is using."}`.trim(),
 
@@ -570,6 +591,96 @@ ${languageMeta?.mirrorInstruction || "Reply in the same language the user is usi
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+async function evaluateCosmopolitanism({
+  ai,
+  reply,
+}) {
+  const evaluationPrompt = `
+You are evaluating whether this AI reply violates Talkio's cosmopolitan personality.
+
+Check for:
+- dehumanization
+- revenge encouragement
+- superiority language
+- manipulation encouragement
+- emotional dependency
+- tribal hatred
+- blind validation
+- narcissistic reinforcement
+
+Reply ONLY with:
+SAFE
+or
+UNSAFE
+`;
+
+  const result = await ai.models.generateContent({
+    model: "gemini-2.5-flash-lite",
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text:
+              evaluationPrompt +
+              "\n\nAI Reply:\n" +
+              reply,
+          },
+        ],
+      },
+    ],
+  });
+
+  const text =
+    typeof result?.text === "function"
+      ? result.text()
+      : result?.text || "";
+
+  return text.trim().toUpperCase().includes("UNSAFE");
+}
+
+async function generateBalancedRepair({
+  ai,
+  model,
+  originalReply,
+  latestUserMessage,
+  languageMeta,
+}) {
+  const repairPrompt = `
+Rewrite the AI reply using Talkio's compassionate cosmopolitan personality.
+
+Rules:
+- Preserve dignity for the user and all people involved.
+- Validate feelings, not harmful behavior.
+- Do not enable manipulation, revenge, cruelty, abuse, exploitation, or dehumanization.
+- Add a gentle mirror if responsibility or impact is being avoided.
+- Keep the same language style as the user.
+- Keep it natural, warm, grounded, and non-clinical.
+- Do not sound preachy or robotic.
+
+User language context:
+${languageMeta?.mirrorInstruction || "Use the user's language naturally."}
+
+Latest user message:
+${latestUserMessage}
+
+Original AI reply:
+${originalReply}
+`;
+
+  return generateModelText({
+    ai,
+    model,
+    systemPrompt: repairPrompt,
+    messages: [
+      {
+        role: "user",
+        content: "Rewrite the reply safely and naturally.",
+      },
+    ],
+  });
 }
 
 function buildConversationMessages(messages, latestUserMessage) {
@@ -1854,6 +1965,21 @@ const runtimeSystemPrompt =
       });
 
       let finalReply = result?.reply || "";
+
+const cosmopolitanismUnsafe = await evaluateCosmopolitanism({
+  ai,
+  reply: finalReply,
+});
+
+if (cosmopolitanismUnsafe) {
+  finalReply = await generateBalancedRepair({
+    ai,
+    model,
+    originalReply: finalReply,
+    latestUserMessage,
+    languageMeta,
+  });
+}
 
 if (isTrustConcern && violatesTrustSafeMode(finalReply)) {
   finalReply = `You do not have to force trust here.

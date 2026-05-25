@@ -44,10 +44,13 @@ function buildConversationMessages(messages = [], latestUserMessage = "") {
 
 function buildTalkioSystemPrompt({
   coreIdentityPrompt,
+  cosmopolitanismPrompt = "",
   latestUserMessage,
 }) {
   return `
 ${coreIdentityPrompt}
+
+${cosmopolitanismPrompt}
 
 RUNTIME CONTEXT
 - Mirror the user's current language naturally.
@@ -61,6 +64,7 @@ LATEST USER MESSAGE
 async function generateTalkioReplyEngine({
   modelGenerate,
   coreIdentityPrompt,
+  cosmopolitanismPrompt = "",
   messages,
   latestUserMessage,
 }) {
@@ -73,6 +77,7 @@ async function generateTalkioReplyEngine({
 
   const systemPrompt = buildTalkioSystemPrompt({
     coreIdentityPrompt,
+    cosmopolitanismPrompt,
     latestUserMessage: cleanedLatestUserMessage,
   });
 

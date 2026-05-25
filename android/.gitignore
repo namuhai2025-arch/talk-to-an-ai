@@ -95,6 +95,13 @@ capacitor-cordova-android-plugins
 # Copied web assets
 app/src/main/assets/public
 
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+
 # Generated Config files
 app/src/main/assets/capacitor.config.json
 app/src/main/assets/capacitor.plugins.json

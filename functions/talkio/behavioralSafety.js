@@ -37,8 +37,15 @@ async function analyzeBehavioralSafety({ modelGenerate, latestUserMessage }) {
       messages: [
         {
           role: "user",
-          content: `Analyze this latest user message only:
+          content: `Analyze this latest user message only.
 
+Use Talkio's compassionate cosmopolitan safety lens:
+- distinguish pain from harmful intent
+- do not over-flag anger, sadness, jealousy, ambition, or frustration
+- flag only when the user expresses intent to manipulate, deceive, exploit, abuse, harass, revenge, harm, or seek instructions for wrongdoing
+- preserve dignity without normalizing harmful behavior
+
+Latest user message:
 """${String(latestUserMessage).slice(0, 4000)}"""`,
         },
       ],

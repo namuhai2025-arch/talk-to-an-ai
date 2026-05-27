@@ -650,7 +650,7 @@ setMessages((prev): ChatMessage[] => {
             localStorage.removeItem("talkio_signed_out");
             window.location.reload();
           }}
-          className="mt-6 w-full rounded-2xl bg-[#78906f] px-4 py-3 text-white"
+          className="mt-6 w-full rounded-full bg-[#78906f] px-4 py-3 text-white"
         >
           Continue
         </button>
@@ -696,7 +696,7 @@ setMessages((prev): ChatMessage[] => {
 
             <button
               type="button"
-              className="w-full rounded-xl bg-emerald-500 px-4 py-2.5 text-white hover:bg-emerald-600"
+              className="w-full rounded-none bg-emerald-500 px-4 py-2.5 text-white hover:bg-emerald-600"
               onClick={() => {
                 localStorage.setItem(storageKeys.safety, "true");
                 setShowSafety(false);
@@ -710,7 +710,7 @@ setMessages((prev): ChatMessage[] => {
 
       {showNamePrompt && !showSafety && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
+          <div className="w-full max-w-md rounded-none bg-white p-6 shadow-lg">
             <h2 className="mb-2 text-lg font-semibold">Quick thing</h2>
             <p className="mb-3 text-sm text-stone-700">
               What nickname should I call you?
@@ -720,13 +720,13 @@ setMessages((prev): ChatMessage[] => {
               value={draftNickname}
               onChange={(e) => setDraftNickname(e.target.value)}
               placeholder="Enter a nickname"
-              className="mb-3 w-full rounded-xl border px-3 py-2.5 outline-none focus:border-emerald-500"
+              className="mb-3 w-full rounded-none border px-3 py-2.5 outline-none focus:border-emerald-500"
             />
 
             <div className="flex gap-2">
               <button
                 type="button"
-                className="flex-1 rounded-xl border px-3 py-2.5"
+                className="flex-1 rounded-none border px-3 py-2.5"
                 onClick={() => setShowNamePrompt(false)}
               >
                 Skip
@@ -734,7 +734,7 @@ setMessages((prev): ChatMessage[] => {
 
               <button
                 type="button"
-                className="flex-1 rounded-xl bg-emerald-500 px-3 py-2.5 text-white"
+                className="flex-1 rounded-none bg-emerald-500 px-3 py-2.5 text-white"
                 onClick={saveNickname}
               >
                 Save
@@ -746,7 +746,7 @@ setMessages((prev): ChatMessage[] => {
 
       {showUpgradeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
+          <div className="w-full max-w-md rounded-none bg-white p-6 shadow-lg">
             <h2 className="mb-2 text-lg font-semibold">Talkio Pro</h2>
             <p className="mb-4 text-sm text-stone-700">
               Unlimited chats will be available with Talkio Pro. For now, free
@@ -755,7 +755,7 @@ setMessages((prev): ChatMessage[] => {
 
             <button
               type="button"
-              className="w-full rounded-xl bg-emerald-500 px-4 py-2.5 text-white hover:bg-emerald-600"
+              className="w-full rounded-none bg-emerald-500 px-4 py-2.5 text-white hover:bg-emerald-600"
               onClick={() => setShowUpgradeModal(false)}
             >
               Got it
@@ -764,7 +764,7 @@ setMessages((prev): ChatMessage[] => {
         </div>
       )}
       {showReviewPrompt && (
-  <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-sm rounded-2xl border border-stone-200 bg-white/95 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
+  <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-sm rounded-none border border-stone-200 bg-white/95 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
     <button
       type="button"
       onClick={() => setShowReviewPrompt(false)}
@@ -774,7 +774,7 @@ setMessages((prev): ChatMessage[] => {
       ×
     </button>
 
-    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-2xl">
+    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-none bg-rose-100 text-2xl">
       💗
     </div>
 
@@ -797,7 +797,7 @@ setMessages((prev): ChatMessage[] => {
   );
   setShowReviewPrompt(false);
 }}
-        className="flex w-full items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left shadow-sm active:scale-[0.99]"
+        className="flex w-full items-center justify-between rounded-none border border-stone-200 bg-white px-4 py-3 text-left shadow-sm active:scale-[0.99]"
       >
         <div className="flex items-center gap-3">
           <span className="text-2xl">▶️</span>
@@ -820,7 +820,7 @@ setMessages((prev): ChatMessage[] => {
   window.open("https://apps.apple.com/", "_blank");
   setShowReviewPrompt(false);
 }}
-        className="flex w-full items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left shadow-sm active:scale-[0.99]"
+        className="flex w-full items-center justify-between rounded-none border border-stone-200 bg-white px-4 py-3 text-left shadow-sm active:scale-[0.99]"
       >
         <div className="flex items-center gap-3">
           <span className="text-2xl"></span>
@@ -858,7 +858,7 @@ setMessages((prev): ChatMessage[] => {
   <div className="relative z-30 flex shrink-0 items-center gap-2 pt-1">
   <button
     type="button"
-    className="rounded-2xl border border-stone-200 bg-white/60 backdrop-blur-md px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
+    className="rounded-none border border-stone-200 bg-white/60 backdrop-blur-md px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
     onClick={() => (window.location.href = "/settings")}
   >
     ⚙️
@@ -866,7 +866,7 @@ setMessages((prev): ChatMessage[] => {
 
   <button
     type="button"
-    className="rounded-2xl border border-stone-200 bg-white/60 backdrop-blur-md px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
+    className="rounded-none border border-stone-200 bg-white/60 backdrop-blur-md px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
     disabled={loading || messages.length <= 1}
     onClick={clearChat}
   >
@@ -874,7 +874,7 @@ setMessages((prev): ChatMessage[] => {
   </button>
 </div>
 </div>
-      <div className="flex-1 overflow-y-auto px-1 pb-52 pt-2">
+      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-2 md:px-10">
         <div className="flex flex-col gap-2">
           {messages.map((m, i) => {
             const prev = messages[i - 1];
@@ -901,9 +901,9 @@ const isFirstUserReply =
 let bubbleClass =
   m.role === "user"
     ? isFirstUserReply
-      ? "talkio-user-bubble self-end mr-4 max-w-[70%] px-5 py-4"
-      : "talkio-user-bubble self-end mr-4 max-w-[74%] px-5 py-4"
-      : "talkio-ai-bubble self-start ml-4 max-w-[74%] px-5 py-4";
+      ? "talkio-user-bubble self-end mr-4 max-w-[70%] px-4 py-3"
+      : "talkio-user-bubble self-end mr-4 max-w-[74%] px-4 py-3"
+      : "talkio-ai-bubble self-start ml-4 max-w-[74%] px-4 py-3";
 
 if (m.role === "user") {
   if (sameAsPrev) bubbleClass += " rounded-tr-md";
@@ -969,7 +969,7 @@ if (m.role === "user") {
 )}
 
           {showTyping && (
-            <div className="talkio-ai-bubble ml-6 self-start max-w-[78%] px-5 py-4">
+            <div className="talkio-ai-bubble ml-6 self-start max-w-[78%] px-4 py-3">
               <div className="flex gap-1">
                 <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.3s]" />
                 <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.15s]" />
@@ -1024,75 +1024,64 @@ if (m.role === "user") {
     )}
 
     <form
-      className="sticky bottom-0 flex gap-2 border-t border-stone-200 bg-[#f7f1e8]/80 px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 backdrop-blur-xl"
-      onSubmit={(e) => {
-        e.preventDefault();
-        sendMessage();
-      }}
-    >
-      <textarea
-  ref={inputRef}
-  onFocus={() => {
-    window.setTimeout(() => {
-      bottomRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "end",
-      });
-    }, 300);
+  className="sticky bottom-0 z-40 flex shrink-0 items-end gap-2 border-t border-stone-200 bg-[#f7f1e8]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2"
+  onSubmit={(e) => {
+    e.preventDefault();
+    sendMessage();
   }}
-  value={input}
-        onChange={(e) => {
-  setInput(e.target.value);
+>
+  <div className="talkio-input flex min-h-[48px] flex-1 items-end border border-stone-300 bg-white px-3 py-2 rounded-sm">
+      <textarea
+      ref={inputRef}
+      value={input}
+      onChange={(e) => {
+        setInput(e.target.value);
 
-  e.target.style.height = "auto";
+        e.target.style.height = "32px";
+        const nextHeight = Math.min(e.target.scrollHeight, 92);
+        e.target.style.height = `${nextHeight}px`;
+        e.target.style.overflowY =
+          e.target.scrollHeight > 92 ? "auto" : "hidden";
+      }}
+      placeholder={
+        crisisLock
+          ? "Chat paused for safety"
+          : isLimitReached
+            ? "Daily free limit reached."
+            : "Type your message..."
+      }
+      disabled={loading || showSafety || crisisLock || isLimitReached}
+      rows={1}
+      className="h-[32px] max-h-[92px] w-full resize-none border-0 bg-transparent p-0 text-[16px] leading-6 outline-none placeholder:text-stone-400"
+      style={{
+        borderRadius: "0px",
+        WebkitAppearance: "none",
+        appearance: "none",
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          (e.target as HTMLTextAreaElement).form?.requestSubmit();
+        }
+      }}
+    />
+  </div>
 
-  const newHeight = Math.min(e.target.scrollHeight, 120);
+  <button
+  type="submit"
+  disabled={
+    loading ||
+    showSafety ||
+    crisisLock ||
+    isLimitReached ||
+    !input.trim()
+  }
+  className="h-[48px] min-w-[64px] rounded-md bg-[#78906f] px-4 text-sm font-medium text-white transition active:scale-95 disabled:opacity-50"
+>
+  Send
+</button>
+</form>
 
-  e.target.style.height = `${newHeight}px`;
-
-  e.target.style.overflowY =
-    e.target.scrollHeight > 120 ? "scroll" : "hidden";
-}}
-        placeholder={
-  crisisLock
-    ? "Chat paused for safety"
-    : isLimitReached
-      ? "Daily free limit reached."
-      : "Type your message..."
-}
-
-disabled={
-  loading ||
-  showSafety ||
-  crisisLock ||
-  isLimitReached
-}
-
-        rows={1}
-        className="talkio-input h-[58px] max-h-[120px] flex-1 resize-none overflow-y-auto rounded-2xl px-5 py-4 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-300 disabled:bg-stone-100 disabled:text-stone-400"
-        style={{ overflowY: "auto" }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            (e.target as HTMLTextAreaElement).form?.requestSubmit();
-          }
-        }}
-      />
-
-      <button
-        type="submit"
-        disabled={
-  loading ||
-  showSafety ||
-  crisisLock ||
-  isLimitReached ||
-  !input.trim()
-}
-        className="h-[58px] min-w-[58px] rounded-full bg-[#78906f] px-5 text-sm font-medium text-white shadow-[0_8px_24px_rgba(80,70,55,0.14)] transition-all active:scale-95"
-      >
-        Send
-      </button>
-    </form>
   </>
       )}
     </main>

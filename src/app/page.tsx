@@ -1024,7 +1024,7 @@ if (m.role === "user") {
     )}
 
     <form
-  className="sticky bottom-0 z-40 flex shrink-0 items-end gap-2 border-t border-stone-200 bg-[#f7f1e8]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2"
+  className="sticky bottom-0 z-40 flex shrink-0 items-end gap-2 border-t border-stone-200 bg-[#f7f1e8]/95 px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-2"
   onSubmit={(e) => {
     e.preventDefault();
     sendMessage();

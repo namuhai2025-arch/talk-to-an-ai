@@ -1030,7 +1030,7 @@ if (m.role === "user") {
     sendMessage();
   }}
 >
-  <div className="talkio-input flex min-h-[48px] flex-1 items-end border border-stone-300 bg-white px-3 py-2 rounded-sm">
+  <div className="talkio-input flex min-h-[44px] flex-1 items-end border border-stone-300 bg-white px-3 py-2 rounded-md">
       <textarea
       ref={inputRef}
       value={input}

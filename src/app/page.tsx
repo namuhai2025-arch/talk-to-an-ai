@@ -764,7 +764,7 @@ setMessages((prev): ChatMessage[] => {
         </div>
       )}
       {showReviewPrompt && (
-  <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-sm rounded-[28px] border border-stone-200 bg-white/95 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
+  <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-sm rounded-2xl border border-stone-200 bg-white/95 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
     <button
       type="button"
       onClick={() => setShowReviewPrompt(false)}
@@ -1042,10 +1042,17 @@ if (m.role === "user") {
   }}
   value={input}
         onChange={(e) => {
-          setInput(e.target.value);
-          e.target.style.height = "auto";
-          e.target.style.height = `${e.target.scrollHeight}px`;
-        }}
+  setInput(e.target.value);
+
+  e.target.style.height = "auto";
+
+  const newHeight = Math.min(e.target.scrollHeight, 120);
+
+  e.target.style.height = `${newHeight}px`;
+
+  e.target.style.overflowY =
+    e.target.scrollHeight > 120 ? "scroll" : "hidden";
+}}
         placeholder={
   crisisLock
     ? "Chat paused for safety"
@@ -1062,7 +1069,7 @@ disabled={
 }
 
         rows={1}
-        className="talkio-input max-h-[120px] min-h-[58px] flex-1 resize-none px-5 py-3 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-300 disabled:bg-stone-100 disabled:text-stone-400"
+        className="talkio-input h-[58px] max-h-[120px] flex-1 resize-none overflow-y-auto rounded-2xl px-5 py-4 text-[16px] leading-6 outline-none placeholder:text-stone-400 focus:border-stone-300 disabled:bg-stone-100 disabled:text-stone-400"
         style={{ overflowY: "auto" }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {

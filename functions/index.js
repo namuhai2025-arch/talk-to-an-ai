@@ -45,7 +45,6 @@ const {
 
 const {
   BASE_SYSTEM_PROMPT,
-  COSMOPOLITANISM_PROMPT,
   TRUST_SAFE_MODE_PROMPT,
 } = require("./talkio/prompts");
 
@@ -534,8 +533,6 @@ function detectLanguageMirror(text = "") {
 }
 const SYSTEM_PROMPT = `
 ${BASE_SYSTEM_PROMPT}
-
-${COSMOPOLITANISM_PROMPT}
 
 RUNTIME COSMOPOLITANISM GUARDRAILS
 - Preserve the dignity of the user and all people involved.

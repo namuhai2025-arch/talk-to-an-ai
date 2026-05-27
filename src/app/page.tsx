@@ -115,6 +115,9 @@ export default function Page() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const [mounted, setMounted] = useState(false);
+  const isSignedOut =
+  typeof window !== "undefined" &&
+  localStorage.getItem("talkio_signed_out") === "true";
   const [userId, setUserId] = useState("guest");
 
   const [displayName, setDisplayName] = useState("");
@@ -197,8 +200,8 @@ export default function Page() {
           .slice(-MAX_MESSAGES)
       : [];
 
-    if (normalizedMessages.length > 0) {
-      setMessages(normalizedMessages);
+    if (!isSignedOut && normalizedMessages.length > 0) {
+    setMessages(normalizedMessages);
     } else {
       setMessages([buildGreeting(cleanNickname)]);
     }
@@ -294,50 +297,35 @@ export default function Page() {
 }, [mounted]);
 
   useEffect(() => {
-    async function ensureUser() {
-      const auth = getFirebaseAuth();
+  async function ensureUser() {
+    const signedOut =
+      localStorage.getItem("talkio_signed_out") === "true";
 
-      if (!auth.currentUser) {
-  await signInAnonymously(auth);
-}
-
-await auth.authStateReady();
-
-await registerTalkioPushToken().catch(console.error);
-
-      const user = auth.currentUser;
-      setUserId(user?.uid || "guest");
+    if (signedOut) {
+      setUserId("signed_out");
+      return;
     }
 
-    if (!mounted) return;
+    const auth = getFirebaseAuth();
 
-    ensureUser().catch(() => {
-      setUserId("guest");
-    });
-  }, [mounted]);
+    if (!auth.currentUser) {
+      await signInAnonymously(auth);
+    }
 
-  useEffect(() => {
+    await auth.authStateReady();
+
+    await registerTalkioPushToken().catch(console.error);
+
+    const user = auth.currentUser;
+
+    setUserId(user?.uid || "guest");
+  }
+
   if (!mounted) return;
 
-  const handler = (event: any) => {
-    const url = event?.detail?.url || "";
-    if (!url) return;
-
-    const parsed = new URL(url);
-    const message = parsed.searchParams.get("message");
-
-    sessionStorage.setItem("talkio_checkin_opened", "true");
-
-    if (message) {
-      sessionStorage.setItem("talkio_checkin_message", message);
-    }
-  };
-
-  window.addEventListener("talkioCheckinOpened", handler);
-
-  return () => {
-    window.removeEventListener("talkioCheckinOpened", handler);
-  };
+  ensureUser().catch(() => {
+    setUserId("guest");
+  });
 }, [mounted]);
 
   useEffect(() => {
@@ -644,6 +632,33 @@ setMessages((prev): ChatMessage[] => {
 
   if (!mounted) return null;
 
+  if (isSignedOut) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-sm">
+        <h1 className="text-3xl font-semibold text-stone-900">
+          Talkio
+        </h1>
+
+        <p className="mt-3 text-sm leading-6 text-stone-500">
+          You are signed out.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => {
+            localStorage.removeItem("talkio_signed_out");
+            window.location.reload();
+          }}
+          className="mt-6 w-full rounded-2xl bg-[#78906f] px-4 py-3 text-white"
+        >
+          Continue
+        </button>
+      </div>
+    </main>
+  );
+}
+
   return (
     <main className="mx-auto flex h-[100dvh] max-w-2xl flex-col text-stone-900">
       <style jsx global>{`
@@ -886,9 +901,9 @@ const isFirstUserReply =
 let bubbleClass =
   m.role === "user"
     ? isFirstUserReply
-      ? "talkio-user-bubble self-end mr-6 max-w-[70%] px-5 py-4"
-      : "talkio-user-bubble self-end mr-3 max-w-[74%] px-5 py-4"
-    : "talkio-ai-bubble self-start ml-1 max-w-[74%] px-5 py-4";
+      ? "talkio-user-bubble self-end mr-4 max-w-[70%] px-5 py-4"
+      : "talkio-user-bubble self-end mr-4 max-w-[74%] px-5 py-4"
+      : "talkio-ai-bubble self-start ml-4 max-w-[74%] px-5 py-4";
 
 if (m.role === "user") {
   if (sameAsPrev) bubbleClass += " rounded-tr-md";
@@ -910,8 +925,8 @@ if (m.role === "user") {
                   <div
                     className={
                       m.role === "user"
-                        ? "mt-2 self-end px-1 text-[12px] text-stone-300"
-                        : "mt-2 self-start px-1 text-[12px] text-stone-300"
+                        ? "mt-2 self-end px-4 text-[12px] text-stone-300"
+                        : "mt-2 self-start px-4 text-[12px] text-stone-300"
                     }
                   >
                     {new Date(m.timestamp).toLocaleTimeString([], {

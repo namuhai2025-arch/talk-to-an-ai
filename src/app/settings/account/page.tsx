@@ -6,6 +6,7 @@ import {
   signInWithRedirect,
   getRedirectResult,
   signOut,
+  reauthenticateWithPopup,
 } from "firebase/auth";
 
 import { getFirebaseAuth } from "@/lib/firebase";
@@ -50,46 +51,64 @@ export default function AccountSettingsPage() {
   };
 
   const handleSignOut = async () => {
+  try {
     const auth = getFirebaseAuth();
+
+    localStorage.setItem("talkio_signed_out", "true");
+    alert("Signed out flag saved");
 
     await signOut(auth);
-    window.location.href = "/";
-  };
+
+    window.location.replace("/");
+  } catch (error) {
+    console.error("Sign out failed:", error);
+    alert("Failed to sign out.");
+  }
+};
 
   const handleDeleteAccount = async () => {
-    const auth = getFirebaseAuth();
-    const user = auth.currentUser;
+  const auth = getFirebaseAuth();
+  const user = auth.currentUser;
 
-    if (!user) {
-      alert("Please sign in again.");
-      return;
+  if (!user) {
+    alert("Please sign in again.");
+    return;
+  }
+
+  setIsDeleting(true);
+
+  try {
+    const provider = new GoogleAuthProvider();
+
+    await reauthenticateWithPopup(user, provider);
+
+    const token = await user.getIdToken(true);
+
+    const res = await fetch(
+      "https://generatetalkioreply-ndury54xsq-uc.a.run.app/deleteMyAccount",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error("Failed to delete");
     }
 
-    setIsDeleting(true);
+    localStorage.setItem("talkio_signed_out", "true");
 
-    try {
-      const token = await user.getIdToken();
+    await signOut(auth);
 
-      const res = await fetch(
-        "https://generatetalkioreply-ndury54xsq-uc.a.run.app/deleteMyAccount",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!res.ok) throw new Error("Failed to delete");
-
-      await signOut(auth);
-      window.location.href = "/";
-    } catch (error) {
-      console.error("Delete account failed:", error);
-      alert("Failed to delete account.");
-      setIsDeleting(false);
-    }
-  };
+    window.location.replace("/");
+  } catch (error) {
+    console.error("Delete account failed:", error);
+    alert("Failed to delete account.");
+    setIsDeleting(false);
+  }
+};
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 pb-6 pt-[calc(env(safe-area-inset-top)+3.5rem)]">

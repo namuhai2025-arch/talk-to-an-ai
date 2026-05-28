@@ -10,6 +10,7 @@ import {
 import { registerTalkioPushToken } from "@/lib/registerPushToken";
 import { Share } from "@capacitor/share";
 import { Keyboard } from "@capacitor/keyboard";
+import { configureRevenueCat } from "@/lib/revenuecat";
 
 type ChatRole = "user" | "assistant";
 
@@ -318,8 +319,11 @@ export default function Page() {
     await registerTalkioPushToken().catch(console.error);
 
     const user = auth.currentUser;
+    const activeUserId = user?.uid || "guest";
 
-    setUserId(user?.uid || "guest");
+    setUserId(activeUserId);
+
+    await configureRevenueCat(activeUserId).catch(console.error);
   }
 
   if (!mounted) return;

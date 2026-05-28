@@ -9,6 +9,7 @@ import {
 } from "@/lib/firebase";
 import { registerTalkioPushToken } from "@/lib/registerPushToken";
 import { Share } from "@capacitor/share";
+import { Keyboard } from "@capacitor/keyboard";
 
 type ChatRole = "user" | "assistant";
 
@@ -366,6 +367,10 @@ export default function Page() {
     window.removeEventListener("resize", handleResize);
   };
 }, [messages, showTyping, mounted]);
+
+   useEffect(() => {
+  Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(console.error);
+}, []);
 
   async function shareTalkio() {
   try {
@@ -1024,7 +1029,7 @@ if (m.role === "user") {
     )}
 
     <form
-  className="sticky bottom-0 z-40 flex shrink-0 items-end gap-2 border-t border-stone-200 bg-[#f7f1e8]/95 px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-2"
+  className="sticky bottom-0 z-40 flex shrink-0 items-end gap-2 border-t border-stone-200 bg-[#f7f1e8]/95 px-3 pb-2 pt-2"
   onSubmit={(e) => {
     e.preventDefault();
     sendMessage();
@@ -1032,9 +1037,13 @@ if (m.role === "user") {
 >
   <div className="talkio-input flex min-h-[44px] flex-1 items-end border border-stone-300 bg-white px-3 py-2 rounded-md">
       <textarea
-      ref={inputRef}
-      value={input}
-      onChange={(e) => {
+        ref={inputRef}
+        value={input}
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        autoComplete="off"
+        onChange={(e) => {
         setInput(e.target.value);
 
         e.target.style.height = "32px";

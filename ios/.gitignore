@@ -5,16 +5,6 @@ App/App/public
 DerivedData
 xcuserdata
 
-# macOS
-.DS_Store
-
-# VS Code / JetBrains
-.idea/
-.vscode/
-
-# Xcode user state
-*.xcuserstate
-
 # Cordova plugins for Capacitor
 capacitor-cordova-ios-plugins
 

@@ -1,5 +1,9 @@
 import { Capacitor } from "@capacitor/core";
-import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
+import {
+  Purchases,
+  LOG_LEVEL,
+  type PurchasesPackage,
+} from "@revenuecat/purchases-capacitor";
 
 const REVENUECAT_IOS_KEY = "appl_zIvyCipyQSePBmlxqazcxndDwrw";
 const REVENUECAT_ANDROID_KEY = "PASTE_ANDROID_PUBLIC_SDK_KEY_HERE";
@@ -19,9 +23,9 @@ export async function configureRevenueCat(userId?: string) {
   });
 
   console.log("RevenueCat configured successfully", {
-  platform,
-  userId,
-});
+    platform,
+    userId,
+  });
 
   configured = true;
 }
@@ -32,4 +36,10 @@ export async function getTalkioOfferings() {
 
 export async function getTalkioCustomerInfo() {
   return Purchases.getCustomerInfo();
+}
+
+export async function purchaseTalkioPackage(packageToPurchase: PurchasesPackage) {
+  return Purchases.purchasePackage({
+    aPackage: packageToPurchase,
+  });
 }

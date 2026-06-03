@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   GoogleAuthProvider,
-  signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
   signOut,
   reauthenticateWithPopup,

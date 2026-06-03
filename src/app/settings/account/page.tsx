@@ -38,7 +38,7 @@ export default function AccountSettingsPage() {
     const provider = new GoogleAuthProvider();
 
     try {
-      await signInWithRedirect(auth, provider);
+      await signInWithPopup(auth, provider);
     } catch (error: any) {
       console.error("Google sign-in failed:", error);
 

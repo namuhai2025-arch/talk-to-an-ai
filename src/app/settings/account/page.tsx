@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import {
   GoogleAuthProvider,
-  signInWithPopup,
+  OAuthProvider,
+  signInWithRedirect,
   getRedirectResult,
   signOut,
   reauthenticateWithPopup,
@@ -38,7 +39,7 @@ export default function AccountSettingsPage() {
     const provider = new GoogleAuthProvider();
 
     try {
-      await signInWithPopup(auth, provider);
+      await signInWithRedirect(auth, provider);
     } catch (error: any) {
       console.error("Google sign-in failed:", error);
 
@@ -49,6 +50,26 @@ export default function AccountSettingsPage() {
       setIsSigningIn(false);
     }
   };
+
+  const handleAppleSignIn = async () => {
+  if (isSigningIn) return;
+
+  setIsSigningIn(true);
+
+  const auth = getFirebaseAuth();
+  const provider = new OAuthProvider("apple.com");
+
+  provider.addScope("email");
+  provider.addScope("name");
+
+  try {
+    await signInWithRedirect(auth, provider);
+  } catch (error: any) {
+    console.error("Apple sign-in failed:", error);
+    alert("Apple sign in failed. Please try again.");
+    setIsSigningIn(false);
+  }
+};
 
   const handleSignOut = async () => {
   try {
@@ -109,7 +130,6 @@ export default function AccountSettingsPage() {
     setIsDeleting(false);
   }
 };
-
   return (
     <main className="min-h-screen bg-stone-50 px-5 pb-6 pt-[calc(env(safe-area-inset-top)+3.5rem)]">
       <div className="mx-auto max-w-md">
@@ -141,6 +161,16 @@ export default function AccountSettingsPage() {
             </span>
             {isSigningIn ? "Opening Google..." : "Continue with Google"}
           </button>
+
+          <button
+  type="button"
+  onClick={handleAppleSignIn}
+  disabled={isSigningIn}
+  className="mt-3 flex w-full items-center justify-center gap-3 rounded-2xl border border-stone-200 bg-black px-4 py-4 text-base font-medium text-white shadow-sm transition hover:bg-stone-900 disabled:pointer-events-none disabled:opacity-50"
+>
+  <span className="text-xl font-semibold"></span>
+  {isSigningIn ? "Opening Apple..." : "Continue with Apple"}
+</button>
 
           <button
             type="button"

@@ -191,11 +191,31 @@ return (
         </div>
       </section>
 
-      <p className="mt-14 text-center text-sm leading-relaxed text-stone-500">
-        Your conversations stay private.
-        <br />
-        Google sign-in is only used to secure and restore your subscription.
-      </p>
+      <div className="mt-14 text-center text-sm leading-relaxed text-stone-500">
+  <p>
+    Your conversations stay private.
+    <br />
+    Sign-in is only used to secure and restore your subscription.
+  </p>
+
+  <div className="mt-4 flex items-center justify-center gap-4">
+    <a
+      href="/terms"
+      className="font-medium text-emerald-700 underline underline-offset-4"
+    >
+      Terms of Use
+    </a>
+
+    <span className="text-stone-300">•</span>
+
+    <a
+      href="/privacy"
+      className="font-medium text-emerald-700 underline underline-offset-4"
+    >
+      Privacy Policy
+    </a>
+  </div>
+</div>
     </div>
   </main>
 );

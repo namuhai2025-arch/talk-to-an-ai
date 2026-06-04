@@ -120,35 +120,37 @@ export default function PaywallPage() {
   disabled
   className="relative cursor-not-allowed rounded-[30px] border-2 border-emerald-300 bg-white p-6 text-left opacity-80 shadow-[0_15px_50px_rgba(16,185,129,0.10)]"
 >
-            <div className="flex h-full min-h-[280px] flex-col justify-between">
-              <div>
-                <div className="absolute right-5 top-5 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
-                  COMING SOON
-                </div>
+  <div className="flex h-full min-h-[280px] flex-col justify-between">
+    <div>
+      <div className="absolute right-5 top-5 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+        COMING SOON
+      </div>
 
-                <p className="text-sm font-semibold uppercase tracking-wide text-emerald-600">
-                  Presence
-                </p>
+      <p className="text-sm font-semibold uppercase tracking-wide text-emerald-600">
+        Presence
+      </p>
 
-                <h2 className="mt-4 text-4xl font-semibold tracking-tight text-stone-950">
-                  $9.99
-                  <span className="ml-1 text-base font-normal text-stone-500">
-                    /month
-                  </span>
-                </h2>
+      <h2 className="mt-4 text-4xl font-semibold tracking-tight text-stone-950">
+        $9.99
+        <span className="ml-1 text-base font-normal text-stone-500">
+          /month
+        </span>
+      </h2>
 
-                <div className="mt-4 space-y-2 text-sm text-stone-600">
-  <div>✓ Voice Conversations</div>
-  <div>✓ Weekly Reflections</div>
-  <div>✓ Monthly Reflections</div>
-  <div>✓ Yearly Reflections</div>
-  <div>✓ Enhanced Continuity</div>
-</div>
-              <div className="mt-10 flex h-16 w-full items-center justify-center rounded-full bg-stone-200 text-base font-semibold text-stone-500">
-  Coming soon
-</div>
-            </div>
-          </button>
+      <div className="mt-4 space-y-2 text-sm text-stone-600">
+        <div>✓ Voice Conversations</div>
+        <div>✓ Weekly Reflections</div>
+        <div>✓ Monthly Reflections</div>
+        <div>✓ Yearly Reflections</div>
+        <div>✓ Enhanced Continuity</div>
+      </div>
+    </div>
+
+    <div className="mt-10 flex h-16 w-full items-center justify-center rounded-full bg-stone-200 text-base font-semibold text-stone-500">
+      Coming soon
+    </div>
+  </div>
+</button>
         </section>
 
         <section className="mx-auto mt-5 max-w-4xl rounded-[28px] border border-stone-200 bg-white/70 p-5 text-center shadow-sm backdrop-blur-xl">

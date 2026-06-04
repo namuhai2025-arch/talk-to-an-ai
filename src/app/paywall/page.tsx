@@ -116,14 +116,14 @@ export default function PaywallPage() {
           </button>
 
           <button
-            type="button"
-            onClick={() => selectPlan("presence", "monthly")}
-            className="relative rounded-[30px] border-2 border-emerald-500 bg-white p-6 text-left shadow-[0_15px_50px_rgba(16,185,129,0.16)] transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01]"
-          >
+  type="button"
+  disabled
+  className="relative cursor-not-allowed rounded-[30px] border-2 border-emerald-300 bg-white p-6 text-left opacity-80 shadow-[0_15px_50px_rgba(16,185,129,0.10)]"
+>
             <div className="flex h-full min-h-[280px] flex-col justify-between">
               <div>
                 <div className="absolute right-5 top-5 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
-                  Most immersive
+                  COMING SOON
                 </div>
 
                 <p className="text-sm font-semibold uppercase tracking-wide text-emerald-600">
@@ -143,9 +143,9 @@ export default function PaywallPage() {
                 </p>
               </div>
 
-              <div className="mt-10 flex h-16 w-full items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 text-base font-semibold text-white shadow-[0_12px_30px_rgba(16,185,129,0.22)]">
-                Continue with Presence
-              </div>
+              <div className="mt-10 flex h-16 w-full items-center justify-center rounded-full bg-stone-200 text-base font-semibold text-stone-500">
+  Coming soon
+</div>
             </div>
           </button>
         </section>

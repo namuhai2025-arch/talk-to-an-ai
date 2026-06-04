@@ -1,8 +1,33 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Share } from "@capacitor/share";
+import { getTalkioCustomerInfo } from "@/lib/revenuecat";
 
 export default function SettingsPage() {
+
+  const [planName, setPlanName] = useState("Free Plan");
+
+useEffect(() => {
+  async function loadPlan() {
+    try {
+      const result = await getTalkioCustomerInfo();
+
+      const active = result.customerInfo.entitlements.active;
+
+      if (active["presence"]) {
+        setPlanName("Talkio Presence");
+      } else if (active["Talkio Companion"]) {
+        setPlanName("Talkio Companion");
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  loadPlan();
+}, []);
+
   return (
     <main className="min-h-screen bg-stone-50 px-5 pb-6 pt-[calc(env(safe-area-inset-top)+3.5rem)]">
       <div className="mx-auto max-w-md">
@@ -29,8 +54,8 @@ export default function SettingsPage() {
 
           <div className="mt-2 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-stone-900">
-              Free Plan
-            </h2>
+  {planName}
+</h2>
 
             <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-700">
               Current

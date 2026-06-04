@@ -137,12 +137,13 @@ export default function PaywallPage() {
                   </span>
                 </h2>
 
-                <p className="mt-4 text-sm leading-6 text-stone-600">
-                  A deeper Talkio experience with voice, richer continuity, and
-                  more immersive support.
-                </p>
-              </div>
-
+                <div className="mt-4 space-y-2 text-sm text-stone-600">
+  <div>✓ Voice Conversations</div>
+  <div>✓ Weekly Reflections</div>
+  <div>✓ Monthly Reflections</div>
+  <div>✓ Yearly Reflections</div>
+  <div>✓ Enhanced Continuity</div>
+</div>
               <div className="mt-10 flex h-16 w-full items-center justify-center rounded-full bg-stone-200 text-base font-semibold text-stone-500">
   Coming soon
 </div>

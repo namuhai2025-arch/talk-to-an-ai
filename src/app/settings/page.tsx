@@ -138,6 +138,22 @@ export default function SettingsPage() {
             </div>
             <span className="text-stone-400">›</span>
           </button>
+
+          <div className="mx-5 border-t border-stone-100" />
+
+          <button
+            type="button"
+            onClick={() => (window.location.href = "/support")}
+            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+          >
+            <div>
+              <p className="font-medium text-stone-900">Support</p>
+              <p className="mt-1 text-sm text-stone-500">
+                Get help, subscriptions, privacy, and contact information.
+              </p>
+            </div>
+            <span className="text-stone-400">›</span>
+          </button>
         </section>
 
         <section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-sm">
@@ -168,7 +184,25 @@ export default function SettingsPage() {
           </button>
         </section>
 
-        <p className="mt-8 text-center text-xs leading-5 text-stone-400">
+        <div className="mt-8 text-center text-sm">
+          <a href="/support" className="text-emerald-700 underline">
+            Support
+          </a>
+
+          <span className="mx-2 text-stone-300">•</span>
+
+          <a href="/privacy" className="text-emerald-700 underline">
+            Privacy Policy
+          </a>
+
+          <span className="mx-2 text-stone-300">•</span>
+
+          <a href="/terms" className="text-emerald-700 underline">
+            Terms of Use
+          </a>
+        </div>
+
+        <p className="mt-6 text-center text-xs leading-5 text-stone-400">
           Talkio is an AI conversation tool, not emergency or medical care.
         </p>
       </div>

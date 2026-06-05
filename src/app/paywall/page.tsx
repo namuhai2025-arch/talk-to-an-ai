@@ -88,7 +88,7 @@ export default function PaywallPage() {
               <div>
                 <div className="flex items-start justify-between gap-4">
                   <p className="text-sm font-semibold uppercase tracking-wide text-emerald-600">
-                    Companion
+                    Talkio Companion Monthly
                   </p>
 
                   <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -110,7 +110,7 @@ export default function PaywallPage() {
               </div>
 
               <div className="mt-10 flex h-16 w-full items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 text-base font-semibold text-white shadow-[0_12px_30px_rgba(16,185,129,0.22)]">
-                Continue with Companion
+                Continue with Talkio Companion Monthly
               </div>
             </div>
           </button>
@@ -191,31 +191,31 @@ export default function PaywallPage() {
         </section>
 
         <div className="mt-14 text-center text-sm leading-relaxed text-stone-500">
-          <p>
-            Your conversations stay private.
-            <br />
-            Sign-in is only used to secure and restore your subscription.
-          </p>
+  <p>
+    Auto-renewable subscription.
+    <br />
+    Talkio Companion Monthly: $4.99/month.
+    <br />
+    Length: 1 month.
+    <br />
+    Subscription renews monthly unless canceled at least 24 hours before renewal.
+  </p>
 
-          <div className="mt-4 flex items-center justify-center gap-4">
-            <a
-              href="/terms"
-              className="font-medium text-emerald-700 underline underline-offset-4"
-            >
-              Terms of Use
-            </a>
+  <div className="mt-4 flex items-center justify-center gap-4">
+    <a
+      href="/terms"
+      className="font-medium text-emerald-700 underline underline-offset-4"
+    >
+      Terms of Use
+    </a>
 
-            <span className="text-stone-300">•</span>
+    <span className="text-stone-300">•</span>
 
-            <a
-              href="/privacy"
-              className="font-medium text-emerald-700 underline underline-offset-4"
-            >
-              Privacy Policy
-            </a>
-          </div>
-        </div>
-      </div>
-    </main>
-  );
-}
+    <a
+      href="/privacy"
+      className="font-medium text-emerald-700 underline underline-offset-4"
+    >
+      Privacy Policy
+    </a>
+  </div>
+</div>

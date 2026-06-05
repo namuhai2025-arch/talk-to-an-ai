@@ -22,7 +22,7 @@ export default function AccountSettingsPage() {
     getRedirectResult(auth)
       .then((result) => {
         if (result?.user) {
-          console.log("Google sign in success");
+          console.log("Sign in success");
         }
       })
       .catch((error) => {

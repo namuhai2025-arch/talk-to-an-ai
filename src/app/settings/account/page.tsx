@@ -97,6 +97,20 @@ export default function AccountSettingsPage() {
   } catch (error: any) {
     console.error("Apple sign-in failed:", error);
 
+    alert(
+      `Apple sign in failed.\n\nCode: ${
+        error?.code || "none"
+      }\nMessage: ${error?.message || JSON.stringify(error)}`
+    );
+
+    setIsSigningIn(false);
+  }
+};
+
+    await signInWithRedirect(auth, provider);
+  } catch (error: any) {
+    console.error("Apple sign-in failed:", error);
+
     if (error?.code !== "USER_CANCELLED") {
       alert("Apple sign in failed. Please try again.");
     }

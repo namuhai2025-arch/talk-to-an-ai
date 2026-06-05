@@ -60,11 +60,12 @@ export default function PaywallPage() {
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-[28px] bg-white p-6 text-center shadow-2xl">
             <h2 className="text-2xl font-semibold text-stone-950">
-              Subscription activated
+              Welcome to Talkio Companion
             </h2>
 
             <p className="mt-3 text-sm leading-6 text-stone-600">
-              Thank you for supporting Talkio. Your Companion plan is now active.
+              Your subscription is active and ready to use.
+              Thank you for supporting Talkio.
             </p>
 
             <button

@@ -71,7 +71,7 @@ export default function PaywallPage() {
             <button
               type="button"
               onClick={() => (window.location.href = "/settings")}
-              className="mt-6 flex h-14 w-full items-center justify-center rounded-full bg-gradient-to-r from-emerald-600 to-teal-500 text-base font-semibold text-white shadow-[0_15px_40px_rgba(0,199,129,0.35)] transition-all duration-200"
+              className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-600 hover:shadow-lg"
             >
               Continue
             </button>
@@ -134,7 +134,7 @@ export default function PaywallPage() {
                 </p>
               </div>
 
-              <div className="mt-10 flex h-16 w-full items-center justify-center rounded-full bg-gradient-to-r from-emerald-600 to-teal-500 text-base font-semibold text-white shadow-[0_15px_40px_rgba(0,199,129,0.35)] transition-all duration-200">
+              <div className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-600 hover:shadow-lg">
                 Talkio Companion 
               </div>
 

@@ -13,9 +13,9 @@ import {
 
 import { Capacitor } from "@capacitor/core";
 import {
-  SignInWithApple,
-  type SignInWithAppleResponse,
-} from "@capacitor-community/apple-sign-in";
+  AppleSignIn,
+  SignInScope,
+} from "@capawesome/capacitor-apple-sign-in";
 
 import { getFirebaseAuth } from "@/lib/firebase";
 
@@ -68,30 +68,26 @@ export default function AccountSettingsPage() {
 
   try {
     if (Capacitor.getPlatform() === "ios") {
-      const result: SignInWithAppleResponse =
-        await SignInWithApple.authorize({
-          clientId: "com.talkiochat.app",
-          redirectURI: "",
-          scopes: "email name",
-          state: "talkio",
-        });
+  const result = await AppleSignIn.signIn({
+    scopes: [SignInScope.Email, SignInScope.FullName],
+  });
 
-      const idToken = result.response.identityToken;
+  const idToken = result.idToken;
 
-      if (!idToken) {
-        throw new Error("No Apple identity token returned.");
-      }
+  if (!idToken) {
+    throw new Error("No Apple identity token returned.");
+  }
 
-      const credential = provider.credential({
-        idToken,
-      });
+  const credential = provider.credential({
+    idToken,
+  });
 
-      await signInWithCredential(auth, credential);
+  await signInWithCredential(auth, credential);
 
-      console.log("Apple native sign in success");
-      window.location.href = "/settings";
-      return;
-    }
+  console.log("Apple native sign in success");
+  window.location.href = "/settings";
+  return;
+}
 
     await signInWithRedirect(auth, provider);
   } catch (error: any) {

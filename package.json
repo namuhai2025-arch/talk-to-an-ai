@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@capacitor-community/apple-sign-in": "^7.1.0",
     "@capacitor/android": "^8.0.2",
     "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^8.0.2",

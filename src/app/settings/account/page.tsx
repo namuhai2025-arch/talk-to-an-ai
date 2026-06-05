@@ -5,11 +5,17 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   signInWithRedirect,
-  signInWithPopup,
   getRedirectResult,
   signOut,
   reauthenticateWithPopup,
+  signInWithCredential,
 } from "firebase/auth";
+
+import { Capacitor } from "@capacitor/core";
+import {
+  SignInWithApple,
+  type SignInWithAppleResponse,
+} from "@capacitor-community/apple-sign-in";
 
 import { getFirebaseAuth } from "@/lib/firebase";
 
@@ -60,20 +66,38 @@ export default function AccountSettingsPage() {
   const auth = getFirebaseAuth();
   const provider = new OAuthProvider("apple.com");
 
-  provider.addScope("email");
-  provider.addScope("name");
-
   try {
-    const result = await signInWithPopup(auth, provider);
+    if (Capacitor.getPlatform() === "ios") {
+      const result: SignInWithAppleResponse =
+        await SignInWithApple.authorize({
+          clientId: "com.talkiochat.app",
+          redirectURI: "",
+          scopes: "email name",
+          state: "talkio",
+        });
 
-    if (result.user) {
-      console.log("Apple sign in success");
+      const idToken = result.response.identityToken;
+
+      if (!idToken) {
+        throw new Error("No Apple identity token returned.");
+      }
+
+      const credential = provider.credential({
+        idToken,
+      });
+
+      await signInWithCredential(auth, credential);
+
+      console.log("Apple native sign in success");
       window.location.href = "/settings";
+      return;
     }
+
+    await signInWithRedirect(auth, provider);
   } catch (error: any) {
     console.error("Apple sign-in failed:", error);
 
-    if (error?.code !== "auth/popup-closed-by-user") {
+    if (error?.code !== "USER_CANCELLED") {
       alert("Apple sign in failed. Please try again.");
     }
 

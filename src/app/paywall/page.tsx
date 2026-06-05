@@ -134,7 +134,7 @@ export default function PaywallPage() {
               </div>
 
               <div className="mt-10 flex h-16 w-full items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 text-base font-semibold text-white shadow-[0_12px_30px_rgba(16,185,129,0.22)]">
-                Continue with Talkio Companion Monthly
+                Talkio Companion 
               </div>
             </div>
           </button>

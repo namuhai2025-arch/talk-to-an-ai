@@ -71,7 +71,7 @@ export default function PaywallPage() {
             <button
               type="button"
               onClick={() => (window.location.href = "/settings")}
-              className="mt-6 flex h-14 w-full items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 text-base font-semibold text-white shadow-[0_12px_30px_rgba(16,185,129,0.25)]"
+              className="mt-6 flex h-14 w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00C781] to-[#18D4C3] text-base font-semibold text-white shadow-[0_15px_40px_rgba(0,199,129,0.35)] transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
             >
               Continue
             </button>
@@ -134,17 +134,19 @@ export default function PaywallPage() {
                 </p>
               </div>
 
-              <div className="mt-10 flex h-16 w-full items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 text-base font-semibold text-white shadow-[0_12px_30px_rgba(16,185,129,0.22)]">
+              <div className="mt-10 flex h-16 w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00C781] to-[#18D4C3] text-base font-semibold text-white shadow-[0_15px_40px_rgba(0,199,129,0.35)] transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]">
                 Talkio Companion 
               </div>
-            </div>
-          </button>
 
-          <button
-  type="button"
-  disabled
-  className="relative cursor-not-allowed rounded-[30px] border-2 border-emerald-300 bg-white p-6 text-left opacity-80 shadow-[0_15px_50px_rgba(16,185,129,0.10)]"
->
+              </div>
+              </button>
+
+              <button
+                type="button"
+                disabled
+                className="relative cursor-not-allowed rounded-[30px] border-2 border-emerald-300 bg-white p-6 text-left opacity-80 shadow-[0_15px_50px_rgba(16,185,129,0.10)]"
+               >
+            
   <div className="flex h-full min-h-[280px] flex-col justify-between">
     <div>
       <div className="absolute right-5 top-5 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">

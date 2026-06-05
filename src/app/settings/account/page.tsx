@@ -107,18 +107,6 @@ export default function AccountSettingsPage() {
   }
 };
 
-    await signInWithRedirect(auth, provider);
-  } catch (error: any) {
-    console.error("Apple sign-in failed:", error);
-
-    if (error?.code !== "USER_CANCELLED") {
-      alert("Apple sign in failed. Please try again.");
-    }
-
-    setIsSigningIn(false);
-  }
-};
-
   const handleSignOut = async () => {
   try {
     const auth = getFirebaseAuth();

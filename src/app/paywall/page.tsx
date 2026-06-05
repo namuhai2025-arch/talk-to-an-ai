@@ -215,7 +215,11 @@ export default function PaywallPage() {
       href="/privacy"
       className="font-medium text-emerald-700 underline underline-offset-4"
     >
-      Privacy Policy
-    </a>
-  </div>
-</div>
+                  Privacy Policy
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+);
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   getTalkioOfferings,
   purchaseTalkioPackage,
@@ -9,6 +10,8 @@ type TalkioPlan = "companion" | "presence" | "professionals";
 type BillingCycle = "monthly" | "yearly";
 
 export default function PaywallPage() {
+  const [showSuccess, setShowSuccess] = useState(false);
+
   const selectPlan = async (
     plan: TalkioPlan,
     billingCycle: BillingCycle
@@ -40,8 +43,7 @@ export default function PaywallPage() {
       const purchaseResult = await purchaseTalkioPackage(packageToPurchase);
 
       if (purchaseResult.customerInfo) {
-        alert("Subscription activated. Thank you for supporting Talkio.");
-        window.location.href = "/";
+        setShowSuccess(true);
       }
     } catch (error: any) {
       console.error("Purchase failed:", error);
@@ -54,6 +56,28 @@ export default function PaywallPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f4fbf7] via-white to-[#f7faf8] px-5 py-6 text-stone-900">
+      {showSuccess && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/35 px-5 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-[28px] bg-white p-6 text-center shadow-2xl">
+            <h2 className="text-2xl font-semibold text-stone-950">
+              Subscription activated
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-stone-600">
+              Thank you for supporting Talkio. Your Companion plan is now active.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => (window.location.href = "/settings")}
+              className="mt-6 flex h-14 w-full items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 text-base font-semibold text-white shadow-[0_12px_30px_rgba(16,185,129,0.25)]"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto max-w-5xl pt-2">
         <button
           type="button"

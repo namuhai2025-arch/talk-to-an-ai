@@ -1,119 +1,211 @@
-export default function SupportPage() {
-  return (
-    <main className="min-h-screen bg-[#f5efe6] px-6 py-8 text-stone-900">
-      <section className="mx-auto max-w-2xl rounded-3xl bg-white/70 p-6 shadow-sm">
-        <a href="/" className="text-sm text-stone-500 hover:text-stone-800">
-          ← Back to Talkio
-        </a>
+"use client";
 
-        <h1 className="mt-6 text-4xl font-semibold tracking-tight">
-          Talkio Support
+import { useEffect, useState } from "react";
+import { Share } from "@capacitor/share";
+import { getTalkioCustomerInfo } from "@/lib/revenuecat";
+
+export default function SettingsPage() {
+  const [planName, setPlanName] = useState("Free Plan");
+
+  useEffect(() => {
+    async function loadPlan() {
+      try {
+        const result = await getTalkioCustomerInfo();
+        const active = result.customerInfo.entitlements.active;
+
+        if (active["presence"]) {
+          setPlanName("Talkio Presence");
+        } else if (active["Talkio Companion"]) {
+          setPlanName("Talkio Companion");
+        } else {
+          setPlanName("Free Plan");
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    }
+
+    loadPlan();
+  }, []);
+
+  const isFree = planName === "Free Plan";
+  const isCompanion = planName === "Talkio Companion";
+  const isPresence = planName === "Talkio Presence";
+
+  const planSubtitle = isPresence
+    ? "Highest plan active"
+    : isCompanion
+      ? "Companion is active"
+      : "Upgrade to unlock unlimited conversations";
+
+  const planDescription = isPresence
+    ? "Your Presence subscription is active. Voice, continuity, and deeper Talkio access are unlocked."
+    : isCompanion
+      ? "Your Companion subscription is active. You can upgrade to Presence for voice and deeper continuity."
+      : "Use Talkio freely until your daily limit. Upgrade anytime when you want to keep chatting.";
+
+  return (
+    <main className="min-h-screen bg-stone-50 px-5 pb-6 pt-[calc(env(safe-area-inset-top)+3.5rem)]">
+      <div className="mx-auto max-w-md">
+        <button
+          type="button"
+          onClick={() => (window.location.href = "/")}
+          className="mb-6 text-sm text-stone-500 hover:text-stone-800"
+        >
+          ← Back to Talkio
+        </button>
+
+        <h1 className="text-3xl font-semibold tracking-tight text-stone-900">
+          Settings
         </h1>
 
-        <p className="mt-4 text-lg leading-8 text-stone-700">
-          Questions, subscriptions, privacy requests, or account support — we're
-          here to help.
+        <p className="mt-1 text-sm text-stone-500">
+          Control your account and conversation experience.
         </p>
 
-        <div className="mt-5 flex flex-wrap gap-4 text-sm">
+        <section className="mt-8 rounded-3xl bg-white p-5 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
+            Plan
+          </p>
+
+          <div className="mt-2 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-stone-900">
+              {planName}
+            </h2>
+
+            <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-700">
+              Current
+            </span>
+          </div>
+
+          <p className="mt-1 text-sm font-medium text-emerald-600">
+            {planSubtitle}
+          </p>
+
+          <p className="mt-2 text-sm leading-6 text-stone-500">
+            {planDescription}
+          </p>
+
+          {(isFree || isCompanion) && (
+            <button
+              type="button"
+              onClick={() => (window.location.href = "/paywall")}
+              className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-600 hover:shadow-lg"
+            >
+              {isCompanion
+                ? "Upgrade to Talkio Presence"
+                : "Upgrade to Talkio Companion"}
+            </button>
+          )}
+
+          {isPresence && (
+            <div className="mt-5 rounded-2xl bg-emerald-100 px-4 py-3 text-center text-sm font-semibold text-emerald-700">
+              Current Highest Plan
+            </div>
+          )}
+        </section>
+
+        <section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-sm">
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.setItem("openNicknamePrompt", "true");
+              window.location.href = "/";
+            }}
+            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+          >
+            <div>
+              <p className="font-medium text-stone-900">Nickname</p>
+              <p className="mt-1 text-sm text-stone-500">
+                Personalize how Talkio addresses you.
+              </p>
+            </div>
+            <span className="text-stone-400">›</span>
+          </button>
+
+          <div className="mx-5 border-t border-stone-100" />
+
+          <button
+            type="button"
+            onClick={() => (window.location.href = "/settings/account")}
+            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+          >
+            <div>
+              <p className="font-medium text-stone-900">Account</p>
+              <p className="mt-1 text-sm text-stone-500">
+                Sign in, sign out, or delete account data.
+              </p>
+            </div>
+            <span className="text-stone-400">›</span>
+          </button>
+
+          <div className="mx-5 border-t border-stone-100" />
+
+          <button
+            type="button"
+            onClick={() => (window.location.href = "/support")}
+            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+          >
+            <div>
+              <p className="font-medium text-stone-900">Support</p>
+              <p className="mt-1 text-sm text-stone-500">
+                Get help, subscriptions, privacy, and contact information.
+              </p>
+            </div>
+            <span className="text-stone-400">›</span>
+          </button>
+        </section>
+
+        <section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-sm">
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await Share.share({
+                  title: "Talkio",
+                  text: "A calm AI space to think, breathe, and talk things through.",
+                  url: "https://talkiochat.com",
+                  dialogTitle: "Share Talkio",
+                });
+              } catch (err) {
+                console.log(err);
+              }
+            }}
+            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+          >
+            <div>
+              <p className="font-medium text-stone-900">Share Talkio</p>
+              <p className="mt-1 text-sm text-stone-500">
+                Send Talkio to someone who could use a calm space to talk.
+              </p>
+            </div>
+
+            <span className="text-stone-400">↗</span>
+          </button>
+        </section>
+
+        <div className="mt-8 text-center text-sm">
+          <a href="/support" className="text-emerald-700 underline">
+            Support
+          </a>
+
+          <span className="mx-2 text-stone-300">•</span>
+
           <a href="/privacy" className="text-emerald-700 underline">
             Privacy Policy
           </a>
-          <a href="/terms" className="text-emerald-700 underline">
-            Terms of Use
-          </a>
-        </div>
 
-        <div className="mt-8 rounded-2xl bg-stone-50 p-5 text-sm leading-7 text-stone-700">
-          <p className="font-semibold text-stone-900">How can we help?</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            <li>Subscription questions</li>
-            <li>Billing issues</li>
-            <li>Account access</li>
-            <li>Privacy requests</li>
-            <li>General Talkio support</li>
-          </ul>
-        </div>
-
-        <div className="mt-6 space-y-3">
-          <a
-            href="mailto:support@talkiochat.com?subject=Talkio%20Support%20Request"
-            className="block rounded-2xl border border-stone-200 bg-white p-4 shadow-sm transition hover:bg-stone-50"
-          >
-            <p className="font-semibold">Contact Support</p>
-            <p className="mt-1 text-sm text-stone-500">
-              Tap to email support@talkiochat.com
-            </p>
-          </a>
-
-          <a
-            href="mailto:support@talkiochat.com?subject=Talkio%20Subscription%20Support"
-            className="block rounded-2xl border border-stone-200 bg-white p-4 shadow-sm transition hover:bg-stone-50"
-          >
-            <p className="font-semibold">Subscription Support</p>
-            <p className="mt-1 text-sm text-stone-500">
-              Need help with Companion subscriptions, billing questions, renewal
-              issues, or cancellation requests.
-            </p>
-          </a>
-
-          <a
-            href="mailto:support@talkiochat.com?subject=Talkio%20Account%20Support"
-            className="block rounded-2xl border border-stone-200 bg-white p-4 shadow-sm transition hover:bg-stone-50"
-          >
-            <p className="font-semibold">Account Support</p>
-            <p className="mt-1 text-sm text-stone-500">
-              Need help signing in, restoring a subscription, or deleting your
-              account? Contact support.
-            </p>
-          </a>
-
-          <a
-            href="mailto:privacy@talkiochat.com?subject=Talkio%20Privacy%20Request"
-            className="block rounded-2xl border border-stone-200 bg-white p-4 shadow-sm transition hover:bg-stone-50"
-          >
-            <p className="font-semibold">Privacy Requests</p>
-            <p className="mt-1 text-sm text-stone-500">
-              Tap to email privacy@talkiochat.com
-            </p>
-          </a>
-
-          <a
-            href="mailto:hello@talkiochat.com?subject=Talkio%20General%20Question"
-            className="block rounded-2xl border border-stone-200 bg-white p-4 shadow-sm transition hover:bg-stone-50"
-          >
-            <p className="font-semibold">General Questions</p>
-            <p className="mt-1 text-sm text-stone-500">
-              Tap to email hello@talkiochat.com
-            </p>
-          </a>
-        </div>
-
-        <div className="mt-8 rounded-2xl bg-emerald-50 p-5 text-sm leading-6 text-emerald-800">
-          Typical response time: 24–48 hours.
-          <br />
-          Support available worldwide.
-        </div>
-
-        <div className="mt-6 flex flex-wrap justify-center gap-5 text-sm">
-          <a href="/privacy" className="text-emerald-700 underline">
-            Privacy Policy
-          </a>
+          <span className="mx-2 text-stone-300">•</span>
 
           <a href="/terms" className="text-emerald-700 underline">
             Terms of Use
-          </a>
-
-          <a href="/" className="text-emerald-700 underline">
-            Main Website
           </a>
         </div>
 
         <p className="mt-6 text-center text-xs leading-5 text-stone-400">
-          Talkio Version 1.0
-          <br />© 2026 Talkio
+          Talkio is an AI conversation tool, not emergency or medical care.
         </p>
-      </section>
+      </div>
     </main>
   );
 }

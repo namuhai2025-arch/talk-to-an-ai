@@ -5,6 +5,7 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
   signOut,
   reauthenticateWithPopup,
@@ -63,10 +64,19 @@ export default function AccountSettingsPage() {
   provider.addScope("name");
 
   try {
-    await signInWithRedirect(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+
+    if (result.user) {
+      console.log("Apple sign in success");
+      window.location.href = "/settings";
+    }
   } catch (error: any) {
     console.error("Apple sign-in failed:", error);
-    alert("Apple sign in failed. Please try again.");
+
+    if (error?.code !== "auth/popup-closed-by-user") {
+      alert("Apple sign in failed. Please try again.");
+    }
+
     setIsSigningIn(false);
   }
 };

@@ -128,15 +128,15 @@ export default function PaywallPage() {
                   </span>
                 </h2>
 
-                <p className="mt-4 text-sm leading-6 text-stone-600">
-                  A calm daily Talkio companion with deeper conversations,
-                  continuity, and emotional support.
-                </p>
+                <p className="mt-4 max-w-[95%] text-[15px] leading-[1.35] text-stone-600">
+  A calm daily Talkio companion with deeper conversations,
+  continuity, and emotional support.
+</p>
               </div>
 
-              <div className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-600 hover:shadow-lg">
-                Talkio Companion 
-              </div>
+              <div className="mt-7 flex h-14 w-full items-center justify-center rounded-full bg-[#10C67A] px-4 text-[16px] font-semibold tracking-[-0.01em] text-white shadow-[0_10px_25px_rgba(16,198,122,0.22)] transition-all hover:bg-[#0FBF74] hover:shadow-md">
+  Talkio Companion
+</div>
 
               </div>
               </button>
@@ -173,7 +173,7 @@ export default function PaywallPage() {
       </div>
     </div>
 
-    <div className="mt-10 flex h-16 w-full items-center justify-center rounded-full bg-stone-200 text-base font-semibold text-stone-500">
+    <div className="mt-7 flex h-16 w-full items-center justify-center rounded-full bg-stone-200 text-base font-semibold text-stone-500">
       Coming soon
     </div>
   </div>

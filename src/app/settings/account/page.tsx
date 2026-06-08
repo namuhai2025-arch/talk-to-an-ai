@@ -72,21 +72,34 @@ export default function AccountSettingsPage() {
     scopes: [SignInScope.Email, SignInScope.FullName],
   });
 
-  const idToken = result.idToken;
+  const idToken =
+  (result as any).idToken ||
+  (result as any).identityToken;
+
+  console.log("Apple result:", result);
 
   if (!idToken) {
     throw new Error("No Apple identity token returned.");
   }
 
   const credential = provider.credential({
-    idToken,
-  });
+  idToken,
+});
 
-  await signInWithCredential(auth, credential);
+const userCredential = await signInWithCredential(
+  auth,
+  credential
+);
 
-  console.log("Apple native sign in success");
-  window.location.href = "/settings";
-  return;
+console.log(
+  "Apple native sign in success",
+  userCredential.user.uid
+);
+
+alert("Apple sign in successful.");
+
+window.location.href = "/settings";
+return;
 }
 
     await signInWithRedirect(auth, provider);

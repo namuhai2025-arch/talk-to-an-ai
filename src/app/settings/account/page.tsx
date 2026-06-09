@@ -96,8 +96,6 @@ console.log(
   userCredential.user.uid
 );
 
-alert("Apple sign in successful.");
-
 window.location.href = "/settings";
 return;
 }

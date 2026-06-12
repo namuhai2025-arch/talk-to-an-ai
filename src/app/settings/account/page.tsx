@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import {
   GoogleAuthProvider,
   OAuthProvider,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   signOut,
   reauthenticateWithPopup,
   signInWithCredential,
@@ -23,19 +22,38 @@ export default function AccountSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
 
-  useEffect(() => {
-    const auth = getFirebaseAuth();
+  const handleGoogleSignIn = async () => {
+  if (isSigningIn) return;
 
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) {
-          console.log("Sign in success");
-        }
-      })
-      .catch((error) => {
-        console.error("Google redirect failed:", error);
-      });
-  }, []);
+  setIsSigningIn(true);
+
+  const auth = getFirebaseAuth();
+  const provider = new GoogleAuthProvider();
+
+  provider.setCustomParameters({
+    prompt: "select_account",
+  });
+
+  try {
+    const result = await signInWithPopup(auth, provider);
+
+    console.log("Google sign in success", result.user.uid);
+
+    localStorage.removeItem("talkio_signed_out");
+
+    window.location.href = "/settings";
+  } catch (error: any) {
+    console.error("Google sign-in failed:", error);
+
+    alert(
+      `Google sign in failed.\n\nCode: ${
+        error?.code || "none"
+      }\nMessage: ${error?.message || JSON.stringify(error)}`
+    );
+
+    setIsSigningIn(false);
+  }
+};
 
   const handleGoogleSignIn = async () => {
     if (isSigningIn) return;

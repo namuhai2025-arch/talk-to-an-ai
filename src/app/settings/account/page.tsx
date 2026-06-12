@@ -5,6 +5,7 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   reauthenticateWithPopup,
   signInWithCredential,
@@ -54,27 +55,6 @@ export default function AccountSettingsPage() {
     setIsSigningIn(false);
   }
 };
-
-  const handleGoogleSignIn = async () => {
-    if (isSigningIn) return;
-
-    setIsSigningIn(true);
-
-    const auth = getFirebaseAuth();
-    const provider = new GoogleAuthProvider();
-
-    try {
-      await signInWithRedirect(auth, provider);
-    } catch (error: any) {
-      console.error("Google sign-in failed:", error);
-
-      if (error?.code !== "auth/cancelled-popup-request") {
-        alert("Google sign in failed. Please try again.");
-      }
-
-      setIsSigningIn(false);
-    }
-  };
 
   const handleAppleSignIn = async () => {
   if (isSigningIn) return;

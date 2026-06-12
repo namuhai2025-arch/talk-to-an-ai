@@ -55,7 +55,7 @@ export default function TalkioOnboarding() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-50 text-stone-900 flex items-center justify-center px-6 py-10">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_15%_25%,rgba(120,144,111,0.16),transparent_28%),radial-gradient(circle_at_85%_70%,rgba(216,181,137,0.18),transparent_30%),linear-gradient(180deg,#f7f1e8,#fbf7f0)] text-stone-900 flex items-center justify-center px-6 py-10">
       <div className="w-full max-w-md">
         <div className="mb-8 flex items-center justify-between">
           <div className="flex gap-2">

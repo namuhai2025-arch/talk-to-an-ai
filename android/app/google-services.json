@@ -12,7 +12,20 @@
           "package_name": "com.talkio.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "813406735573-n2th0ui2rge3kb016jicleuugtpdahak.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.talkio.app",
+            "certificate_hash": "25bd095469c2e4686e10f8321916b9664b38b2e6"
+          }
+        },
+        {
+          "client_id": "813406735573-visb4md4pcm4s10krdfcfh9qccanb264.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBunVyNTE5w0bBp6JVgrzepRaxDxmQv2NE"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "813406735573-k50np3eu9nniu2pd4hmp2f4hm6hfv5l6.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "813406735573-245sof703eeo2glu42hqolqr7dste06a.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.talkiochat.app"
+              }
+            }
+          ]
         }
       }
     }

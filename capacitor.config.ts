@@ -12,6 +12,10 @@ const config: CapacitorConfig = {
   },
 
   plugins: {
+    FirebaseAuthentication: {
+      providers: ["google.com"]
+    },
+
     SystemBars: {
       insetsHandling: 'css',
       style: 'DARK',

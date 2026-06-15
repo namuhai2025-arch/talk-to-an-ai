@@ -6,14 +6,18 @@ import {
   configureRevenueCat,
   getTalkioCustomerInfo,
 } from "@/lib/revenuecat";
+import { onAuthStateChanged } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase";
 
 export default function SettingsPage() {
   const [planName, setPlanName] = useState("Free Plan");
 
   useEffect(() => {
-  async function loadPlan() {
+  const auth = getFirebaseAuth();
+
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
     try {
-      await configureRevenueCat();
+      await configureRevenueCat(user?.uid);
 
       const result = await getTalkioCustomerInfo();
 
@@ -25,6 +29,7 @@ export default function SettingsPage() {
       const active = result.customerInfo.entitlements.active || {};
 
       console.log("RevenueCat active entitlements:", active);
+      console.log("RevenueCat app user:", user?.uid);
 
       if (active["presence"]) {
         setPlanName("Talkio Presence");
@@ -37,9 +42,9 @@ export default function SettingsPage() {
       console.log("Failed to load plan:", err);
       setPlanName("Free Plan");
     }
-  }
+  });
 
-  loadPlan();
+  return () => unsubscribe();
 }, []);
 
   const isFree = planName === "Free Plan";

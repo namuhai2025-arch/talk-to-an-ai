@@ -7,7 +7,7 @@ import {
   purchaseTalkioPackage,
 } from "@/lib/revenuecat";
 
-type TalkioPlan = "companion" | "presence" | "professionals";
+type TalkioPlan = "companion";
 type BillingCycle = "monthly" | "yearly";
 
 export default function PaywallPage() {
@@ -22,19 +22,14 @@ export default function PaywallPage() {
 
       const offerings = await getTalkioOfferings();
 
-console.log("RevenueCat offerings:", offerings);
+      console.log("RevenueCat offerings:", offerings);
 
-if (!offerings || !offerings.current) {
-  alert("Subscriptions are not available yet. Please try again later.");
-  return;
-}
-
-const currentOffering = offerings.current;
-
-      if (!currentOffering) {
+      if (!offerings || !offerings.current) {
         alert("Subscriptions are not available yet. Please try again later.");
         return;
       }
+
+      const currentOffering = offerings.current;
 
       const packageToPurchase = currentOffering.availablePackages.find((pkg) => {
         const identifier = pkg.identifier.toLowerCase();
@@ -62,10 +57,10 @@ const currentOffering = offerings.current;
       if (error?.userCancelled) return;
 
       alert(
-  `Purchase failed.\n\nCode: ${error?.code || "none"}\nMessage: ${
-    error?.message || JSON.stringify(error)
-  }`
-);
+        `Purchase failed.\n\nCode: ${error?.code || "none"}\nMessage: ${
+          error?.message || JSON.stringify(error)
+        }`
+      );
     }
   };
 
@@ -79,8 +74,8 @@ const currentOffering = offerings.current;
             </h2>
 
             <p className="mt-3 text-sm leading-6 text-stone-600">
-              Your subscription is active and ready to use.
-              Thank you for supporting Talkio.
+              Your subscription is active and ready to use. Thank you for
+              supporting Talkio.
             </p>
 
             <button
@@ -109,51 +104,52 @@ const currentOffering = offerings.current;
           </p>
 
           <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-stone-950 md:text-[58px]">
-            You don't have to carry it all.
-Let it out.
+            You don&apos;t have to carry it all.
+            <br />
+            Let it out.
           </h1>
 
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-stone-700">
-            Start free. Vent, reflect, and feel lighter. Upgrade only when you want deeper access.
+            Start free. Vent, reflect, and feel lighter. Upgrade only when you
+            want deeper access.
           </p>
         </section>
 
-        <section className="mx-auto mt-14 grid max-w-4xl gap-5 md:grid-cols-3">
-
+        <section className="mx-auto mt-14 grid max-w-3xl gap-5 md:grid-cols-2">
           <button
-  type="button"
-  onClick={() => (window.location.href = "/")}
-  className="rounded-[30px] border border-emerald-200 bg-white/90 p-6 text-left shadow-[0_10px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md"
->
-  <div className="flex h-full min-h-[280px] flex-col justify-between">
-    <div>
-      <div className="flex items-start justify-between gap-4">
-        <p className="text-sm font-semibold uppercase tracking-wide text-emerald-600">
-          Free
-        </p>
+            type="button"
+            onClick={() => (window.location.href = "/")}
+            className="rounded-[30px] border border-emerald-200 bg-white/90 p-6 text-left shadow-[0_10px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md"
+          >
+            <div className="flex h-full min-h-[280px] flex-col justify-between">
+              <div>
+                <div className="flex items-start justify-between gap-4">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-emerald-600">
+                    Free
+                  </p>
 
-        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-  Start Free
-</span>
-      </div>
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                    Start Free
+                  </span>
+                </div>
 
-      <h2 className="mt-4 text-4xl font-semibold tracking-tight text-stone-950">
-        $0
-      </h2>
+                <h2 className="mt-4 text-4xl font-semibold tracking-tight text-stone-950">
+                  $0
+                </h2>
 
-      <div className="mt-4 space-y-2 text-sm text-stone-600">
-        <div>✓ 10 free messages daily</div>
-        <div>✓ Vent without judgment</div>
-        <div>✓ Reflect and gain clarity</div>
-        <div>✓ No payment required</div>
-      </div>
-    </div>
+                <div className="mt-4 space-y-2 text-sm text-stone-600">
+                  <div>✓ 10 free messages daily</div>
+                  <div>✓ Vent without judgment</div>
+                  <div>✓ Reflect and gain clarity</div>
+                  <div>✓ No payment required</div>
+                </div>
+              </div>
 
-    <div className="mt-7 flex h-14 w-full items-center justify-center rounded-full bg-stone-900 px-4 text-[16px] font-semibold text-white">
-      Continue Free
-    </div>
-  </div>
-</button>
+              <div className="mt-7 flex h-14 w-full items-center justify-center rounded-full bg-stone-900 px-4 text-[16px] font-semibold text-white">
+                Continue Free
+              </div>
+            </div>
+          </button>
 
           <button
             type="button"
@@ -180,127 +176,51 @@ Let it out.
                 </h2>
 
                 <p className="mt-4 max-w-[95%] text-[15px] leading-[1.35] text-stone-600">
-  Unlimited conversations, deeper memory,
-stronger continuity, and priority access.
-</p>
+                  Unlimited conversations, deeper memory, stronger continuity,
+                  and priority access.
+                </p>
               </div>
 
               <div className="mt-7 flex h-14 w-full items-center justify-center rounded-full bg-[#10C67A] px-4 text-[16px] font-semibold tracking-[-0.01em] text-white shadow-[0_10px_25px_rgba(16,198,122,0.22)] transition-all hover:bg-[#0FBF74] hover:shadow-md">
-  Talkio Companion
-</div>
-
+                Talkio Companion
               </div>
-              </button>
-
-              <button
-                type="button"
-                disabled
-                className="relative cursor-not-allowed rounded-[30px] border-2 border-emerald-300 bg-white p-6 text-left opacity-80 shadow-[0_15px_50px_rgba(16,185,129,0.10)]"
-               >
-            
-  <div className="flex h-full min-h-[280px] flex-col justify-between">
-    <div>
-      <div className="absolute right-5 top-5 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
-        COMING SOON
-      </div>
-
-      <p className="text-sm font-semibold uppercase tracking-wide text-emerald-600">
-        Presence
-      </p>
-
-      <h2 className="mt-4 text-4xl font-semibold tracking-tight text-stone-950">
-        $9.99
-        <span className="ml-1 text-base font-normal text-stone-500">
-          /month
-        </span>
-      </h2>
-
-      <div className="mt-4 space-y-2 text-sm text-stone-600">
-        <div>✓ Voice Conversations</div>
-        <div>✓ Weekly Reflections</div>
-        <div>✓ Monthly Reflections</div>
-        <div>✓ Yearly Reflections</div>
-        <div>✓ Enhanced Continuity</div>
-      </div>
-    </div>
-
-    <div className="mt-7 flex h-16 w-full items-center justify-center rounded-full bg-stone-200 text-base font-semibold text-stone-500">
-      Coming soon
-    </div>
-  </div>
-</button>
-        </section>
-
-        <section className="mx-auto mt-5 max-w-4xl rounded-[28px] border border-stone-200 bg-white/70 p-5 text-center shadow-sm backdrop-blur-xl">
-          <p className="text-sm font-semibold text-stone-900">Professionals</p>
-
-          <p className="mt-2 text-sm leading-6 text-stone-600">
-            A strategic Talkio experience designed for leaders, creators,
-            founders, and high-performance professionals.
-          </p>
-
-          <p className="mt-3 text-sm font-medium text-emerald-600">
-            Coming soon
-          </p>
-        </section>
-
-        <section className="mx-auto mt-8 max-w-4xl rounded-[28px] border border-white/60 bg-white/80 p-6 shadow-[0_10px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl">
-          <p className="text-sm font-semibold text-stone-900">
-            What Talkio unlocks
-          </p>
-
-          <div className="mt-4 grid gap-3 text-sm text-stone-700 md:grid-cols-3">
-            {[
-              "Deeper and longer conversations",
-              "Enhanced memory continuity",
-              "More emotionally aware replies",
-              "Voice conversations in Presence",
-              "Personalized emotional check-ins",
-              "Priority access during high traffic",
-              "More natural reflective conversations",
-              "Early access to future Talkio experiences",
-            ].map((feature) => (
-              <div key={feature} className="flex gap-2">
-                <span className="text-emerald-600">✓</span>
-                <span>{feature}</span>
-              </div>
-            ))}
-          </div>
+            </div>
+          </button>
         </section>
 
         <div className="mt-14 text-center text-sm leading-relaxed text-stone-500">
-  <p>
-  Free plan available.
-  <br />
-  Upgrade only if you want deeper conversations and continuity.
-  <br />
-  <br />
-  Talkio Companion Monthly: $4.99/month.
-  <br />
-  Auto-renewable subscription.
-  <br />
-  Cancel anytime through your Apple or Google account settings.
-</p>
+          <p>
+            Free plan available.
+            <br />
+            Upgrade only if you want deeper conversations and continuity.
+            <br />
+            <br />
+            Talkio Companion Monthly: $4.99/month.
+            <br />
+            Auto-renewable subscription.
+            <br />
+            Cancel anytime through your Apple or Google account settings.
+          </p>
 
-  <div className="mt-4 flex items-center justify-center gap-4">
-    <a
-      href="/terms"
-      className="font-medium text-emerald-700 underline underline-offset-4"
-    >
-      Terms of Use
-    </a>
+          <div className="mt-4 flex items-center justify-center gap-4">
+            <a
+              href="/terms"
+              className="font-medium text-emerald-700 underline underline-offset-4"
+            >
+              Terms of Use
+            </a>
 
-    <span className="text-stone-300">•</span>
+            <span className="text-stone-300">•</span>
 
-    <a
-      href="/privacy"
-      className="font-medium text-emerald-700 underline underline-offset-4"
-    >
-                  Privacy Policy
-          </a>
+            <a
+              href="/privacy"
+              className="font-medium text-emerald-700 underline underline-offset-4"
+            >
+              Privacy Policy
+            </a>
+          </div>
         </div>
       </div>
-    </div>
-  </main>
-);
+    </main>
+  );
 }

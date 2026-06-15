@@ -90,10 +90,10 @@ export default function PaywallPage() {
 
     const active = result.customerInfo.entitlements.active || {};
 
-    if (active["Talkio Companion"] || active["presence"]) {
-      setShowSuccess(true);
-      return;
-    }
+    if (active["Talkio Companion"] || active["companion"]) {
+  setShowSuccess(true);
+  return;
+}
 
     alert("No active subscription found to restore.");
   } catch (error: any) {
@@ -255,14 +255,7 @@ Always there when you need it.
             <br />
             Cancel anytime through your Apple or Google account settings.
           </p>
-
-          <button
-  type="button"
-  onClick={restorePurchases}
-  className="mt-4 text-sm font-medium text-emerald-700 underline underline-offset-4"
->
-  Restore Purchases
-</button>
+     
           <div className="mt-4 flex items-center justify-center gap-4">
             <a
               href="/terms"

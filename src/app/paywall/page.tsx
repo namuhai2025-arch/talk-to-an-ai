@@ -15,28 +15,39 @@ type BillingCycle = "monthly" | "yearly";
 
 export default function PaywallPage() {
   const [showSuccess, setShowSuccess] = useState(false);
-  const [userId, setUserId] = useState<string | undefined>();
-
+  
   useEffect(() => {
-    const auth = getFirebaseAuth();
+  const auth = getFirebaseAuth();
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      const uid = user?.uid;
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (!user || user.isAnonymous) {
+      setUserId(undefined);
+      return;
+    }
 
-      setUserId(uid);
+    setUserId(user.uid);
 
-      await configureRevenueCat(uid);
-    });
+    await configureRevenueCat(user.uid);
+  });
 
-    return () => unsubscribe();
-  }, []);
+  return () => unsubscribe();
+}, []);
 
   const selectPlan = async (
-    plan: TalkioPlan,
-    billingCycle: BillingCycle
-  ) => {
-    try {
-      await configureRevenueCat(userId);
+  plan: TalkioPlan,
+  billingCycle: BillingCycle
+) => {
+  const auth = getFirebaseAuth();
+  const user = auth.currentUser;
+
+  if (!user || user.isAnonymous) {
+    localStorage.setItem("talkio_after_signin_redirect", "/paywall");
+    window.location.href = "/settings/account";
+    return;
+  }
+
+  try {
+    await configureRevenueCat(user.uid);
 
       const offerings = await getTalkioOfferings();
 
@@ -84,7 +95,16 @@ export default function PaywallPage() {
 
   const restorePurchases = async () => {
   try {
-    await configureRevenueCat(userId);
+
+    const auth = getFirebaseAuth();
+const user = auth.currentUser;
+
+if (!user || user.isAnonymous) {
+  localStorage.setItem("talkio_after_signin_redirect", "/paywall");
+  window.location.href = "/settings/account";
+  return;
+}
+    await configureRevenueCat(user.uid);
 
     const result = await restoreTalkioPurchases();
 

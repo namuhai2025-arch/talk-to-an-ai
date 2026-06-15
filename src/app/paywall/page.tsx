@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  configureRevenueCat,
   getTalkioOfferings,
   purchaseTalkioPackage,
 } from "@/lib/revenuecat";
@@ -17,8 +18,18 @@ export default function PaywallPage() {
     billingCycle: BillingCycle
   ) => {
     try {
+      await configureRevenueCat();
+
       const offerings = await getTalkioOfferings();
-      const currentOffering = offerings.current;
+
+console.log("RevenueCat offerings:", offerings);
+
+if (!offerings || !offerings.current) {
+  alert("Subscriptions are not available yet. Please try again later.");
+  return;
+}
+
+const currentOffering = offerings.current;
 
       if (!currentOffering) {
         alert("Subscriptions are not available yet. Please try again later.");
@@ -50,7 +61,11 @@ export default function PaywallPage() {
 
       if (error?.userCancelled) return;
 
-      alert("Purchase could not be completed. Please try again.");
+      alert(
+  `Purchase failed.\n\nCode: ${error?.code || "none"}\nMessage: ${
+    error?.message || JSON.stringify(error)
+  }`
+);
     }
   };
 
@@ -94,16 +109,52 @@ export default function PaywallPage() {
           </p>
 
           <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-stone-950 md:text-[58px]">
-            Stay connected to your Talkio experience.
+            You don't have to carry it all.
+Let it out.
           </h1>
 
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-stone-700">
-            Choose the level of presence that fits how you want to talk, reflect,
-            and continue with Talkio.
+            Start free. Vent, reflect, and feel lighter. Upgrade only when you want deeper access.
           </p>
         </section>
 
-        <section className="mx-auto mt-14 grid max-w-4xl gap-5 md:grid-cols-2">
+        <section className="mx-auto mt-14 grid max-w-4xl gap-5 md:grid-cols-3">
+
+          <button
+  type="button"
+  onClick={() => (window.location.href = "/")}
+  className="rounded-[30px] border border-emerald-200 bg-white/90 p-6 text-left shadow-[0_10px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md"
+>
+  <div className="flex h-full min-h-[280px] flex-col justify-between">
+    <div>
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm font-semibold uppercase tracking-wide text-emerald-600">
+          Free
+        </p>
+
+        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+  Start Free
+</span>
+      </div>
+
+      <h2 className="mt-4 text-4xl font-semibold tracking-tight text-stone-950">
+        $0
+      </h2>
+
+      <div className="mt-4 space-y-2 text-sm text-stone-600">
+        <div>✓ 10 free messages daily</div>
+        <div>✓ Vent without judgment</div>
+        <div>✓ Reflect and gain clarity</div>
+        <div>✓ No payment required</div>
+      </div>
+    </div>
+
+    <div className="mt-7 flex h-14 w-full items-center justify-center rounded-full bg-stone-900 px-4 text-[16px] font-semibold text-white">
+      Continue Free
+    </div>
+  </div>
+</button>
+
           <button
             type="button"
             onClick={() => selectPlan("companion", "monthly")}
@@ -129,8 +180,8 @@ export default function PaywallPage() {
                 </h2>
 
                 <p className="mt-4 max-w-[95%] text-[15px] leading-[1.35] text-stone-600">
-  A calm daily Talkio companion with deeper conversations,
-  continuity, and emotional support.
+  Unlimited conversations, deeper memory,
+stronger continuity, and priority access.
 </p>
               </div>
 
@@ -198,7 +249,7 @@ export default function PaywallPage() {
             What Talkio unlocks
           </p>
 
-          <div className="mt-4 grid gap-3 text-sm text-stone-700 md:grid-cols-2">
+          <div className="mt-4 grid gap-3 text-sm text-stone-700 md:grid-cols-3">
             {[
               "Deeper and longer conversations",
               "Enhanced memory continuity",
@@ -219,14 +270,17 @@ export default function PaywallPage() {
 
         <div className="mt-14 text-center text-sm leading-relaxed text-stone-500">
   <p>
-    Auto-renewable subscription.
-    <br />
-    Talkio Companion Monthly: $4.99/month.
-    <br />
-    Length: 1 month.
-    <br />
-    Subscription renews monthly unless canceled at least 24 hours before renewal.
-  </p>
+  Free plan available.
+  <br />
+  Upgrade only if you want deeper conversations and continuity.
+  <br />
+  <br />
+  Talkio Companion Monthly: $4.99/month.
+  <br />
+  Auto-renewable subscription.
+  <br />
+  Cancel anytime through your Apple or Google account settings.
+</p>
 
   <div className="mt-4 flex items-center justify-center gap-4">
     <a

@@ -108,7 +108,22 @@ if (!user || user.isAnonymous) {
 
     const result = await restoreTalkioPurchases();
 
-    const active = result.customerInfo.entitlements.active || {};
+    console.log(
+  "FULL CUSTOMER INFO",
+  JSON.stringify(result.customerInfo, null, 2)
+);
+
+const active = result.customerInfo.entitlements.active || {};
+
+console.log(
+  "ENTITLEMENT KEYS",
+  Object.keys(active)
+);
+
+console.log(
+  "ACTIVE SUBSCRIPTIONS",
+  result.customerInfo.activeSubscriptions
+);
 
     if (active["Talkio Companion"] || active["companion"]) {
   setShowSuccess(true);

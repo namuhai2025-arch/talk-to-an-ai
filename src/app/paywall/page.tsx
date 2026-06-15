@@ -7,6 +7,7 @@ import {
   configureRevenueCat,
   getTalkioOfferings,
   purchaseTalkioPackage,
+  restoreTalkioPurchases,
 } from "@/lib/revenuecat";
 
 type TalkioPlan = "companion";
@@ -80,6 +81,31 @@ export default function PaywallPage() {
       );
     }
   };
+
+  const restorePurchases = async () => {
+  try {
+    await configureRevenueCat(userId);
+
+    const result = await restoreTalkioPurchases();
+
+    const active = result.customerInfo.entitlements.active || {};
+
+    if (active["Talkio Companion"] || active["presence"]) {
+      setShowSuccess(true);
+      return;
+    }
+
+    alert("No active subscription found to restore.");
+  } catch (error: any) {
+    console.error("Restore purchases failed:", error);
+
+    alert(
+      `Restore failed.\n\nMessage: ${
+        error?.message || JSON.stringify(error)
+      }`
+    );
+  }
+};
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f4fbf7] via-white to-[#f7faf8] px-5 py-6 text-stone-900">
@@ -205,7 +231,7 @@ Always there when you need it.
             </div>
           </button>
         </section>
-
+  
         <div className="mt-14 text-center text-sm leading-relaxed text-stone-500">
           <p>
             Free plan available.
@@ -220,6 +246,13 @@ Always there when you need it.
             Cancel anytime through your Apple or Google account settings.
           </p>
 
+          <button
+  type="button"
+  onClick={restorePurchases}
+  className="mt-4 text-sm font-medium text-emerald-700 underline underline-offset-4"
+>
+  Restore Purchases
+</button>
           <div className="mt-4 flex items-center justify-center gap-4">
             <a
               href="/terms"

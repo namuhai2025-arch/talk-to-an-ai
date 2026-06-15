@@ -140,14 +140,14 @@ export default function PaywallPage() {
                 <div className="mt-4 space-y-2 text-sm text-stone-600">
                   <div>✓ 10 free messages daily</div>
                   <div>✓ Vent without judgment</div>
-                  <div>✓ Reflect and gain clarity</div>
+                  <div>✓ Feel lighter after difficult moments</div>
                   <div>✓ No payment required</div>
                 </div>
               </div>
 
-              <div className="mt-7 flex h-14 w-full items-center justify-center rounded-full bg-stone-900 px-4 text-[16px] font-semibold text-white">
-                Continue Free
-              </div>
+              <div className="mt-7 flex h-14 w-full items-center justify-center rounded-full bg-[#10C67A] px-4 text-[16px] font-semibold tracking-[-0.01em] text-white shadow-[0_10px_25px_rgba(16,198,122,0.22)] transition-all hover:bg-[#0FBF74] hover:shadow-md">
+  Continue Free
+</div>
             </div>
           </button>
 
@@ -176,8 +176,9 @@ export default function PaywallPage() {
                 </h2>
 
                 <p className="mt-4 max-w-[95%] text-[15px] leading-[1.35] text-stone-600">
-                  Unlimited conversations, deeper memory, stronger continuity,
-                  and priority access.
+                  Unlimited conversations.
+Long-term memory and continuity.
+Priority access.
                 </p>
               </div>
 

@@ -231,6 +231,16 @@ Always there when you need it.
             </div>
           </button>
         </section>
+
+        <div className="mt-6 text-center">
+  <button
+    type="button"
+    onClick={restorePurchases}
+    className="text-sm font-medium text-emerald-700 underline underline-offset-4"
+  >
+    Restore Purchases
+  </button>
+</div>
   
         <div className="mt-14 text-center text-sm leading-relaxed text-stone-500">
           <p>

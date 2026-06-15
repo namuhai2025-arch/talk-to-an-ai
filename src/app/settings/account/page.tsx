@@ -32,14 +32,12 @@ export default function AccountSettingsPage() {
   setIsSigningIn(true);
 
   try {
-    if (Capacitor.getPlatform() === "android") {
-      const result =
-        await FirebaseAuthentication.signInWithGoogle();
+    const platform = Capacitor.getPlatform();
 
-      console.log(
-        "Android Google sign in success",
-        result.user?.uid
-      );
+    if (platform === "android") {
+      const result = await FirebaseAuthentication.signInWithGoogle();
+
+      console.log("Android Google sign in success", result.user?.uid);
 
       localStorage.removeItem("talkio_signed_out");
 
@@ -48,39 +46,31 @@ export default function AccountSettingsPage() {
     }
 
     const auth = getFirebaseAuth();
-
     const provider = new GoogleAuthProvider();
 
     provider.setCustomParameters({
       prompt: "select_account",
     });
 
-    const result = await signInWithPopup(
-      auth,
-      provider
-    );
+    if (platform === "ios") {
+      await signInWithRedirect(auth, provider);
+      return;
+    }
 
-    console.log(
-      "Google sign in success",
-      result.user.uid
-    );
+    const result = await signInWithPopup(auth, provider);
+
+    console.log("Google sign in success", result.user.uid);
 
     localStorage.removeItem("talkio_signed_out");
 
     window.location.href = "/settings";
   } catch (error: any) {
-    console.error(
-      "Google sign-in failed:",
-      error
-    );
+    console.error("Google sign-in failed:", error);
 
     alert(
       `Google sign in failed.\n\nCode: ${
         error?.code || "none"
-      }\nMessage: ${
-        error?.message ||
-        JSON.stringify(error)
-      }`
+      }\nMessage: ${error?.message || JSON.stringify(error)}`
     );
 
     setIsSigningIn(false);

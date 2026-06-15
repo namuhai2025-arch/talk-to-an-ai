@@ -17,10 +17,15 @@ export default function SettingsPage() {
 
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
     try {
-      if (!user?.uid) {
+      if (!user?.uid || user.isAnonymous) {
   setPlanName("Free Plan");
   return;
 }
+
+console.log("Firebase UID:", user.uid);
+console.log("Firebase email:", user.email);
+console.log("Firebase anonymous:", user.isAnonymous);
+console.log("Firebase providers:", user.providerData);
 
 await configureRevenueCat(user.uid);
 

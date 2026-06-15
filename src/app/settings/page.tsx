@@ -2,31 +2,45 @@
 
 import { useEffect, useState } from "react";
 import { Share } from "@capacitor/share";
-import { getTalkioCustomerInfo } from "@/lib/revenuecat";
+import {
+  configureRevenueCat,
+  getTalkioCustomerInfo,
+} from "@/lib/revenuecat";
 
 export default function SettingsPage() {
   const [planName, setPlanName] = useState("Free Plan");
 
   useEffect(() => {
-    async function loadPlan() {
-      try {
-        const result = await getTalkioCustomerInfo();
-        const active = result.customerInfo.entitlements.active;
+  async function loadPlan() {
+    try {
+      await configureRevenueCat();
 
-        if (active["presence"]) {
-          setPlanName("Talkio Presence");
-        } else if (active["Talkio Companion"]) {
-          setPlanName("Talkio Companion");
-        } else {
-          setPlanName("Free Plan");
-        }
-      } catch (err) {
-        console.log(err);
+      const result = await getTalkioCustomerInfo();
+
+      if (!result?.customerInfo) {
+        setPlanName("Free Plan");
+        return;
       }
-    }
 
-    loadPlan();
-  }, []);
+      const active = result.customerInfo.entitlements.active || {};
+
+      console.log("RevenueCat active entitlements:", active);
+
+      if (active["presence"]) {
+        setPlanName("Talkio Presence");
+      } else if (active["Talkio Companion"]) {
+        setPlanName("Talkio Companion");
+      } else {
+        setPlanName("Free Plan");
+      }
+    } catch (err) {
+      console.log("Failed to load plan:", err);
+      setPlanName("Free Plan");
+    }
+  }
+
+  loadPlan();
+}, []);
 
   const isFree = planName === "Free Plan";
   const isCompanion = planName === "Talkio Companion";

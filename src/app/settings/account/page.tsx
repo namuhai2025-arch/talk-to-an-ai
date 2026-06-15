@@ -9,7 +9,9 @@ import {
   signOut,
   reauthenticateWithPopup,
   signInWithCredential,
-} from "firebase/auth";
+  } from "firebase/auth";
+
+import { logOutRevenueCat } from "@/lib/revenuecat";
 
 import { Capacitor } from "@capacitor/core";
 import {
@@ -146,14 +148,13 @@ return;
     const auth = getFirebaseAuth();
 
     localStorage.setItem("talkio_signed_out", "true");
-    alert("Signed out flag saved");
 
+    await logOutRevenueCat();
     await signOut(auth);
 
     window.location.replace("/");
   } catch (error) {
-    console.error("Sign out failed:", error);
-    alert("Failed to sign out.");
+    console.error("Sign out failed:", error);    
   }
 };
 
@@ -191,6 +192,7 @@ return;
 
     localStorage.setItem("talkio_signed_out", "true");
 
+    await logOutRevenueCat();
     await signOut(auth);
 
     window.location.replace("/");

@@ -15,13 +15,17 @@ let configuringPromise: Promise<void> | null = null;
 export async function configureRevenueCat(userId?: string) {
   const platform = Capacitor.getPlatform();
 
+  if (!userId) {
+    console.log("RevenueCat skipped: no Firebase user ID yet.");
+    return;
+  }
+
   if (configured && configuredUserId === userId) {
     return;
   }
 
   if (configuringPromise) {
     await configuringPromise;
-    return;
   }
 
   configuringPromise = (async () => {
@@ -30,7 +34,7 @@ export async function configureRevenueCat(userId?: string) {
     if (!configured) {
       await Purchases.configure({
         apiKey: platform === "ios" ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY,
-        appUserID: userId || undefined,
+        appUserID: userId,
       });
 
       configured = true;
@@ -44,7 +48,7 @@ export async function configureRevenueCat(userId?: string) {
       return;
     }
 
-    if (userId && configuredUserId !== userId) {
+    if (configuredUserId !== userId) {
       await Purchases.logIn({ appUserID: userId });
 
       configuredUserId = userId;
@@ -98,4 +102,15 @@ export async function restoreTalkioPurchases() {
   }
 
   return Purchases.restorePurchases();
+}
+export async function logOutRevenueCat() {
+  if (!configured) {
+    return;
+  }
+
+  await Purchases.logOut();
+
+  configuredUserId = undefined;
+
+  console.log("RevenueCat logged out");
 }

@@ -17,7 +17,12 @@ export default function SettingsPage() {
 
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
     try {
-      await configureRevenueCat(user?.uid);
+      if (!user?.uid) {
+  setPlanName("Free Plan");
+  return;
+}
+
+await configureRevenueCat(user.uid);
 
       const result = await getTalkioCustomerInfo();
 

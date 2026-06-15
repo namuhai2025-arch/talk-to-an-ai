@@ -310,7 +310,7 @@ export default function Page() {
 
     const auth = getFirebaseAuth();
 
-    if (!auth.currentUser) {
+    if (!auth.currentUser && !signedOut) {
       await signInAnonymously(auth);
     }
 
@@ -323,7 +323,9 @@ export default function Page() {
 
     setUserId(activeUserId);
 
-    await configureRevenueCat(activeUserId).catch(console.error);
+    if (user && !user.isAnonymous) {
+      await configureRevenueCat(user.uid).catch(console.error);
+    }
   }
 
   if (!mounted) return;
@@ -508,8 +510,8 @@ await new Promise((resolve) =>
       const auth = getFirebaseAuth();
 
       if (!auth.currentUser) {
-        await signInAnonymously(auth);
-      }
+  throw new Error("No signed-in user available.");
+}
 
       const user = auth.currentUser;
       const token = user ? await user.getIdToken() : "";

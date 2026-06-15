@@ -9,10 +9,15 @@ const REVENUECAT_IOS_KEY = "appl_zIvyCipyQSePBmlxqazcxndDwrw";
 const REVENUECAT_ANDROID_KEY = "goog_PmPcqddwNAqxlqXgHvPEuSXmkHL";
 
 let configured = false;
+let configuredUserId: string | undefined;
 let configuringPromise: Promise<void> | null = null;
 
 export async function configureRevenueCat(userId?: string) {
-  if (configured) return;
+  const platform = Capacitor.getPlatform();
+
+  if (configured && configuredUserId === userId) {
+    return;
+  }
 
   if (configuringPromise) {
     await configuringPromise;
@@ -22,22 +27,37 @@ export async function configureRevenueCat(userId?: string) {
   configuringPromise = (async () => {
     await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
 
-    const platform = Capacitor.getPlatform();
+    if (!configured) {
+      await Purchases.configure({
+        apiKey: platform === "ios" ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY,
+        appUserID: userId || undefined,
+      });
 
-    await Purchases.configure({
-      apiKey: platform === "ios" ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY,
-      appUserID: userId || undefined,
-    });
+      configured = true;
+      configuredUserId = userId;
 
-    configured = true;
+      console.log("RevenueCat configured successfully", {
+        platform,
+        userId,
+      });
 
-    console.log("RevenueCat configured successfully", {
-      platform,
-      userId,
-    });
+      return;
+    }
+
+    if (userId && configuredUserId !== userId) {
+      await Purchases.logIn({ appUserID: userId });
+
+      configuredUserId = userId;
+
+      console.log("RevenueCat logged in user", {
+        platform,
+        userId,
+      });
+    }
   })();
 
   await configuringPromise;
+  configuringPromise = null;
 }
 
 export function isRevenueCatConfigured() {
@@ -70,4 +90,12 @@ export async function purchaseTalkioPackage(packageToPurchase: PurchasesPackage)
   return Purchases.purchasePackage({
     aPackage: packageToPurchase,
   });
+}
+
+export async function restoreTalkioPurchases() {
+  if (!configured) {
+    throw new Error("RevenueCat is not configured yet.");
+  }
+
+  return Purchases.restorePurchases();
 }

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase";
 import {
   configureRevenueCat,
   getTalkioOfferings,
@@ -12,13 +14,28 @@ type BillingCycle = "monthly" | "yearly";
 
 export default function PaywallPage() {
   const [showSuccess, setShowSuccess] = useState(false);
+  const [userId, setUserId] = useState<string | undefined>();
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      const uid = user?.uid;
+
+      setUserId(uid);
+
+      await configureRevenueCat(uid);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const selectPlan = async (
     plan: TalkioPlan,
     billingCycle: BillingCycle
   ) => {
     try {
-      await configureRevenueCat();
+      await configureRevenueCat(userId);
 
       const offerings = await getTalkioOfferings();
 

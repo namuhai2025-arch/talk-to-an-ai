@@ -6,7 +6,7 @@ import {
 } from "@revenuecat/purchases-capacitor";
 
 const REVENUECAT_IOS_KEY = "appl_zIvyCipyQSePBmlxqazcxndDwrw";
-const REVENUECAT_ANDROID_KEY = "PASTE_ANDROID_PUBLIC_SDK_KEY_HERE";
+const REVENUECAT_ANDROID_KEY = "goog_PmPcqddwNAqxlqXgHvPEuSXmkHL";
 
 let configured = false;
 let configuringPromise: Promise<void> | null = null;

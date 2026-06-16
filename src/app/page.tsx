@@ -199,11 +199,11 @@ export default function Page() {
           .slice(-MAX_MESSAGES)
       : [];
 
-    if (!isSignedOut && normalizedMessages.length > 0) {
-    setMessages(normalizedMessages);
-    } else {
-      setMessages([buildGreeting(cleanNickname)]);
-    }
+    if (normalizedMessages.length > 0) {
+  setMessages(normalizedMessages);
+} else {
+  setMessages([buildGreeting(cleanNickname)]);
+}
 
     const savedTitle = loadJson<string>(storageKeys.title, "New conversation");
     if (typeof savedTitle === "string" && savedTitle.trim()) {

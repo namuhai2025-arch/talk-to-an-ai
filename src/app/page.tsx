@@ -11,6 +11,19 @@ import { Share } from "@capacitor/share";
 import { Keyboard } from "@capacitor/keyboard";
 import { configureRevenueCat } from "@/lib/revenuecat";
 
+import {
+  GoogleAuthProvider,
+  OAuthProvider,
+  signInWithPopup,
+  signInWithCredential,
+} from "firebase/auth";
+import { Capacitor } from "@capacitor/core";
+import {
+  AppleSignIn,
+  SignInScope,
+} from "@capawesome/capacitor-apple-sign-in";
+import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
+
 type ChatRole = "user" | "assistant";
 
 type ChatMessage = {
@@ -116,6 +129,7 @@ export default function Page() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const [acceptedTerms, setAcceptedTerms] = useState(false);  
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   const [mounted, setMounted] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -313,13 +327,11 @@ export default function Page() {
 }, [mounted]);
 
   useEffect(() => {
-  async function ensureUser() {
-    const auth = getFirebaseAuth();
+  if (!mounted) return;
 
-    await auth.authStateReady();
+  const auth = getFirebaseAuth();
 
-    const user = auth.currentUser;
-
+  const unsubscribe = auth.onAuthStateChanged(async (user) => {
     if (!user) {
       setUserId("signed_out");
       return;
@@ -328,16 +340,11 @@ export default function Page() {
     setUserId(user.uid);
 
     await registerTalkioPushToken().catch(console.error);
-
     await configureRevenueCat(user.uid).catch(console.error);
-  }
-
-  if (!mounted) return;
-
-  ensureUser().catch(() => {
-    setUserId("signed_out");
   });
-}, [mounted]);
+
+  return unsubscribe;
+}, [mounted]);  
 
   useEffect(() => {
   const shouldOpenNickname = localStorage.getItem("openNicknamePrompt");
@@ -418,6 +425,75 @@ export default function Page() {
     setDraftNickname(clean);
     setShowNamePrompt(false);
   }
+
+  const finishWelcomeSignIn = () => {
+  localStorage.removeItem("talkio_signed_out");
+};
+
+const handleGoogleSignIn = async () => {
+  if (!acceptedTerms || isSigningIn) return;
+
+  setIsSigningIn(true);
+
+  try {
+    const platform = Capacitor.getPlatform();
+
+    if (platform === "android" || platform === "ios") {
+      await FirebaseAuthentication.signInWithGoogle();
+      finishWelcomeSignIn();
+      return;
+    }
+
+    const auth = getFirebaseAuth();
+    const provider = new GoogleAuthProvider();
+
+    provider.setCustomParameters({ prompt: "select_account" });
+
+    await signInWithPopup(auth, provider);
+    finishWelcomeSignIn();
+  } catch (error: any) {
+    console.error("Google sign-in failed:", error);
+    alert(`Google sign in failed.\n\n${error?.message || JSON.stringify(error)}`);
+    setIsSigningIn(false);
+  }
+};
+
+const handleAppleSignIn = async () => {
+  if (!acceptedTerms || isSigningIn) return;
+
+  setIsSigningIn(true);
+
+  const auth = getFirebaseAuth();
+  const provider = new OAuthProvider("apple.com");
+
+  try {
+    if (Capacitor.getPlatform() === "ios") {
+      const result = await AppleSignIn.signIn({
+        scopes: [SignInScope.Email, SignInScope.FullName],
+      });
+
+      const idToken =
+        (result as any).idToken || (result as any).identityToken;
+
+      if (!idToken) {
+        throw new Error("No Apple identity token returned.");
+      }
+
+      const credential = provider.credential({ idToken });
+      await signInWithCredential(auth, credential);
+
+      finishWelcomeSignIn();
+      return;
+    }
+
+    await signInWithPopup(auth, provider);
+    finishWelcomeSignIn();
+  } catch (error: any) {
+    console.error("Apple sign-in failed:", error);
+    alert(`Apple sign in failed.\n\n${error?.message || JSON.stringify(error)}`);
+    setIsSigningIn(false);
+  }
+};
 
   async function sendMessage(overrideText?: string) {
     const text = (overrideText ?? input).trim();
@@ -729,40 +805,22 @@ setMessages((prev): ChatMessage[] => {
         <div className="mt-8 space-y-3">
           <button
   type="button"
-  disabled={!acceptedTerms}
-  onClick={() => {
-    localStorage.setItem("talkio_after_signin_redirect", "/");
-    window.location.href = "/settings/account?provider=google";
-  }}
+  disabled={!acceptedTerms || isSigningIn}
+  onClick={handleGoogleSignIn}
   className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
 >
-  Continue with Google
+  {isSigningIn ? "Opening Google..." : "Continue with Google"}
 </button>
 
           <button
   type="button"
-  disabled={!acceptedTerms}
-  onClick={() => {
-    localStorage.setItem("talkio_after_signin_redirect", "/");
-    window.location.href = "/settings/account?provider=google";
-  }}
+  disabled={!acceptedTerms || isSigningIn}
+  onClick={handleAppleSignIn}
   className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
 >
-  Continue with Apple 
+  {isSigningIn ? "Opening Apple..." : "Continue with Apple"}
 </button>
         </div>
-
-        <p className="mt-8 text-sm leading-6 text-stone-500">
-          By continuing you agree to the{" "}
-          <a href="/terms" className="font-medium text-emerald-700 underline">
-            Terms
-          </a>{" "}
-          and{" "}
-          <a href="/privacy" className="font-medium text-emerald-700 underline">
-            Privacy Policy
-          </a>
-          .
-        </p>
       </div>
     </main>
   );

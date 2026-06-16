@@ -188,8 +188,14 @@ export default function Page() {
   const enabled =
     localStorage.getItem("talkio_pin_enabled") === "true";
 
-  if (enabled) {
+  const savedPin = localStorage.getItem("talkio_pin_code");
+
+  if (enabled && savedPin) {
     setPinRequired(true);
+    setPinUnlocked(false);
+  } else {
+    setPinRequired(false);
+    setPinUnlocked(true);
   }
 }, [mounted]);
 
@@ -425,10 +431,6 @@ export default function Page() {
     setDraftNickname(clean);
     setShowNamePrompt(false);
   }
-
-  const finishWelcomeSignIn = () => {
-  localStorage.removeItem("talkio_signed_out");
-};
 
 const handleGoogleSignIn = async () => {
   if (!acceptedTerms || isSigningIn) return;
@@ -723,7 +725,7 @@ setMessages((prev): ChatMessage[] => {
 
   if (!mounted || userId === null) return null;
 
-  if (pinRequired && !pinUnlocked) {
+  if (!isSignedOut && pinRequired && !pinUnlocked) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
       <div className="w-full max-w-sm rounded-[32px] bg-white p-8 shadow-sm ring-1 ring-stone-100">
@@ -732,7 +734,7 @@ setMessages((prev): ChatMessage[] => {
         </h1>
 
         <p className="mt-3 text-stone-600">
-          Enter your 4-digit PIN.
+          Enter your 4-digit PIN to open Talkio.
         </p>
 
         <input
@@ -745,19 +747,21 @@ setMessages((prev): ChatMessage[] => {
               e.target.value.replace(/\D/g, "").slice(0, 4)
             )
           }
-          className="mt-6 w-full rounded-2xl border border-stone-200 px-4 py-4 text-center text-2xl tracking-[10px]"
+          className="mt-6 w-full rounded-2xl border border-stone-200 px-4 py-4 text-center text-2xl tracking-[10px] outline-none focus:border-emerald-500"
+          autoFocus
         />
 
         <button
           type="button"
           onClick={() => {
-            const savedPin =
-              localStorage.getItem("talkio_pin_code");
+            const savedPin = localStorage.getItem("talkio_pin_code");
 
             if (enteredPin === savedPin) {
+              setEnteredPin("");
               setPinUnlocked(true);
             } else {
               alert("Incorrect PIN");
+              setEnteredPin("");
             }
           }}
           className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-4 font-semibold text-white"

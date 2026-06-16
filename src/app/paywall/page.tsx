@@ -41,10 +41,10 @@ export default function PaywallPage() {
   const user = auth.currentUser;
 
   if (!user || user.isAnonymous) {
-    localStorage.setItem("talkio_after_signin_redirect", "/paywall");
-    window.location.href = "/settings/account";
-    return;
-  }
+  alert("Please sign in from the Welcome screen first.");
+  window.location.href = "/";
+  return;
+}
 
   try {
     await configureRevenueCat(user.uid);
@@ -100,8 +100,8 @@ export default function PaywallPage() {
 const user = auth.currentUser;
 
 if (!user || user.isAnonymous) {
-  localStorage.setItem("talkio_after_signin_redirect", "/paywall");
-  window.location.href = "/settings/account";
+  alert("Please sign in from the Welcome screen first.");
+  window.location.href = "/";
   return;
 }
     await configureRevenueCat(user.uid);

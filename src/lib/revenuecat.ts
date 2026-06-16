@@ -25,8 +25,11 @@ export async function configureRevenueCat(userId?: string) {
   }
 
   if (configuringPromise) {
-    await configuringPromise;
+  await configuringPromise;
+  if (configured && configuredUserId === userId) {
+    return;
   }
+}
 
   configuringPromise = (async () => {
     await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
@@ -103,14 +106,7 @@ export async function restoreTalkioPurchases() {
 
   return Purchases.restorePurchases();
 }
+
 export async function logOutRevenueCat() {
-  if (!configured) {
-    return;
-  }
-
-  await Purchases.logOut();
-
-  configuredUserId = undefined;
-
-  console.log("RevenueCat logged out");
+  console.log("RevenueCat logout skipped to preserve subscription identity.");
 }

@@ -91,6 +91,7 @@ console.log("RevenueCat app user:", user.uid);
   return (
     <main className="min-h-screen bg-stone-50 px-5 pb-6 pt-[calc(env(safe-area-inset-top)+3.5rem)]">
       <div className="mx-auto max-w-md">
+        
         <button
           type="button"
           onClick={() => (window.location.href = "/")}
@@ -168,6 +169,36 @@ console.log("RevenueCat app user:", user.uid);
           </button>
 
           <div className="mx-5 border-t border-stone-100" />
+
+<button
+  type="button"
+  onClick={() => (window.location.href = "/settings/account")}
+  className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+>
+  <div>
+    <p className="font-medium text-stone-900">Account</p>
+    <p className="mt-1 text-sm text-stone-500">
+      Sign in, switch account, or delete account data.
+    </p>
+  </div>
+  <span className="text-stone-400">›</span>
+</button>
+
+<div className="mx-5 border-t border-stone-100" />
+
+<button
+  type="button"
+  onClick={() => (window.location.href = "/settings/privacy")}
+  className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+>
+  <div>
+    <p className="font-medium text-stone-900">Privacy Lock</p>
+    <p className="mt-1 text-sm text-stone-500">
+      Require a PIN before opening Talkio.
+    </p>
+  </div>
+  <span className="text-stone-400">›</span>
+</button>
 
           <button
             type="button"

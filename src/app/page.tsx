@@ -119,6 +119,10 @@ export default function Page() {
   const [userId, setUserId] = useState<string | null>(null);
   const isSignedOut = userId === "signed_out";
 
+  const [pinRequired, setPinRequired] = useState(false);
+  const [pinUnlocked, setPinUnlocked] = useState(false);
+  const [enteredPin, setEnteredPin] = useState("");
+
   const [displayName, setDisplayName] = useState("");
   const [draftNickname, setDraftNickname] = useState("");
   const [showNamePrompt, setShowNamePrompt] = useState(false);
@@ -161,6 +165,17 @@ export default function Page() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+  if (!mounted) return;
+
+  const enabled =
+    localStorage.getItem("talkio_pin_enabled") === "true";
+
+  if (enabled) {
+    setPinRequired(true);
+  }
+}, [mounted]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -629,6 +644,52 @@ setMessages((prev): ChatMessage[] => {
   }
 
   if (!mounted || userId === null) return null;
+
+  if (pinRequired && !pinUnlocked) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
+      <div className="w-full max-w-sm rounded-[32px] bg-white p-8 shadow-sm ring-1 ring-stone-100">
+        <h1 className="text-3xl font-semibold text-stone-900">
+          Privacy Lock
+        </h1>
+
+        <p className="mt-3 text-stone-600">
+          Enter your 4-digit PIN.
+        </p>
+
+        <input
+          type="password"
+          inputMode="numeric"
+          maxLength={4}
+          value={enteredPin}
+          onChange={(e) =>
+            setEnteredPin(
+              e.target.value.replace(/\D/g, "").slice(0, 4)
+            )
+          }
+          className="mt-6 w-full rounded-2xl border border-stone-200 px-4 py-4 text-center text-2xl tracking-[10px]"
+        />
+
+        <button
+          type="button"
+          onClick={() => {
+            const savedPin =
+              localStorage.getItem("talkio_pin_code");
+
+            if (enteredPin === savedPin) {
+              setPinUnlocked(true);
+            } else {
+              alert("Incorrect PIN");
+            }
+          }}
+          className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-4 font-semibold text-white"
+        >
+          Unlock Talkio
+        </button>
+      </div>
+    </main>
+  );
+}
 
   if (isSignedOut) {
   return (

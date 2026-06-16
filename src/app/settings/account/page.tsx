@@ -25,6 +25,34 @@ import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 export default function AccountSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [accountProvider, setAccountProvider] = useState<string | null>(null);
+
+  useEffect(() => {
+  const auth = getFirebaseAuth();
+
+  const unsubscribe = auth.onAuthStateChanged((user) => {
+    if (!user || user.isAnonymous) {
+      setAccountEmail(null);
+      setAccountProvider(null);
+      return;
+    }
+
+    setAccountEmail(user.email);
+
+    const providerId = user.providerData[0]?.providerId;
+
+    if (providerId === "apple.com") {
+      setAccountProvider("Apple");
+    } else if (providerId === "google.com") {
+      setAccountProvider("Google");
+    } else {
+      setAccountProvider(providerId || "Signed in");
+    }
+  });
+
+  return () => unsubscribe();
+}, []);
 
   const handleGoogleSignIn = async () => {
   if (isSigningIn) return;
@@ -212,9 +240,28 @@ return;
         </p>
 
         <section className="mt-8 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
+
+  {accountEmail && (
+    <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-4 ring-1 ring-emerald-100">
+      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+        Signed in as
+      </p>
+
+      <p className="mt-2 text-sm font-semibold text-stone-900">
+        {accountEmail}
+      </p>
+
+      {accountProvider && (
+        <p className="mt-1 text-xs text-stone-500">
+          Provider: {accountProvider}
+        </p>
+      )}
+    </div>
+  )}
+
+  <button
+    type="button"
+    onClick={handleGoogleSignIn}
             disabled={isSigningIn}
             className="flex w-full items-center justify-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-medium text-stone-900 shadow-sm transition hover:bg-stone-50 disabled:pointer-events-none disabled:opacity-50"
           >

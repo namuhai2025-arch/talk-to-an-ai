@@ -3,29 +3,16 @@
 import { useEffect, useState } from "react";
 import {
   GoogleAuthProvider,
-  OAuthProvider,
-  signInWithPopup,
   signOut,
   reauthenticateWithPopup,
-  signInWithCredential,
 } from "firebase/auth";
-
 import { logOutRevenueCat } from "@/lib/revenuecat";
-import { Capacitor } from "@capacitor/core";
-import {
-  AppleSignIn,
-  SignInScope,
-} from "@capawesome/capacitor-apple-sign-in";
-
 import { getFirebaseAuth } from "@/lib/firebase";
-import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 
 export default function AccountSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isSigningIn, setIsSigningIn] = useState(false);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [accountProvider, setAccountProvider] = useState<string | null>(null);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -52,128 +39,6 @@ export default function AccountSettingsPage() {
 
     return () => unsubscribe();
   }, []);
-
-  const finishSignIn = () => {
-    localStorage.removeItem("talkio_signed_out");
-
-    const redirect =
-      localStorage.getItem("talkio_after_signin_redirect") ||
-      "/settings/account";
-
-    localStorage.removeItem("talkio_after_signin_redirect");
-
-    window.location.href = redirect;
-  };
-
-  const handleGoogleSignIn = async () => {
-    if (!acceptedTerms) {
-  alert(
-    "Please agree to the Terms of Use and Privacy Policy before signing in."
-  );
-  return;
-}
-    if (isSigningIn) return;
-
-    setIsSigningIn(true);
-
-    try {
-      const platform = Capacitor.getPlatform();
-
-      if (platform === "android" || platform === "ios") {
-        const result = await FirebaseAuthentication.signInWithGoogle();
-
-        console.log("Native Google sign in success", result.user?.uid);
-
-        finishSignIn();
-        return;
-      }
-
-      const auth = getFirebaseAuth();
-      const provider = new GoogleAuthProvider();
-
-      provider.setCustomParameters({
-        prompt: "select_account",
-      });
-
-      const result = await signInWithPopup(auth, provider);
-
-      console.log("Google sign in success", result.user.uid);
-
-      finishSignIn();
-    } catch (error: any) {
-      console.error("Google sign-in failed:", error);
-
-      alert(
-        `Google sign in failed.\n\nCode: ${
-          error?.code || "none"
-        }\nMessage: ${error?.message || JSON.stringify(error)}`
-      );
-
-      setIsSigningIn(false);
-    }
-  };
-
-  const handleAppleSignIn = async () => {
-    if (!acceptedTerms) {
-  alert(
-    "Please agree to the Terms of Use and Privacy Policy before signing in."
-  );
-  return;
-}
-    if (isSigningIn) return;
-
-    setIsSigningIn(true);
-
-    const auth = getFirebaseAuth();
-    const provider = new OAuthProvider("apple.com");
-
-    try {
-      if (Capacitor.getPlatform() === "ios") {
-        const result = await AppleSignIn.signIn({
-          scopes: [SignInScope.Email, SignInScope.FullName],
-        });
-
-        const idToken =
-          (result as any).idToken || (result as any).identityToken;
-
-        console.log("Apple result:", result);
-
-        if (!idToken) {
-          throw new Error("No Apple identity token returned.");
-        }
-
-        const credential = provider.credential({
-          idToken,
-        });
-
-        const userCredential = await signInWithCredential(auth, credential);
-
-        console.log(
-          "Apple native sign in success",
-          userCredential.user.uid
-        );
-
-        finishSignIn();
-        return;
-      }
-
-      const result = await signInWithPopup(auth, provider);
-
-      console.log("Apple web sign in success", result.user.uid);
-
-      finishSignIn();
-    } catch (error: any) {
-      console.error("Apple sign-in failed:", error);
-
-      alert(
-        `Apple sign in failed.\n\nCode: ${
-          error?.code || "none"
-        }\nMessage: ${error?.message || JSON.stringify(error)}`
-      );
-
-      setIsSigningIn(false);
-    }
-  };
 
   const handleSignOut = async () => {
     try {
@@ -255,87 +120,37 @@ export default function AccountSettingsPage() {
         </p>
 
         <section className="mt-8 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
-          {accountEmail && (
-            <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-4 ring-1 ring-emerald-100">
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                Signed in as
-              </p>
-
-              <p className="mt-2 text-sm font-semibold text-stone-900">
-                {accountEmail}
-              </p>
-
-              {accountProvider && (
-                <p className="mt-1 text-xs text-stone-500">
-                  Provider: {accountProvider}
+          {accountEmail ? (
+            <>
+              <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-4 ring-1 ring-emerald-100">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                  Signed in as
                 </p>
-              )}
-            </div>
-          )}
 
-          {!accountEmail && (
-  <label className="mb-4 flex items-start gap-3 text-left">
-    <input
-      type="checkbox"
-      checked={acceptedTerms}
-      onChange={(e) => setAcceptedTerms(e.target.checked)}
-      className="mt-1 h-5 w-5"
-    />
+                <p className="mt-2 text-sm font-semibold text-stone-900">
+                  {accountEmail}
+                </p>
 
-    <span className="text-sm leading-6 text-stone-600">
-      I agree to Talkio's{" "}
-      <a
-        href="/terms"
-        className="font-medium text-emerald-700 underline"
-      >
-        Terms
-      </a>{" "}
-      and{" "}
-      <a
-        href="/privacy"
-        className="font-medium text-emerald-700 underline"
-      >
-        Privacy Policy
-      </a>.
-    </span>
-  </label>
-)}
-
-{!accountEmail && (
-  <>
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={!acceptedTerms || isSigningIn}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-medium text-stone-900 shadow-sm transition hover:bg-stone-50 disabled:pointer-events-none disabled:opacity-50"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xl font-semibold text-blue-500">
-                  G
-                </span>
-                {isSigningIn ? "Opening Google..." : "Continue with Google"}
-              </button>
+                {accountProvider && (
+                  <p className="mt-1 text-xs text-stone-500">
+                    Provider: {accountProvider}
+                  </p>
+                )}
+              </div>
 
               <button
                 type="button"
-                onClick={handleAppleSignIn}
-                disabled={!acceptedTerms || isSigningIn}
-                className="mt-3 flex w-full items-center justify-center gap-3 rounded-2xl border border-stone-200 bg-black px-4 py-4 text-base font-medium text-white shadow-sm transition hover:bg-stone-900 disabled:pointer-events-none disabled:opacity-50"
+                onClick={handleSignOut}
+                className="mt-4 flex w-full items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 py-4 text-left text-base font-medium text-stone-900 transition hover:bg-stone-50"
               >
-                <span className="text-xl font-semibold"></span>
-                {isSigningIn ? "Opening Apple..." : "Continue with Apple"}
+                <span>Switch account / Sign out</span>
+                <span className="text-stone-400">›</span>
               </button>
             </>
-          )}
-
-          {accountEmail && (
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="mt-4 flex w-full items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 py-4 text-left text-base font-medium text-stone-900 transition hover:bg-stone-50"
-            >
-              <span>Sign out</span>
-              <span className="text-stone-400">›</span>
-            </button>
+          ) : (
+            <div className="rounded-2xl bg-stone-50 px-4 py-4 text-sm leading-6 text-stone-500">
+              You are not signed in. Return to Talkio to sign in.
+            </div>
           )}
         </section>
 

@@ -115,6 +115,8 @@ export default function Page() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
+  const [acceptedTerms, setAcceptedTerms] = useState(false);  
+
   const [mounted, setMounted] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const isSignedOut = userId === "signed_out";
@@ -703,28 +705,51 @@ setMessages((prev): ChatMessage[] => {
           You don&apos;t have to carry it all alone.
         </p>
 
+        <label className="mb-4 flex items-start gap-3 text-left">
+  <input
+    type="checkbox"
+    checked={acceptedTerms}
+    onChange={(e) => setAcceptedTerms(e.target.checked)}
+    className="mt-1 h-5 w-5"
+  />
+
+  <span className="text-sm leading-6 text-stone-600">
+    I agree to Talkio&apos;s{" "}
+    <a href="/terms" className="font-medium text-emerald-700 underline">
+      Terms
+    </a>{" "}
+    and{" "}
+    <a href="/privacy" className="font-medium text-emerald-700 underline">
+      Privacy Policy
+    </a>
+    .
+  </span>
+</label>
+
         <div className="mt-8 space-y-3">
           <button
-            type="button"
-            onClick={() => {
-              localStorage.setItem("talkio_after_signin_redirect", "/");
-              window.location.href = "/settings/account?provider=google";
-            }}
-            className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm"
-          >
-            Continue with Google
-          </button>
+  type="button"
+  disabled={!acceptedTerms}
+  onClick={() => {
+    localStorage.setItem("talkio_after_signin_redirect", "/");
+    window.location.href = "/settings/account?provider=google";
+  }}
+  className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
+>
+  Continue with Google
+</button>
 
           <button
-            type="button"
-            onClick={() => {
-              localStorage.setItem("talkio_after_signin_redirect", "/");
-              window.location.href = "/settings/account?provider=apple";
-            }}
-            className="w-full rounded-2xl bg-black px-4 py-4 text-base font-semibold text-white shadow-sm"
-          >
-            Continue with Apple
-          </button>
+  type="button"
+  disabled={!acceptedTerms}
+  onClick={() => {
+    localStorage.setItem("talkio_after_signin_redirect", "/");
+    window.location.href = "/settings/account?provider=google";
+  }}
+  className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
+>
+  Continue with Apple 
+</button>
         </div>
 
         <p className="mt-8 text-sm leading-6 text-stone-500">

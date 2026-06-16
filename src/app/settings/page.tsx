@@ -10,7 +10,10 @@ import { onAuthStateChanged } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
 
 export default function SettingsPage() {
-  const [planName, setPlanName] = useState("Free Plan");
+  const [planName, setPlanName] = useState(() => {
+  if (typeof window === "undefined") return "Free Plan";
+  return localStorage.getItem("talkio_cached_plan") || "Free Plan";
+});
 
   useEffect(() => {
   const auth = getFirebaseAuth();
@@ -18,6 +21,7 @@ export default function SettingsPage() {
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
     try {
       if (!user?.uid || user.isAnonymous) {
+  localStorage.removeItem("talkio_cached_plan");
   setPlanName("Free Plan");
   return;
 }
@@ -37,7 +41,8 @@ const result = await getTalkioCustomerInfo();
 console.log("RevenueCat full customerInfo:", result?.customerInfo);
 
       if (!result?.customerInfo) {
-        setPlanName("Free Plan");
+        const cachedPlan = localStorage.getItem("talkio_cached_plan");
+        setPlanName(cachedPlan || "Free Plan");
         return;
       }
 
@@ -53,19 +58,30 @@ console.log("RevenueCat app user:", user.uid);
         active["companion"] ||
         activeSubscriptions.includes("talkio_companion_monthly")
       ) {
+        localStorage.setItem("talkio_cached_plan", "Talkio Companion");
         setPlanName("Talkio Companion");
       } else if (
         active["Talkio Presence"] ||
         active["presence"] ||
         activeSubscriptions.includes("talkio_presence_monthly_v2")
       ) {
-        setPlanName("Talkio Presence");
+        localStorage.setItem("talkio_cached_plan", "Talkio Presence");
+setPlanName("Talkio Presence");
       } else {
-        setPlanName("Free Plan");
+        const cachedPlan = localStorage.getItem("talkio_cached_plan");
+
+if (cachedPlan === "Talkio Companion" || cachedPlan === "Talkio Presence") {
+  setPlanName(cachedPlan);
+  return;
+}
+
+      localStorage.setItem("talkio_cached_plan", "Free Plan");
+      setPlanName("Free Plan");
       }
     } catch (err) {
       console.log("Failed to load plan:", err);
-      setPlanName("Free Plan");
+      const cachedPlan = localStorage.getItem("talkio_cached_plan");
+      setPlanName(cachedPlan || "Free Plan");
     }
   });
 

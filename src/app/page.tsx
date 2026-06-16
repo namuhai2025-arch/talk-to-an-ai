@@ -10,6 +10,7 @@ import { registerTalkioPushToken } from "@/lib/registerPushToken";
 import { Share } from "@capacitor/share";
 import { Keyboard } from "@capacitor/keyboard";
 import { configureRevenueCat } from "@/lib/revenuecat";
+import { App } from "@capacitor/app";
 
 import {
   GoogleAuthProvider,
@@ -187,10 +188,11 @@ export default function Page() {
 
   const enabled =
     localStorage.getItem("talkio_pin_enabled") === "true";
-
   const savedPin = localStorage.getItem("talkio_pin_code");
+  const locked =
+    localStorage.getItem("talkio_pin_locked") === "true";
 
-  if (enabled && savedPin) {
+  if (enabled && savedPin && locked) {
     setPinRequired(true);
     setPinUnlocked(false);
   } else {
@@ -330,6 +332,49 @@ export default function Page() {
       },
     ];
   });
+}, [mounted]);
+
+  useEffect(() => {
+  if (!mounted) return;
+
+  let cleanup: { remove: () => Promise<void> } | undefined;
+
+  const setupAppLock = async () => {
+    cleanup = await App.addListener("appStateChange", ({ isActive }) => {
+      console.log("APP STATE:", isActive);
+
+      const enabled =
+        localStorage.getItem("talkio_pin_enabled") === "true";
+      const savedPin = localStorage.getItem("talkio_pin_code");
+
+      if (!enabled || !savedPin) return;
+
+      if (!isActive) {
+        console.log("APP BACKGROUND");
+        localStorage.setItem("talkio_pin_locked", "true");
+        setPinUnlocked(false);
+      }
+
+      if (isActive) {
+        console.log("APP FOREGROUND");
+
+        const locked =
+          localStorage.getItem("talkio_pin_locked") === "true";
+
+        if (locked) {
+          console.log("PIN LOCK TRIGGERED");
+          setPinRequired(true);
+          setPinUnlocked(false);
+        }
+      }
+    });
+  };
+
+  setupAppLock();
+
+  return () => {
+    cleanup?.remove();
+  };
 }, [mounted]);
 
   useEffect(() => {
@@ -758,6 +803,7 @@ setMessages((prev): ChatMessage[] => {
 
             if (enteredPin === savedPin) {
               setEnteredPin("");
+              localStorage.removeItem("talkio_pin_locked");
               setPinUnlocked(true);
             } else {
               alert("Incorrect PIN");

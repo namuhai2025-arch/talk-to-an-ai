@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { signInAnonymously } from "firebase/auth";
 import {
   getFirebaseAuth,
   getFirebaseAnalytics,
@@ -117,10 +116,8 @@ export default function Page() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const [mounted, setMounted] = useState(false);
-  const isSignedOut =
-  typeof window !== "undefined" &&
-  localStorage.getItem("talkio_signed_out") === "true";
-  const [userId, setUserId] = useState("guest");
+  const [userId, setUserId] = useState<string | null>(null);
+  const isSignedOut = userId === "signed_out";
 
   const [displayName, setDisplayName] = useState("");
   const [draftNickname, setDraftNickname] = useState("");
@@ -300,38 +297,28 @@ export default function Page() {
 
   useEffect(() => {
   async function ensureUser() {
-    const signedOut =
-      localStorage.getItem("talkio_signed_out") === "true";
+    const auth = getFirebaseAuth();
 
-    if (signedOut) {
+    await auth.authStateReady();
+
+    const user = auth.currentUser;
+
+    if (!user) {
       setUserId("signed_out");
       return;
     }
 
-    const auth = getFirebaseAuth();
-
-    if (!auth.currentUser && !signedOut) {
-      await signInAnonymously(auth);
-    }
-
-    await auth.authStateReady();
+    setUserId(user.uid);
 
     await registerTalkioPushToken().catch(console.error);
 
-    const user = auth.currentUser;
-    const activeUserId = user?.uid || "guest";
-
-    setUserId(activeUserId);
-
-    if (user && !user.isAnonymous) {
-      await configureRevenueCat(user.uid).catch(console.error);
-    }
+    await configureRevenueCat(user.uid).catch(console.error);
   }
 
   if (!mounted) return;
 
   ensureUser().catch(() => {
-    setUserId("guest");
+    setUserId("signed_out");
   });
 }, [mounted]);
 
@@ -641,30 +628,55 @@ setMessages((prev): ChatMessage[] => {
     }
   }
 
-  if (!mounted) return null;
+  if (!mounted || userId === null) return null;
 
   if (isSignedOut) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
-      <div className="w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-sm">
-        <h1 className="text-3xl font-semibold text-stone-900">
-          Talkio
+      <div className="w-full max-w-sm rounded-[32px] bg-white p-8 shadow-sm ring-1 ring-stone-100">
+        <h1 className="text-3xl font-semibold tracking-tight text-stone-900">
+          Welcome to Talkio
         </h1>
 
-        <p className="mt-3 text-sm leading-6 text-stone-500">
-          You are signed out.
+        <p className="mt-5 text-base leading-7 text-stone-600">
+          You don&apos;t have to carry it all alone.
         </p>
 
-        <button
-          type="button"
-          onClick={() => {
-            localStorage.removeItem("talkio_signed_out");
-            window.location.reload();
-          }}
-          className="mt-6 w-full rounded-full bg-[#78906f] px-4 py-3 text-white"
-        >
-          Continue
-        </button>
+        <div className="mt-8 space-y-3">
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.setItem("talkio_after_signin_redirect", "/");
+              window.location.href = "/settings/account?provider=google";
+            }}
+            className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm"
+          >
+            Continue with Google
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.setItem("talkio_after_signin_redirect", "/");
+              window.location.href = "/settings/account?provider=apple";
+            }}
+            className="w-full rounded-2xl bg-black px-4 py-4 text-base font-semibold text-white shadow-sm"
+          >
+            Continue with Apple
+          </button>
+        </div>
+
+        <p className="mt-8 text-sm leading-6 text-stone-500">
+          By continuing you agree to the{" "}
+          <a href="/terms" className="font-medium text-emerald-700 underline">
+            Terms
+          </a>{" "}
+          and{" "}
+          <a href="/privacy" className="font-medium text-emerald-700 underline">
+            Privacy Policy
+          </a>
+          .
+        </p>
       </div>
     </main>
   );

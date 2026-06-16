@@ -486,9 +486,16 @@ const handleGoogleSignIn = async () => {
     const platform = Capacitor.getPlatform();
 
     if (platform === "android" || platform === "ios") {
-      await FirebaseAuthentication.signInWithGoogle();
-      finishWelcomeSignIn();
-      return;
+      localStorage.setItem("talkio_auth_in_progress", "true");
+
+await FirebaseAuthentication.signInWithGoogle();
+
+localStorage.removeItem("talkio_signed_out");
+localStorage.removeItem("talkio_auth_in_progress");
+
+setIsSigningIn(false);
+setUserId(getFirebaseAuth().currentUser?.uid || null);
+return;
     }
 
     const auth = getFirebaseAuth();
@@ -497,18 +504,26 @@ const handleGoogleSignIn = async () => {
     provider.setCustomParameters({ prompt: "select_account" });
 
     await signInWithPopup(auth, provider);
-    finishWelcomeSignIn();
-  } catch (error: any) {
-    console.error("Google sign-in failed:", error);
-    alert(`Google sign in failed.\n\n${error?.message || JSON.stringify(error)}`);
-    setIsSigningIn(false);
-  }
-};
 
+localStorage.removeItem("talkio_signed_out");
+localStorage.removeItem("talkio_auth_in_progress");
+
+setIsSigningIn(false);
+setUserId(auth.currentUser?.uid || null);
+
+  } catch (error: any) {
+  localStorage.removeItem("talkio_auth_in_progress");
+
+  console.error("Google sign-in failed:", error);
+  alert(`Google sign in failed.\n\n${error?.message || JSON.stringify(error)}`);
+  setIsSigningIn(false);
+}
+};
 const handleAppleSignIn = async () => {
   if (!acceptedTerms || isSigningIn) return;
 
   setIsSigningIn(true);
+  localStorage.setItem("talkio_auth_in_progress", "true");
 
   const auth = getFirebaseAuth();
   const provider = new OAuthProvider("apple.com");
@@ -527,17 +542,37 @@ const handleAppleSignIn = async () => {
       }
 
       const credential = provider.credential({ idToken });
+
       await signInWithCredential(auth, credential);
 
-      finishWelcomeSignIn();
+      localStorage.removeItem("talkio_signed_out");
+      localStorage.removeItem("talkio_auth_in_progress");
+
+      setIsSigningIn(false);
+      setUserId(auth.currentUser?.uid || null);
       return;
     }
 
     await signInWithPopup(auth, provider);
-    finishWelcomeSignIn();
+
+    localStorage.removeItem("talkio_signed_out");
+    localStorage.removeItem("talkio_auth_in_progress");
+
+    setIsSigningIn(false);
+    setUserId(auth.currentUser?.uid || null);
   } catch (error: any) {
-    console.error("Apple sign-in failed:", error);
-    alert(`Apple sign in failed.\n\n${error?.message || JSON.stringify(error)}`);
+    localStorage.removeItem("talkio_auth_in_progress");
+
+    console.error("Apple sign-in failed raw:", error);
+    console.error("Apple sign-in failed code:", error?.code);
+    console.error("Apple sign-in failed message:", error?.message);
+
+    alert(
+      `Apple sign in failed.\n\nCode: ${
+        error?.code || "none"
+      }\nMessage: ${error?.message || String(error)}`
+    );
+
     setIsSigningIn(false);
   }
 };
@@ -751,8 +786,6 @@ setMessages((prev): ChatMessage[] => {
       timestamp: Date.now(),
     },
   ];
-
-  
 
   return nextMessages.slice(-MAX_MESSAGES);
 

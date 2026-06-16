@@ -12,6 +12,7 @@ import { getFirebaseAuth } from "@/lib/firebase";
 export default function AccountSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [isSignedIn, setIsSignedIn] = useState(false);
   const [accountProvider, setAccountProvider] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,12 +20,14 @@ export default function AccountSettingsPage() {
 
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (!user || user.isAnonymous) {
-        setAccountEmail(null);
-        setAccountProvider(null);
-        return;
-      }
+  setIsSignedIn(false);
+  setAccountEmail(null);
+  setAccountProvider(null);
+  return;
+}
 
-      setAccountEmail(user.email);
+setIsSignedIn(true);
+setAccountEmail(user.email || "Apple account");
 
       const providerId = user.providerData[0]?.providerId;
 
@@ -120,7 +123,7 @@ export default function AccountSettingsPage() {
         </p>
 
         <section className="mt-8 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
-          {accountEmail ? (
+          {isSignedIn ? (
             <>
               <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-4 ring-1 ring-emerald-100">
                 <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">

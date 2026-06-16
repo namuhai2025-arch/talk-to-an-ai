@@ -5,7 +5,6 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
   signOut,
   reauthenticateWithPopup,
   signInWithCredential,
@@ -62,14 +61,20 @@ export default function AccountSettingsPage() {
   try {
     const platform = Capacitor.getPlatform();
 
-    if (platform === "android") {
+    if (platform === "android" || platform === "ios") {
       const result = await FirebaseAuthentication.signInWithGoogle();
 
-      console.log("Android Google sign in success", result.user?.uid);
+      console.log("Native Google sign in success", result.user?.uid);
 
       localStorage.removeItem("talkio_signed_out");
 
-      window.location.href = "/settings";
+      const redirect =
+        localStorage.getItem("talkio_after_signin_redirect") ||
+        "/settings/account";
+
+      localStorage.removeItem("talkio_after_signin_redirect");
+
+      window.location.href = redirect;
       return;
     }
 
@@ -80,18 +85,19 @@ export default function AccountSettingsPage() {
       prompt: "select_account",
     });
 
-    if (platform === "ios") {
-      await signInWithRedirect(auth, provider);
-      return;
-    }
-
     const result = await signInWithPopup(auth, provider);
 
     console.log("Google sign in success", result.user.uid);
 
     localStorage.removeItem("talkio_signed_out");
 
-    window.location.href = "/settings";
+    const redirect =
+      localStorage.getItem("talkio_after_signin_redirect") ||
+      "/settings/account";
+
+    localStorage.removeItem("talkio_after_signin_redirect");
+
+    window.location.href = redirect;
   } catch (error: any) {
     console.error("Google sign-in failed:", error);
 
@@ -143,7 +149,12 @@ console.log(
   userCredential.user.uid
 );
 
-window.location.href = "/settings";
+const redirect =
+  localStorage.getItem("talkio_after_signin_redirect") || "/settings/account";
+
+localStorage.removeItem("talkio_after_signin_redirect");
+
+window.location.href = redirect;
 return;
 }
 

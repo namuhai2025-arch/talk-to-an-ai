@@ -60,6 +60,7 @@ setAccountEmail(user.email || "Apple account");
 
     localStorage.setItem("talkio_signed_out", "true");
     localStorage.removeItem("talkio_native_uid");
+    localStorage.removeItem("talkio_native_email");
 
     await logOutRevenueCat();
     await signOut(auth);
@@ -104,6 +105,7 @@ setAccountEmail(user.email || "Apple account");
 
       localStorage.setItem("talkio_signed_out", "true");
       localStorage.removeItem("talkio_native_uid");
+      localStorage.removeItem("talkio_native_email");
 
       await logOutRevenueCat();
       await signOut(auth);

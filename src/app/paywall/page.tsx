@@ -15,6 +15,7 @@ type BillingCycle = "monthly" | "yearly";
 
 export default function PaywallPage() {
   const [showSuccess, setShowSuccess] = useState(false);
+  const [userId, setUserId] = useState<string | undefined>(undefined);
   
   useEffect(() => {
   const auth = getFirebaseAuth();
@@ -39,6 +40,13 @@ export default function PaywallPage() {
 ) => {
   const auth = getFirebaseAuth();
   const user = auth.currentUser;
+
+console.log(
+  "PAYWALL USER",
+  auth.currentUser?.uid,
+  auth.currentUser?.email,
+  auth.currentUser?.isAnonymous
+);
 
   if (!user || user.isAnonymous) {
   alert("Please sign in from the Welcome screen first.");

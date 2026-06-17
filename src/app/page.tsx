@@ -17,6 +17,7 @@ import {
   OAuthProvider,
   signInWithPopup,
   signInWithCredential,
+  
 } from "firebase/auth";
 import { Capacitor } from "@capacitor/core";
 import {
@@ -499,19 +500,23 @@ const handleGoogleSignIn = async () => {
     const platform = Capacitor.getPlatform();
 
 if (platform === "android" || platform === "ios") {
-  
   const result = await FirebaseAuthentication.signInWithGoogle();
+
+  const idToken = result?.credential?.idToken;
+
+  if (!idToken) {
+    throw new Error("No Google ID token returned.");
+  }
+
+  const auth = getFirebaseAuth();
+  const credential = GoogleAuthProvider.credential(idToken);
+
+  const userCredential = await signInWithCredential(auth, credential);
 
   localStorage.removeItem("talkio_signed_out");
   localStorage.removeItem("talkio_auth_in_progress");
 
-  const uid = result?.user?.uid;
-
-  if (uid) {
-  localStorage.setItem("talkio_native_uid", uid);
-  setUserId(uid);
-}
-
+  setUserId(userCredential.user.uid);
   setIsSigningIn(false);
   return;
 }

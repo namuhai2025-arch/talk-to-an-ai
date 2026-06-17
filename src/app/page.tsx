@@ -485,14 +485,14 @@ export default function Page() {
 const handleGoogleSignIn = async () => {
   if (!acceptedTerms || isSigningIn) return;
 
+  localStorage.setItem("talkio_auth_in_progress", "true");
   setIsSigningIn(true);
 
   try {
     const platform = Capacitor.getPlatform();
 
 if (platform === "android" || platform === "ios") {
-  localStorage.setItem("talkio_auth_in_progress", "true");
-
+  
   const result = await FirebaseAuthentication.signInWithGoogle();
 
   localStorage.removeItem("talkio_signed_out");

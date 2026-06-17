@@ -389,9 +389,16 @@ export default function Page() {
 
   const unsubscribe = auth.onAuthStateChanged(async (user) => {
     if (!user) {
-      setUserId("signed_out");
-      return;
-    }
+  const nativeUid = localStorage.getItem("talkio_native_uid");
+
+  if (nativeUid) {
+    setUserId(nativeUid);
+    return;
+  }
+
+  setUserId("signed_out");
+  return;
+}
 
     setUserId(user.uid);
 
@@ -501,9 +508,9 @@ if (platform === "android" || platform === "ios") {
   const uid = result?.user?.uid;
 
   if (uid) {
-    setUserId(uid);
-    window.location.replace("/");
-  }
+  localStorage.setItem("talkio_native_uid", uid);
+  setUserId(uid);
+}
 
   setIsSigningIn(false);
   return;

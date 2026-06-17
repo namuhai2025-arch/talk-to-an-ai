@@ -20,6 +20,15 @@ export default function AccountSettingsPage() {
 
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (!user || user.isAnonymous) {
+  const nativeUid = localStorage.getItem("talkio_native_uid");
+
+  if (nativeUid) {
+    setIsSignedIn(true);
+    setAccountEmail("Google account");
+    setAccountProvider("Google");
+    return;
+  }
+
   setIsSignedIn(false);
   setAccountEmail(null);
   setAccountProvider(null);
@@ -44,19 +53,20 @@ setAccountEmail(user.email || "Apple account");
   }, []);
 
   const handleSignOut = async () => {
-    try {
-      const auth = getFirebaseAuth();
+  try {
+    const auth = getFirebaseAuth();
 
-      localStorage.setItem("talkio_signed_out", "true");
+    localStorage.setItem("talkio_signed_out", "true");
+    localStorage.removeItem("talkio_native_uid");
 
-      await logOutRevenueCat();
-      await signOut(auth);
+    await logOutRevenueCat();
+    await signOut(auth);
 
-      window.location.replace("/");
-    } catch (error) {
-      console.error("Sign out failed:", error);
-    }
-  };
+    window.location.replace("/");
+  } catch (error) {
+    console.error("Sign out failed:", error);
+  }
+};
 
   const handleDeleteAccount = async () => {
     const auth = getFirebaseAuth();
@@ -91,6 +101,7 @@ setAccountEmail(user.email || "Apple account");
       }
 
       localStorage.setItem("talkio_signed_out", "true");
+      localStorage.removeItem("talkio_native_uid");
 
       await logOutRevenueCat();
       await signOut(auth);

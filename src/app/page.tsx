@@ -343,6 +343,11 @@ export default function Page() {
     cleanup = await App.addListener("appStateChange", ({ isActive }) => {
       console.log("APP STATE:", isActive);
 
+      if (localStorage.getItem("talkio_auth_in_progress") === "true") {
+  console.log("Auth in progress. Skipping app lock.");
+  return;
+}
+
       const enabled =
         localStorage.getItem("talkio_pin_enabled") === "true";
       const savedPin = localStorage.getItem("talkio_pin_code");
@@ -488,10 +493,17 @@ const handleGoogleSignIn = async () => {
 if (platform === "android" || platform === "ios") {
   localStorage.setItem("talkio_auth_in_progress", "true");
 
-  await FirebaseAuthentication.signInWithGoogle();
+  const result = await FirebaseAuthentication.signInWithGoogle();
 
   localStorage.removeItem("talkio_signed_out");
   localStorage.removeItem("talkio_auth_in_progress");
+
+  const uid = result?.user?.uid;
+
+  if (uid) {
+    setUserId(uid);
+    window.location.replace("/");
+  }
 
   setIsSigningIn(false);
   return;

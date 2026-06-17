@@ -485,31 +485,30 @@ const handleGoogleSignIn = async () => {
   try {
     const platform = Capacitor.getPlatform();
 
-    if (platform === "android" || platform === "ios") {
-      localStorage.setItem("talkio_auth_in_progress", "true");
+if (platform === "android" || platform === "ios") {
+  localStorage.setItem("talkio_auth_in_progress", "true");
 
-await FirebaseAuthentication.signInWithGoogle();
+  await FirebaseAuthentication.signInWithGoogle();
+
+  localStorage.removeItem("talkio_signed_out");
+  localStorage.removeItem("talkio_auth_in_progress");
+
+  setIsSigningIn(false);
+  return;
+}
+
+const auth = getFirebaseAuth();
+const provider = new GoogleAuthProvider();
+
+provider.setCustomParameters({ prompt: "select_account" });
+
+await signInWithPopup(auth, provider);
 
 localStorage.removeItem("talkio_signed_out");
 localStorage.removeItem("talkio_auth_in_progress");
 
 setIsSigningIn(false);
-setUserId(getFirebaseAuth().currentUser?.uid || null);
 return;
-    }
-
-    const auth = getFirebaseAuth();
-    const provider = new GoogleAuthProvider();
-
-    provider.setCustomParameters({ prompt: "select_account" });
-
-    await signInWithPopup(auth, provider);
-
-localStorage.removeItem("talkio_signed_out");
-localStorage.removeItem("talkio_auth_in_progress");
-
-setIsSigningIn(false);
-setUserId(auth.currentUser?.uid || null);
 
   } catch (error: any) {
   localStorage.removeItem("talkio_auth_in_progress");
@@ -672,7 +671,10 @@ await new Promise((resolve) =>
       const auth = getFirebaseAuth();
 
       if (!auth.currentUser) {
-  throw new Error("No signed-in user available.");
+  alert("Please wait a moment and try again.");
+  setLoading(false);
+  setShowTyping(false);
+  return;
 }
 
       const user = auth.currentUser;
@@ -730,9 +732,9 @@ await new Promise((resolve) =>
       }
 
       let assistantReply =
-        typeof data?.reply === "string" && data.reply.trim()
-          ? data.reply
-          : "...";
+  typeof data?.reply === "string" && data.reply.trim()
+    ? data.reply
+    : "I lost your message while I was thinking. Could you send it again?";
 
       if (res.status === 429) {
         setIsLimitReached(true);

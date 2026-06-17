@@ -23,11 +23,13 @@ export default function AccountSettingsPage() {
   const nativeUid = localStorage.getItem("talkio_native_uid");
 
   if (nativeUid) {
-    setIsSignedIn(true);
-    setAccountEmail("Google account");
-    setAccountProvider("Google");
-    return;
-  }
+  setIsSignedIn(true);
+  setAccountEmail(
+    localStorage.getItem("talkio_native_email") || "Google account"
+  );
+  setAccountProvider("Google");
+  return;
+}
 
   setIsSignedIn(false);
   setAccountEmail(null);

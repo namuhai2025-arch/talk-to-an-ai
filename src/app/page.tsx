@@ -389,6 +389,13 @@ export default function Page() {
   const auth = getFirebaseAuth();
 
   const unsubscribe = auth.onAuthStateChanged(async (user) => {
+
+    console.log(
+  "AUTH STATE CHANGED",
+  user?.uid,
+  user?.email
+);
+
     if (!user) {
   const nativeUid = localStorage.getItem("talkio_native_uid");
 
@@ -513,12 +520,27 @@ if (platform === "android" || platform === "ios") {
 
   const userCredential = await signInWithCredential(auth, credential);
 
-  localStorage.removeItem("talkio_signed_out");
-  localStorage.removeItem("talkio_auth_in_progress");
+localStorage.setItem(
+  "talkio_native_uid",
+  userCredential.user.uid
+);
 
-  setUserId(userCredential.user.uid);
-  setIsSigningIn(false);
-  return;
+localStorage.setItem(
+  "talkio_native_email",
+  userCredential.user.email || "Google account"
+);
+
+console.log(
+  "GOOGLE LOGIN SUCCESS",
+  userCredential.user.uid
+);
+
+localStorage.removeItem("talkio_signed_out");
+localStorage.removeItem("talkio_auth_in_progress");
+
+setUserId(userCredential.user.uid);
+setIsSigningIn(false);
+return;
 }
 
 const auth = getFirebaseAuth();

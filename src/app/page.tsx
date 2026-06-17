@@ -130,8 +130,10 @@ export default function Page() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const [acceptedTerms, setAcceptedTerms] = useState(false);  
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [signingProvider, setSigningProvider] =
+  useState<"google" | "apple" | null>(null);
 
   const [mounted, setMounted] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -497,77 +499,60 @@ export default function Page() {
     setShowNamePrompt(false);
   }
 
-const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = async () => {
   if (!acceptedTerms || isSigningIn) return;
 
   localStorage.setItem("talkio_auth_in_progress", "true");
   setIsSigningIn(true);
+  setSigningProvider("google");
 
   try {
     const platform = Capacitor.getPlatform();
 
-if (platform === "android" || platform === "ios") {
-  const result = await FirebaseAuthentication.signInWithGoogle();
+    if (platform === "android" || platform === "ios") {
+      const result = await FirebaseAuthentication.signInWithGoogle();
 
-  const idToken = result?.credential?.idToken;
+      const idToken = result?.credential?.idToken;
 
-  if (!idToken) {
-    throw new Error("No Google ID token returned.");
-  }
+      if (!idToken) {
+        throw new Error("No Google ID token returned.");
+      }
 
-  const auth = getFirebaseAuth();
-  const credential = GoogleAuthProvider.credential(idToken);
+      const auth = getFirebaseAuth();
+      const credential = GoogleAuthProvider.credential(idToken);
+      const userCredential = await signInWithCredential(auth, credential);
 
-  const userCredential = await signInWithCredential(auth, credential);
+      localStorage.setItem("talkio_native_uid", userCredential.user.uid);
+      localStorage.setItem(
+        "talkio_native_email",
+        userCredential.user.email || "Google account"
+      );
 
-localStorage.setItem(
-  "talkio_native_uid",
-  userCredential.user.uid
-);
+      console.log("GOOGLE LOGIN SUCCESS", userCredential.user.uid);
 
-localStorage.setItem(
-  "talkio_native_email",
-  userCredential.user.email || "Google account"
-);
+      localStorage.removeItem("talkio_signed_out");
+      localStorage.removeItem("talkio_auth_in_progress");
 
-console.log(
-  "GOOGLE LOGIN SUCCESS",
-  userCredential.user.uid
-);
-
-localStorage.removeItem("talkio_signed_out");
-localStorage.removeItem("talkio_auth_in_progress");
-
-setUserId(userCredential.user.uid);
-setIsSigningIn(false);
-return;
-}
-
-const auth = getFirebaseAuth();
-const provider = new GoogleAuthProvider();
-
-provider.setCustomParameters({ prompt: "select_account" });
-
-await signInWithPopup(auth, provider);
-
-localStorage.removeItem("talkio_signed_out");
-localStorage.removeItem("talkio_auth_in_progress");
-
-setIsSigningIn(false);
-return;
-
+      setUserId(userCredential.user.uid);
+      setSigningProvider(null);
+      setIsSigningIn(false);
+      return;
+    }
   } catch (error: any) {
-  localStorage.removeItem("talkio_auth_in_progress");
+    localStorage.removeItem("talkio_auth_in_progress");
+    setSigningProvider(null);
+    setIsSigningIn(false);
 
-  console.error("Google sign-in failed:", error);
-  alert(`Google sign in failed.\n\n${error?.message || JSON.stringify(error)}`);
-  setIsSigningIn(false);
-}
+    console.error("Google sign-in failed:", error);
+    alert(`Google sign in failed.\n\n${error?.message || JSON.stringify(error)}`);
+  }
 };
+
 const handleAppleSignIn = async () => {
   if (!acceptedTerms || isSigningIn) return;
 
   setIsSigningIn(true);
+  setSigningProvider("apple");
   localStorage.setItem("talkio_auth_in_progress", "true");
 
   const auth = getFirebaseAuth();
@@ -593,33 +578,39 @@ const handleAppleSignIn = async () => {
       localStorage.removeItem("talkio_signed_out");
       localStorage.removeItem("talkio_auth_in_progress");
 
-      setIsSigningIn(false);
       setUserId(auth.currentUser?.uid || null);
+      setSigningProvider(null);
+      setIsSigningIn(false);
+
       return;
-    }
+      }
 
     await signInWithPopup(auth, provider);
 
-    localStorage.removeItem("talkio_signed_out");
-    localStorage.removeItem("talkio_auth_in_progress");
+localStorage.removeItem("talkio_signed_out");
+localStorage.removeItem("talkio_auth_in_progress");
 
-    setIsSigningIn(false);
-    setUserId(auth.currentUser?.uid || null);
-  } catch (error: any) {
-    localStorage.removeItem("talkio_auth_in_progress");
+setUserId(auth.currentUser?.uid || null);
+setSigningProvider(null);
+setIsSigningIn(false);
 
-    console.error("Apple sign-in failed raw:", error);
-    console.error("Apple sign-in failed code:", error?.code);
-    console.error("Apple sign-in failed message:", error?.message);
 
-    alert(
-      `Apple sign in failed.\n\nCode: ${
-        error?.code || "none"
-      }\nMessage: ${error?.message || String(error)}`
-    );
+    } catch (error: any) {
+  localStorage.removeItem("talkio_auth_in_progress");
 
-    setIsSigningIn(false);
-  }
+  setSigningProvider(null);
+  setIsSigningIn(false);
+
+  console.error("Apple sign-in failed raw:", error);
+  console.error("Apple sign-in failed code:", error?.code);
+  console.error("Apple sign-in failed message:", error?.message);
+
+  alert(
+    `Apple sign in failed.\n\nCode: ${
+      error?.code || "none"
+    }\nMessage: ${error?.message || String(error)}`
+  );
+}
 };
 
   async function sendMessage(overrideText?: string) {
@@ -940,7 +931,9 @@ setMessages((prev): ChatMessage[] => {
   onClick={handleGoogleSignIn}
   className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
 >
-  {isSigningIn ? "Opening Google..." : "Continue with Google"}
+  {signingProvider === "google"
+  ? "Opening Google..."
+  : "Continue with Google"}
 </button>
 
           <button
@@ -949,7 +942,9 @@ setMessages((prev): ChatMessage[] => {
   onClick={handleAppleSignIn}
   className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
 >
-  {isSigningIn ? "Opening Apple..." : "Continue with Apple"}
+  {signingProvider === "apple"
+  ? "Opening Apple..."
+  : "Continue with Apple"}
 </button>
         </div>
       </div>

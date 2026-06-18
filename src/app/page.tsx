@@ -138,6 +138,8 @@ export default function Page() {
   const [signingProvider, setSigningProvider] =
   useState<"google" | "apple" | null>(null);
 
+  const [authInProgress, setAuthInProgress] = useState(false);
+
   const [mounted, setMounted] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -151,7 +153,8 @@ export default function Page() {
   const [draftNickname, setDraftNickname] = useState("");
   const [showNamePrompt, setShowNamePrompt] = useState(false);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([buildGreeting("")]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversationLoaded, setConversationLoaded] = useState(false);
   const [conversationTitle, setConversationTitle] =
     useState("New conversation");
 
@@ -255,6 +258,7 @@ export default function Page() {
     if (typeof savedTitle === "string" && savedTitle.trim()) {
       setConversationTitle(savedTitle);
     }
+     setConversationLoaded(true);
   }, [mounted, storageKeys]);
 
   useEffect(() => {
@@ -263,14 +267,14 @@ export default function Page() {
   }, [displayName, mounted, storageKeys]);
 
   useEffect(() => {
-    if (!mounted) return;
-    localStorage.setItem(storageKeys.messages, JSON.stringify(messages));
-  }, [messages, mounted, storageKeys]);
+  if (!mounted || !conversationLoaded) return;
+  localStorage.setItem(storageKeys.messages, JSON.stringify(messages));
+}, [messages, mounted, conversationLoaded, storageKeys]);
 
   useEffect(() => {
-    if (!mounted) return;
-    localStorage.setItem(storageKeys.title, JSON.stringify(conversationTitle));
-  }, [conversationTitle, mounted, storageKeys]);
+  if (!mounted || !conversationLoaded) return;
+  localStorage.setItem(storageKeys.title, JSON.stringify(conversationTitle));
+}, [conversationTitle, mounted, conversationLoaded, storageKeys]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -499,6 +503,7 @@ export default function Page() {
 
   localStorage.setItem("talkio_auth_in_progress", "true");
   setIsSigningIn(true);
+  setAuthInProgress(true);
   setSigningProvider("google");
 
   try {
@@ -525,12 +530,14 @@ export default function Page() {
       setUserId(userCredential.user.uid);
       setSigningProvider(null);
       setIsSigningIn(false);
+      setAuthInProgress(false);
       return;
     }
   } catch (error: any) {
     localStorage.removeItem("talkio_auth_in_progress");
     setSigningProvider(null);
     setIsSigningIn(false);
+    setAuthInProgress(false);
 
     console.error("Google sign-in failed:", error);
     alert(`Google sign in failed.\n\n${error?.message || JSON.stringify(error)}`);
@@ -541,6 +548,7 @@ const handleAppleSignIn = async () => {
   if (!acceptedTerms || isSigningIn) return;
 
   setIsSigningIn(true);
+  setAuthInProgress(true);
   setSigningProvider("apple");
   localStorage.setItem("talkio_auth_in_progress", "true");
 
@@ -570,6 +578,7 @@ const handleAppleSignIn = async () => {
       setUserId(auth.currentUser?.uid || null);
       setSigningProvider(null);
       setIsSigningIn(false);
+      setAuthInProgress(false);
 
       return;
       }
@@ -582,6 +591,7 @@ localStorage.removeItem("talkio_auth_in_progress");
 setUserId(auth.currentUser?.uid || null);
 setSigningProvider(null);
 setIsSigningIn(false);
+setAuthInProgress(false);
 
 
     } catch (error: any) {
@@ -589,6 +599,7 @@ setIsSigningIn(false);
 
   setSigningProvider(null);
   setIsSigningIn(false);
+  setAuthInProgress(false);
 
   console.error("Apple sign-in failed raw:", error);
   console.error("Apple sign-in failed code:", error?.code);
@@ -869,7 +880,9 @@ setMessages((prev): ChatMessage[] => {
     }
   }
 
-  if (!mounted || !authReady) return null;
+  if (!mounted || !authReady || !conversationLoaded || authInProgress || isSigningIn) {
+  return null;
+}
 
   if (!isSignedOut && pinRequired && !pinUnlocked) {
   return (

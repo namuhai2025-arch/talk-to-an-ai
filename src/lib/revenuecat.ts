@@ -63,8 +63,11 @@ export async function configureRevenueCat(userId?: string) {
     }
   })();
 
+  try {
   await configuringPromise;
+} finally {
   configuringPromise = null;
+}
 }
 
 export function isRevenueCatConfigured() {

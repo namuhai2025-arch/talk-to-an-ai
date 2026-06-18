@@ -951,10 +951,7 @@ setMessages((prev): ChatMessage[] => {
   );
 }
 
-  if (
-  isSignedOut &&
-  localStorage.getItem("talkio_terms_accepted") !== "true"
-) {
+  if (isSignedOut) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
       <div className="w-full max-w-sm rounded-[32px] bg-white p-8 shadow-sm ring-1 ring-stone-100">

@@ -9,7 +9,10 @@ import {
 import { registerTalkioPushToken } from "@/lib/registerPushToken";
 import { Share } from "@capacitor/share";
 import { Keyboard } from "@capacitor/keyboard";
-import { configureRevenueCat } from "@/lib/revenuecat";
+import {
+  configureRevenueCat,
+  getTalkioCustomerInfo,
+} from "@/lib/revenuecat";
 import { App } from "@capacitor/app";
 
 import {
@@ -701,10 +704,44 @@ await new Promise((resolve) =>
       const user = auth.currentUser;
       const token = user ? await user.getIdToken() : "";
 
-      const planName =
-  typeof window !== "undefined"
-    ? localStorage.getItem("talkio_cached_plan") || "Free Plan"
-    : "Free Plan";
+      let userTier = "free";
+
+try {
+  const customerResult = await getTalkioCustomerInfo();
+  const active = customerResult?.customerInfo?.entitlements?.active || {};
+  const activeSubscriptions =
+    customerResult?.customerInfo?.activeSubscriptions || [];
+
+  if (
+    active["Talkio Presence"] ||
+    active["presence"] ||
+    activeSubscriptions.includes("talkio_presence_monthly_v2")
+  ) {
+    userTier = "presence";
+    localStorage.setItem("talkio_cached_plan", "Talkio Presence");
+  } else if (
+    active["Talkio Companion"] ||
+    active["companion"] ||
+    activeSubscriptions.includes("talkio_companion_monthly")
+  ) {
+    userTier = "companion";
+    localStorage.setItem("talkio_cached_plan", "Talkio Companion");
+  }
+} catch (err) {
+  console.log("Failed to resolve chat tier:", err);
+
+  const cachedPlan =
+    typeof window !== "undefined"
+      ? localStorage.getItem("talkio_cached_plan")
+      : "";
+
+  userTier =
+    cachedPlan === "Talkio Presence"
+      ? "presence"
+      : cachedPlan === "Talkio Companion"
+        ? "companion"
+        : "free";
+}
 
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -716,12 +753,7 @@ await new Promise((resolve) =>
   message: text,
   messages: nextMessages,
 
-  userTier:
-    planName === "Talkio Presence"
-      ? "presence"
-      : planName === "Talkio Companion"
-      ? "companion"
-      : "free",
+  userTier,
 
   source:
     typeof window !== "undefined" &&

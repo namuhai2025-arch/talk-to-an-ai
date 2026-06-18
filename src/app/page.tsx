@@ -423,7 +423,7 @@ export default function Page() {
 
     setCheckingAuth(false);
     setAuthReady(true);
-  }, 1500);
+  }, 0);
 });
 
   return unsubscribe;
@@ -899,7 +899,23 @@ setMessages((prev): ChatMessage[] => {
   authInProgress ||
   isSigningIn
 ) {
-  return null;
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-stone-50">
+      <div className="text-center">
+        <h1 className="text-4xl font-semibold tracking-tight text-stone-900">
+          Talkio
+        </h1>
+
+        <p className="mt-3 text-xl font-medium text-stone-700">
+          Emotional Relief AI
+        </p>
+
+        <p className="mt-4 text-base italic text-stone-500">
+          Getting your space ready...
+        </p>
+      </div>
+    </main>
+  );
 }
 
   if (!isSignedOut && pinRequired && !pinUnlocked) {
@@ -963,7 +979,7 @@ setMessages((prev): ChatMessage[] => {
           You don&apos;t have to carry it all alone.
         </p>
 
-        {!acceptedTerms && (
+        
   <label className="mb-4 flex items-start gap-3 text-left">
     <input
       type="checkbox"
@@ -992,7 +1008,7 @@ setMessages((prev): ChatMessage[] => {
       .
     </span>
   </label>
-)}
+
 
         <div className="mt-8 space-y-3">
           <button

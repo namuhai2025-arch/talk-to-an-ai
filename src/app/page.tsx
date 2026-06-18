@@ -133,7 +133,10 @@ export default function Page() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(() => {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem("talkio_terms_accepted") === "true";
+});
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [signingProvider, setSigningProvider] =
   useState<"google" | "apple" | null>(null);
@@ -143,6 +146,7 @@ export default function Page() {
   const [mounted, setMounted] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const isSignedOut = userId === "signed_out";
 
   const [pinRequired, setPinRequired] = useState(false);
@@ -399,21 +403,28 @@ export default function Page() {
   const auth = getFirebaseAuth();
 
   const unsubscribe = auth.onAuthStateChanged(async (user) => {
-    console.log("AUTH STATE CHANGED", user?.uid, user?.email);
+  console.log("AUTH STATE CHANGED", user?.uid, user?.email);
 
-    if (!user) {
-      setUserId("signed_out");
-      setAuthReady(true);
-      return;
-    }
-
+  if (user) {
     setUserId(user.uid);
 
     await registerTalkioPushToken().catch(console.error);
     await configureRevenueCat(user.uid).catch(console.error);
 
+    setCheckingAuth(false);
     setAuthReady(true);
-  });
+    return;
+  }
+
+  setTimeout(() => {
+    if (!auth.currentUser) {
+      setUserId("signed_out");
+    }
+
+    setCheckingAuth(false);
+    setAuthReady(true);
+  }, 1500);
+});
 
   return unsubscribe;
 }, [mounted]);
@@ -880,7 +891,14 @@ setMessages((prev): ChatMessage[] => {
     }
   }
 
-  if (!mounted || !authReady || !conversationLoaded || authInProgress || isSigningIn) {
+  if (
+  !mounted ||
+  !authReady ||
+  checkingAuth ||
+  !conversationLoaded ||
+  authInProgress ||
+  isSigningIn
+) {
   return null;
 }
 
@@ -933,7 +951,10 @@ setMessages((prev): ChatMessage[] => {
   );
 }
 
-  if (isSignedOut) {
+  if (
+  isSignedOut &&
+  localStorage.getItem("talkio_terms_accepted") !== "true"
+) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
       <div className="w-full max-w-sm rounded-[32px] bg-white p-8 shadow-sm ring-1 ring-stone-100">
@@ -945,26 +966,36 @@ setMessages((prev): ChatMessage[] => {
           You don&apos;t have to carry it all alone.
         </p>
 
-        <label className="mb-4 flex items-start gap-3 text-left">
-  <input
-    type="checkbox"
-    checked={acceptedTerms}
-    onChange={(e) => setAcceptedTerms(e.target.checked)}
-    className="mt-1 h-5 w-5"
-  />
+        {!acceptedTerms && (
+  <label className="mb-4 flex items-start gap-3 text-left">
+    <input
+      type="checkbox"
+      checked={acceptedTerms}
+      onChange={(e) => {
+        setAcceptedTerms(e.target.checked);
 
-  <span className="text-sm leading-6 text-stone-600">
-    I agree to Talkio&apos;s{" "}
-    <a href="/terms" className="font-medium text-emerald-700 underline">
-      Terms
-    </a>{" "}
-    and{" "}
-    <a href="/privacy" className="font-medium text-emerald-700 underline">
-      Privacy Policy
-    </a>
-    .
-  </span>
-</label>
+        if (e.target.checked) {
+          localStorage.setItem("talkio_terms_accepted", "true");
+        } else {
+          localStorage.removeItem("talkio_terms_accepted");
+        }
+      }}
+      className="mt-1 h-5 w-5"
+    />
+
+    <span className="text-sm leading-6 text-stone-600">
+      I agree to Talkio&apos;s{" "}
+      <a href="/terms" className="font-medium text-emerald-700 underline">
+        Terms
+      </a>{" "}
+      and{" "}
+      <a href="/privacy" className="font-medium text-emerald-700 underline">
+        Privacy Policy
+      </a>
+      .
+    </span>
+  </label>
+)}
 
         <div className="mt-8 space-y-3">
           <button

@@ -900,19 +900,29 @@ setMessages((prev): ChatMessage[] => {
   isSigningIn
 ) {
   return (
-    <main className="min-h-screen bg-stone-50 flex items-center justify-center px-6">
-      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm">
-        <h1 className="text-3xl font-semibold text-stone-900">
+    <main className="flex min-h-screen items-center justify-center bg-[#f7f1e8] px-6">
+      <div className="w-full max-w-sm rounded-[32px] border border-stone-200 bg-white/80 p-8 text-center shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl">
+          🌿
+        </div>
+
+        <h1 className="text-4xl font-semibold tracking-tight text-stone-900">
           Talkio
         </h1>
 
-        <p className="mt-3 text-xl font-semibold text-stone-900">
+        <p className="mt-3 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
           Emotional Relief AI
         </p>
 
-        <p className="mt-4 text-stone-500 italic">
-          Getting your space ready...
+        <p className="mt-5 text-sm leading-6 text-stone-500">
+          Getting your calm space ready...
         </p>
+
+        <div className="mt-6 flex justify-center gap-1">
+          <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.3s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.15s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400" />
+        </div>
       </div>
     </main>
   );

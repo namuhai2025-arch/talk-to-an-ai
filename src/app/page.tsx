@@ -598,9 +598,6 @@ setIsSigningIn(false);
   );
 }
 };
-  const planName =
-  localStorage.getItem("talkio_cached_plan") || "Free Plan";
-
   async function sendMessage(overrideText?: string) {
     const text = (overrideText ?? input).trim();
     const normalizedText = text.toLowerCase();
@@ -701,9 +698,13 @@ await new Promise((resolve) =>
   setShowTyping(false);
   return;
 }
-
       const user = auth.currentUser;
       const token = user ? await user.getIdToken() : "";
+
+      const planName =
+  typeof window !== "undefined"
+    ? localStorage.getItem("talkio_cached_plan") || "Free Plan"
+    : "Free Plan";
 
       const res = await fetch("/api/chat", {
         method: "POST",

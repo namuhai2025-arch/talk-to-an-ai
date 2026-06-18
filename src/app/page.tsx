@@ -416,6 +416,8 @@ export default function Page() {
     return;
   }
 
+  setCheckingAuth(true);
+
   setTimeout(() => {
     if (!auth.currentUser) {
       setUserId("signed_out");

@@ -54,30 +54,30 @@ console.log("RevenueCat active subscriptions:", activeSubscriptions);
 console.log("RevenueCat app user:", user.uid);
 
       if (
-        active["Talkio Companion"] ||
-        active["companion"] ||
-        activeSubscriptions.includes("talkio_companion_monthly")
-      ) {
-        localStorage.setItem("talkio_cached_plan", "Talkio Companion");
-        setPlanName("Talkio Companion");
-      } else if (
-        active["Talkio Presence"] ||
-        active["presence"] ||
-        activeSubscriptions.includes("talkio_presence_monthly_v2")
-      ) {
-        localStorage.setItem("talkio_cached_plan", "Talkio Presence");
-setPlanName("Talkio Presence");
-      } else {
-        const cachedPlan = localStorage.getItem("talkio_cached_plan");
+  active["Talkio Presence"] ||
+  active["presence"] ||
+  activeSubscriptions.includes("talkio_presence_monthly_v2")
+) {
+  localStorage.setItem("talkio_cached_plan", "Talkio Presence");
+  setPlanName("Talkio Presence");
+} else if (
+  active["Talkio Companion"] ||
+  active["companion"] ||
+  activeSubscriptions.includes("talkio_companion_monthly")
+) {
+  localStorage.setItem("talkio_cached_plan", "Talkio Companion");
+  setPlanName("Talkio Companion");
+} else {
+  const cachedPlan = localStorage.getItem("talkio_cached_plan");
 
-if (cachedPlan === "Talkio Companion" || cachedPlan === "Talkio Presence") {
-  setPlanName(cachedPlan);
-  return;
+  if (cachedPlan === "Talkio Companion" || cachedPlan === "Talkio Presence") {
+    setPlanName(cachedPlan);
+    return;
+  }
+
+  localStorage.setItem("talkio_cached_plan", "Free Plan");
+  setPlanName("Free Plan");
 }
-
-      localStorage.setItem("talkio_cached_plan", "Free Plan");
-      setPlanName("Free Plan");
-      }
     } catch (err) {
       console.log("Failed to load plan:", err);
       const cachedPlan = localStorage.getItem("talkio_cached_plan");

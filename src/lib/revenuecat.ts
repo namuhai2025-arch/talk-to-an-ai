@@ -36,12 +36,14 @@ export async function configureRevenueCat(userId?: string) {
 
     if (!configured) {
       await Purchases.configure({
-        apiKey: platform === "ios" ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY,
-        appUserID: userId,
-      });
+  apiKey: platform === "ios" ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY,
+  appUserID: userId,
+});
 
-      configured = true;
-      configuredUserId = userId;
+await Purchases.logIn({ appUserID: userId });
+
+configured = true;
+configuredUserId = userId;
 
       console.log("RevenueCat configured successfully", {
         platform,

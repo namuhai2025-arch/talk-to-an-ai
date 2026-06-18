@@ -598,6 +598,8 @@ setIsSigningIn(false);
   );
 }
 };
+  const planName =
+  localStorage.getItem("talkio_cached_plan") || "Free Plan";
 
   async function sendMessage(overrideText?: string) {
     const text = (overrideText ?? input).trim();
@@ -712,6 +714,14 @@ await new Promise((resolve) =>
         body: JSON.stringify({
   message: text,
   messages: nextMessages,
+
+  userTier:
+    planName === "Talkio Presence"
+      ? "presence"
+      : planName === "Talkio Companion"
+      ? "companion"
+      : "free",
+
   source:
     typeof window !== "undefined" &&
     sessionStorage.getItem("talkio_checkin_reply_context") === "true"

@@ -900,17 +900,17 @@ setMessages((prev): ChatMessage[] => {
   isSigningIn
 ) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-stone-50">
-      <div className="text-center">
-        <h1 className="text-4xl font-semibold tracking-tight text-stone-900">
+    <main className="min-h-screen bg-stone-50 flex items-center justify-center px-6">
+      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm">
+        <h1 className="text-3xl font-semibold text-stone-900">
           Talkio
         </h1>
 
-        <p className="mt-3 text-xl font-medium text-stone-700">
+        <p className="mt-3 text-xl font-semibold text-stone-900">
           Emotional Relief AI
         </p>
 
-        <p className="mt-4 text-base italic text-stone-500">
+        <p className="mt-4 text-stone-500 italic">
           Getting your space ready...
         </p>
       </div>

@@ -10,13 +10,16 @@ import { onAuthStateChanged } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
 
 export default function SettingsPage() {
-  const [planName, setPlanName] = useState(() => {
-  if (typeof window === "undefined") return "Free Plan";
-  return localStorage.getItem("talkio_cached_plan") || "Free Plan";
-});
+  const [planName, setPlanName] = useState("Free Plan");
 
   useEffect(() => {
   const auth = getFirebaseAuth();
+
+  const cachedPlan = localStorage.getItem("talkio_cached_plan");
+
+if (cachedPlan === "Talkio Companion" || cachedPlan === "Talkio Presence") {
+  setPlanName(cachedPlan);
+}
 
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
     try {

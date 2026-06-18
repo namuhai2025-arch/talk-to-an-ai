@@ -423,7 +423,7 @@ export default function Page() {
 
     setCheckingAuth(false);
     setAuthReady(true);
-  }, 0);
+  }, 2000);
 });
 
   return unsubscribe;

@@ -14,54 +14,47 @@ export default function AccountSettingsPage() {
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [accountProvider, setAccountProvider] = useState<string | null>(null);
+  const [authLoaded, setAuthLoaded] = useState(false);
 
   useEffect(() => {
-    const auth = getFirebaseAuth();
+  const auth = getFirebaseAuth();
 
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (!user || user.isAnonymous) {
-  const nativeUid = localStorage.getItem("talkio_native_uid");
+  const unsubscribe = auth.onAuthStateChanged((user) => {
+    setAuthLoaded(true);
 
-  if (nativeUid) {
-  setIsSignedIn(true);
-  setAccountEmail(
-    localStorage.getItem("talkio_native_email") || "Google account"
-  );
-  setAccountProvider("Google");
-  return;
-}
+    if (!user || user.isAnonymous) {
+      setIsSignedIn(false);
+      setAccountEmail(null);
+      setAccountProvider(null);
+      return;
+    }
 
-  setIsSignedIn(false);
-  setAccountEmail(null);
-  setAccountProvider(null);
-  return;
-}
+    setIsSignedIn(true);
+    setAccountEmail(user.email || "Apple account");
 
-setIsSignedIn(true);
-setAccountEmail(user.email || "Apple account");
+    const providerId =
+      user.providerData.find((p) => p.providerId === "google.com")?.providerId ||
+      user.providerData.find((p) => p.providerId === "apple.com")?.providerId ||
+      user.providerData[0]?.providerId;
 
-      const providerId = user.providerData[0]?.providerId;
+    if (providerId === "apple.com") {
+      setAccountProvider("Apple");
+    } else if (providerId === "google.com") {
+      setAccountProvider("Google");
+    } else {
+      setAccountProvider(providerId || "Signed in");
+    }
+  });
 
-      if (providerId === "apple.com") {
-        setAccountProvider("Apple");
-      } else if (providerId === "google.com") {
-        setAccountProvider("Google");
-      } else {
-        setAccountProvider(providerId || "Signed in");
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
+  return () => unsubscribe();
+}, []);
 
   const handleSignOut = async () => {
   try {
     const auth = getFirebaseAuth();
 
     localStorage.setItem("talkio_signed_out", "true");
-    localStorage.removeItem("talkio_native_uid");
-    localStorage.removeItem("talkio_native_email");
-
+   
     await logOutRevenueCat();
     await signOut(auth);
 
@@ -104,9 +97,7 @@ setAccountEmail(user.email || "Apple account");
       }
 
       localStorage.setItem("talkio_signed_out", "true");
-      localStorage.removeItem("talkio_native_uid");
-      localStorage.removeItem("talkio_native_email");
-
+      
       await logOutRevenueCat();
       await signOut(auth);
 
@@ -138,7 +129,11 @@ setAccountEmail(user.email || "Apple account");
         </p>
 
         <section className="mt-8 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
-          {isSignedIn ? (
+          {!authLoaded ? (
+  <div className="rounded-2xl bg-stone-50 px-4 py-4 text-sm leading-6 text-stone-500">
+    Checking account...
+  </div>
+) : isSignedIn ? (
             <>
               <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-4 ring-1 ring-emerald-100">
                 <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">

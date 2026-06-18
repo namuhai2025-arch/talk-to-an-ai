@@ -137,6 +137,7 @@ export default function Page() {
 
   const [mounted, setMounted] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const isSignedOut = userId === "signed_out";
 
   const [pinRequired, setPinRequired] = useState(false);
@@ -391,33 +392,24 @@ export default function Page() {
   const auth = getFirebaseAuth();
 
   const unsubscribe = auth.onAuthStateChanged(async (user) => {
-
-    console.log(
-  "AUTH STATE CHANGED",
-  user?.uid,
-  user?.email
-);
+    console.log("AUTH STATE CHANGED", user?.uid, user?.email);
 
     if (!user) {
-  const nativeUid = localStorage.getItem("talkio_native_uid");
-
-  if (nativeUid) {
-    setUserId(nativeUid);
-    return;
-  }
-
-  setUserId("signed_out");
-  return;
-}
+      setUserId("signed_out");
+      setAuthReady(true);
+      return;
+    }
 
     setUserId(user.uid);
 
     await registerTalkioPushToken().catch(console.error);
     await configureRevenueCat(user.uid).catch(console.error);
+
+    setAuthReady(true);
   });
 
   return unsubscribe;
-}, [mounted]);  
+}, [mounted]);
 
   useEffect(() => {
   const shouldOpenNickname = localStorage.getItem("openNicknamePrompt");
@@ -521,12 +513,6 @@ export default function Page() {
       const auth = getFirebaseAuth();
       const credential = GoogleAuthProvider.credential(idToken);
       const userCredential = await signInWithCredential(auth, credential);
-
-      localStorage.setItem("talkio_native_uid", userCredential.user.uid);
-      localStorage.setItem(
-        "talkio_native_email",
-        userCredential.user.email || "Google account"
-      );
 
       console.log("GOOGLE LOGIN SUCCESS", userCredential.user.uid);
 
@@ -840,7 +826,7 @@ setMessages((prev): ChatMessage[] => {
     }
   }
 
-  if (!mounted || userId === null) return null;
+  if (!mounted || !authReady) return null;
 
   if (!isSignedOut && pinRequired && !pinUnlocked) {
   return (

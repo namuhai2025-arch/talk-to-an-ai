@@ -5,15 +5,41 @@ import React from "react";
 
 export default function TalkioOnboarding() {
   const screens = [
-    { image: "/onboarding/screen1-heavy-thoughts.png" },
-    { image: "/onboarding/screen2-no-advice.png" },
-    { image: "/onboarding/screen3-no-judgment.png" },
-    { image: "/onboarding/screen4-clarity.png" },
-    { image: "/onboarding/screen5-feel-lighter.png" },
+    {
+      image: "/onboarding/screen1-heavy-thoughts.png",
+      buttonColor: "bg-[#14A978]",
+      finalButtonColor: "bg-[#0F8A5F]",
+      dotColor: "bg-[#14A978]",
+    },
+    {
+      image: "/onboarding/screen2-no-advice.png",
+      buttonColor: "bg-[#3F8F62]",
+      finalButtonColor: "bg-[#0F8A5F]",
+      dotColor: "bg-[#3F8F62]",
+    },
+    {
+      image: "/onboarding/screen3-no-judgment.png",
+      buttonColor: "bg-[#6F8A4A]",
+      finalButtonColor: "bg-[#0F8A5F]",
+      dotColor: "bg-[#6F8A4A]",
+    },
+    {
+      image: "/onboarding/screen4-clarity.png",
+      buttonColor: "bg-[#D08A4E]",
+      finalButtonColor: "bg-[#B9743C]",
+      dotColor: "bg-[#D08A4E]",
+    },
+    {
+      image: "/onboarding/screen5-feel-lighter.png",
+      buttonColor: "bg-[#7F8F58]",
+      finalButtonColor: "bg-[#687A42]",
+      dotColor: "bg-[#7F8F58]",
+    },
   ];
 
   const [index, setIndex] = React.useState(0);
 
+  const current = screens[index];
   const isFirst = index === 0;
   const isLast = index === screens.length - 1;
 
@@ -43,11 +69,11 @@ export default function TalkioOnboarding() {
       <div className="mx-auto flex min-h-[calc(100vh-80px)] w-full max-w-md flex-col">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex gap-2">
-            {screens.map((_, i) => (
+            {screens.map((screen, i) => (
               <div
-                key={i}
+                key={screen.image}
                 className={`h-2 rounded-full transition-all ${
-                  i === index ? "w-10 bg-[#17B57A]" : "w-2 bg-stone-300"
+                  i === index ? `w-10 ${current.dotColor}` : "w-2 bg-stone-300"
                 }`}
               />
             ))}
@@ -66,8 +92,8 @@ export default function TalkioOnboarding() {
 
         <div className="relative flex-1 overflow-hidden rounded-[34px] bg-[#f7f1e8]">
           <Image
-            key={screens[index].image}
-            src={screens[index].image}
+            key={current.image}
+            src={current.image}
             alt="Talkio onboarding"
             fill
             priority
@@ -79,7 +105,7 @@ export default function TalkioOnboarding() {
               <button
                 type="button"
                 onClick={next}
-                className="w-full rounded-full bg-[#17B57A] px-5 py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99]"
+                className={`w-full rounded-full ${current.buttonColor} px-5 py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99]`}
               >
                 Continue
               </button>
@@ -98,8 +124,8 @@ export default function TalkioOnboarding() {
                   onClick={next}
                   className={`w-[68%] rounded-full px-5 text-sm font-semibold text-white transition active:scale-[0.99] ${
                     isLast
-                      ? "bg-[#0F8A5F] py-3.5 shadow-md tracking-wide"
-                      : "bg-[#17B57A] py-3 shadow-sm"
+                      ? `${current.finalButtonColor} py-3.5 shadow-md tracking-wide`
+                      : `${current.buttonColor} py-3 shadow-sm`
                   }`}
                 >
                   {isLast ? "Start Talking" : "Continue"}

@@ -56,34 +56,35 @@ export default function TalkioOnboarding() {
         </div>
 
         <div className="relative flex-1 overflow-hidden rounded-[34px] bg-[#f7f1e8]">
-          <Image
-            key={screens[index].image}
-            src={screens[index].image}
-            alt="Talkio onboarding"
-            fill
-            priority
-            className="object-contain"
-          />
-        </div>
+  <Image
+    key={screens[index].image}
+    src={screens[index].image}
+    alt="Talkio onboarding"
+    fill
+    priority
+    className="object-contain"
+  />
 
-        <div className="mt-5 space-y-3">
-          {index > 0 && (
-            <button
-              onClick={() => setIndex((prev) => prev - 1)}
-              className="w-full rounded-2xl border border-stone-300 bg-white px-5 py-4 text-base font-medium text-stone-700"
-            >
-              Back
-            </button>
-          )}
+  <div className="absolute bottom-10 left-8 right-8 space-y-3">
+    {index > 0 && (
+      <button
+        type="button"
+        onClick={() => setIndex((prev) => prev - 1)}
+        className="w-full rounded-full border border-stone-300 bg-white/95 px-5 py-4 text-base font-semibold text-stone-700 shadow-sm"
+      >
+        Back
+      </button>
+    )}
 
-          <button
-            onClick={next}
-            className="w-full rounded-2xl bg-emerald-500 px-5 py-4 text-base font-semibold text-white"
-          >
-            {isLast ? "Start Talking" : "Continue"}
-          </button>
-        </div>
-
+    <button
+      type="button"
+      onClick={next}
+      className="w-full rounded-full bg-emerald-600 px-5 py-4 text-base font-semibold text-white shadow-lg"
+    >
+      {isLast ? "Start Talking" : "Continue"}
+    </button>
+  </div>
+</div>
         <p className="mt-4 text-center text-sm text-stone-400">
           Talkio • Vent. Reflect. Move Forward.
         </p>

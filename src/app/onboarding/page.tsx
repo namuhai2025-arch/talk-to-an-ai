@@ -13,6 +13,7 @@ export default function TalkioOnboarding() {
   ];
 
   const [index, setIndex] = React.useState(0);
+  const isFirst = index === 0;
   const isLast = index === screens.length - 1;
 
   function next() {
@@ -46,45 +47,53 @@ export default function TalkioOnboarding() {
           </div>
 
           {!isLast && (
-            <button
-              onClick={skip}
-              className="text-sm text-stone-500"
-            >
+            <button onClick={skip} className="text-sm text-stone-500">
               Skip
             </button>
           )}
         </div>
 
         <div className="relative flex-1 overflow-hidden rounded-[34px] bg-[#f7f1e8]">
-  <Image
-    key={screens[index].image}
-    src={screens[index].image}
-    alt="Talkio onboarding"
-    fill
-    priority
-    className="object-contain"
-  />
+          <Image
+            key={screens[index].image}
+            src={screens[index].image}
+            alt="Talkio onboarding"
+            fill
+            priority
+            className="object-contain"
+          />
 
-  <div className="absolute bottom-10 left-8 right-8 space-y-3">
-    {index > 0 && (
-      <button
-        type="button"
-        onClick={() => setIndex((prev) => prev - 1)}
-        className="w-full rounded-full border border-stone-300 bg-white/95 px-5 py-4 text-base font-semibold text-stone-700 shadow-sm"
-      >
-        Back
-      </button>
-    )}
+          <div className="absolute bottom-6 left-6 right-6">
+            {isFirst ? (
+              <button
+                type="button"
+                onClick={next}
+                className="w-full rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-md transition active:scale-[0.99]"
+              >
+                Continue
+              </button>
+            ) : (
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIndex((prev) => prev - 1)}
+                  className="w-[32%] rounded-full border border-stone-300 bg-white/90 px-4 py-3 text-sm font-medium text-stone-700 shadow-sm backdrop-blur transition active:scale-[0.99]"
+                >
+                  Back
+                </button>
 
-    <button
-      type="button"
-      onClick={next}
-      className="w-full rounded-full bg-emerald-600 px-5 py-4 text-base font-semibold text-white shadow-lg"
-    >
-      {isLast ? "Start Talking" : "Continue"}
-    </button>
-  </div>
-</div>
+                <button
+                  type="button"
+                  onClick={next}
+                  className="w-[68%] rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-md transition active:scale-[0.99]"
+                >
+                  {isLast ? "Start Talking" : "Continue"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
         <p className="mt-4 text-center text-sm text-stone-400">
           Talkio • Vent. Reflect. Move Forward.
         </p>

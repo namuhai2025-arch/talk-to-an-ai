@@ -13,6 +13,7 @@ export default function TalkioOnboarding() {
   ];
 
   const [index, setIndex] = React.useState(0);
+
   const isFirst = index === 0;
   const isLast = index === screens.length - 1;
 
@@ -31,6 +32,12 @@ export default function TalkioOnboarding() {
     window.location.href = "/";
   }
 
+  function back() {
+    if (!isFirst) {
+      setIndex((prev) => prev - 1);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f1e8] px-5 pb-6 pt-14 text-stone-900">
       <div className="mx-auto flex min-h-[calc(100vh-80px)] w-full max-w-md flex-col">
@@ -40,14 +47,18 @@ export default function TalkioOnboarding() {
               <div
                 key={i}
                 className={`h-2 rounded-full transition-all ${
-                  i === index ? "w-10 bg-emerald-500" : "w-2 bg-stone-300"
+                  i === index ? "w-10 bg-[#17B57A]" : "w-2 bg-stone-300"
                 }`}
               />
             ))}
           </div>
 
           {!isLast && (
-            <button onClick={skip} className="text-sm text-stone-500">
+            <button
+              type="button"
+              onClick={skip}
+              className="text-sm text-stone-500"
+            >
               Skip
             </button>
           )}
@@ -68,7 +79,7 @@ export default function TalkioOnboarding() {
               <button
                 type="button"
                 onClick={next}
-                className="w-full rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-md transition active:scale-[0.99]"
+                className="w-full rounded-full bg-[#17B57A] px-5 py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99]"
               >
                 Continue
               </button>
@@ -76,8 +87,8 @@ export default function TalkioOnboarding() {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setIndex((prev) => prev - 1)}
-                  className="w-[32%] rounded-full border border-stone-300 bg-white/90 px-4 py-3 text-sm font-medium text-stone-700 shadow-sm backdrop-blur transition active:scale-[0.99]"
+                  onClick={back}
+                  className="w-[32%] rounded-full border border-stone-200 bg-white/90 px-4 py-3 text-sm font-medium text-stone-700 shadow-sm backdrop-blur transition active:scale-[0.99]"
                 >
                   Back
                 </button>
@@ -85,7 +96,11 @@ export default function TalkioOnboarding() {
                 <button
                   type="button"
                   onClick={next}
-                  className="w-[68%] rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-md transition active:scale-[0.99]"
+                  className={`w-[68%] rounded-full px-5 text-sm font-semibold text-white transition active:scale-[0.99] ${
+                    isLast
+                      ? "bg-[#0F8A5F] py-3.5 shadow-md tracking-wide"
+                      : "bg-[#17B57A] py-3 shadow-sm"
+                  }`}
                 >
                   {isLast ? "Start Talking" : "Continue"}
                 </button>

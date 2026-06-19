@@ -1704,7 +1704,27 @@ if (safetyInterruption.blocked) {
 
 
     const access = await getUserAccessProfile(uid, decodedToken);
+    console.log("PLAN DEBUG", {
+  uid,
+  firestorePlan: access?.plan,
+  subscriptionStatus: access?.subscriptionStatus,
+});
 
+   const incomingTier =
+  typeof body?.userTier === "string"
+    ? body.userTier.trim().toLowerCase()
+    : "";
+
+console.log("INCOMING TIER", incomingTier);
+
+if (
+  incomingTier === "companion" ||
+  incomingTier === "presence" ||
+  incomingTier === "professionals" ||
+  incomingTier === "elite"
+) {
+  access.plan = incomingTier;
+}
     const freeTrial = await getOrCreateFreeTrial(uid);
 
     const userPlan = access?.plan || "free";

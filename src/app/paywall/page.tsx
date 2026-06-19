@@ -86,8 +86,17 @@ console.log(
       const purchaseResult = await purchaseTalkioPackage(packageToPurchase);
 
       if (purchaseResult.customerInfo) {
-        setShowSuccess(true);
-      }
+  localStorage.setItem(
+    "talkio_cached_plan",
+    "Talkio Companion"
+  );
+
+  setShowSuccess(true);
+
+  setTimeout(() => {
+    window.location.replace("/");
+  }, 500);
+}
     } catch (error: any) {
       console.error("Purchase failed:", error);
 
@@ -165,12 +174,12 @@ console.log(
             </p>
 
             <button
-              type="button"
-              onClick={() => (window.location.href = "/settings")}
-              className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-600 hover:shadow-lg"
-            >
-              Continue
-            </button>
+  type="button"
+  onClick={() => (window.location.href = "/")}
+  className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-600 hover:shadow-lg"
+>
+  Start Chatting
+</button>
           </div>
         </div>
       )}

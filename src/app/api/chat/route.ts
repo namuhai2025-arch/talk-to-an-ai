@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify(payload),
       cache: "no-store",
-    });
+    }); 
 
         const rawText = await firebaseRes.text();
 

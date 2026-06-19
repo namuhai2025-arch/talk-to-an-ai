@@ -31,8 +31,8 @@ export default function TalkioOnboarding() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f1e8] px-5 py-8 text-stone-900">
-      <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-md flex-col">
+    <main className="min-h-screen bg-[#f7f1e8] px-5 pb-6 pt-14 text-stone-900">
+      <div className="mx-auto flex min-h-[calc(100vh-80px)] w-full max-w-md flex-col">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex gap-2">
             {screens.map((_, i) => (
@@ -48,21 +48,21 @@ export default function TalkioOnboarding() {
           {!isLast && (
             <button
               onClick={skip}
-              className="text-sm text-stone-500 hover:text-stone-700"
+              className="text-sm text-stone-500"
             >
               Skip
             </button>
           )}
         </div>
 
-        <div className="relative flex-1 overflow-hidden rounded-[36px] bg-white shadow-sm">
+        <div className="relative flex-1 overflow-hidden rounded-[34px] bg-[#f7f1e8]">
           <Image
             key={screens[index].image}
             src={screens[index].image}
             alt="Talkio onboarding"
             fill
             priority
-            className="object-cover"
+            className="object-contain"
           />
         </div>
 

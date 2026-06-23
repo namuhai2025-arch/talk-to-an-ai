@@ -166,6 +166,8 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
 
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
   const [showSafety, setShowSafety] = useState(false);
   const [isLimitReached, setIsLimitReached] = useState(false);
 

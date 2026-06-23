@@ -1704,6 +1704,19 @@ if (safetyInterruption.blocked) {
 
 
     const access = await getUserAccessProfile(uid, decodedToken);
+
+    const userDocSnap = await db.collection("users").doc(uid).get();
+
+const userDocData =
+  userDocSnap.exists
+    ? userDocSnap.data() || {}
+    : {};
+
+const nickname =
+  typeof userDocData.nickname === "string"
+    ? userDocData.nickname.trim()
+    : "";
+
     console.log("PLAN DEBUG", {
   uid,
   firestorePlan: access?.plan,
@@ -1914,11 +1927,31 @@ const memoryPromptBlock = buildMemoryPromptBlock({
 
     const isTrustConcern = detectTrustConcern(latestUserMessage);
 
+const nicknameBlock = nickname
+  ? `
+USER PROFILE
+
+Preferred name: ${nickname}
+
+When a preferred name is known:
+
+- Use it naturally and occasionally.
+- Do not use it every reply.
+- Use it when welcoming the user back.
+- Use it when encouraging them.
+- Use it during personal moments.
+
+The goal is familiarity, not repetition.
+`
+  : "";
+
 const runtimeSystemPrompt =
   buildRuntimeSystemPrompt({
     languageMeta,
     isTrustConcern,
   }) +
+  "\n\n" +
+  nicknameBlock +
   "\n\n" +
   memoryPromptBlock;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getFirebaseAuth,
   getFirebaseAnalytics,
@@ -167,7 +167,6 @@ export default function Page() {
   const [showTyping, setShowTyping] = useState(false);
 
   const [showSafety, setShowSafety] = useState(false);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isLimitReached, setIsLimitReached] = useState(false);
 
   const [crisisLock, setCrisisLock] = useState(false);
@@ -1245,7 +1244,7 @@ setMessages((prev): ChatMessage[] => {
   <div>
     <h1 className="text-[2.15rem] font-semibold tracking-[-0.04em]">Talkio</h1>
     <p className="mt-1 text-sm text-stone-500">
-  Reflect, breathe, move forward
+  The older brother you wish you had.
 </p>
   </div>
 

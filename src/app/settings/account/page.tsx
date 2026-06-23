@@ -54,6 +54,7 @@ export default function AccountSettingsPage() {
     const auth = getFirebaseAuth();
 
     localStorage.setItem("talkio_signed_out", "true");
+    localStorage.removeItem("talkio_cached_plan");
    
     await logOutRevenueCat();
     await signOut(auth);
@@ -97,6 +98,7 @@ export default function AccountSettingsPage() {
       }
 
       localStorage.setItem("talkio_signed_out", "true");
+      localStorage.removeItem("talkio_cached_plan");
       
       await logOutRevenueCat();
       await signOut(auth);

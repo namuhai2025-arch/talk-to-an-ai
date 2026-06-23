@@ -737,20 +737,23 @@ try {
     customerResult?.customerInfo?.activeSubscriptions || [];
 
   if (
-    active["Talkio Presence"] ||
-    active["presence"] ||
-    activeSubscriptions.includes("talkio_presence_monthly_v2")
-  ) {
-    userTier = "presence";
-    localStorage.setItem("talkio_cached_plan", "Talkio Presence");
-  } else if (
-    active["Talkio Companion"] ||
-    active["companion"] ||
-    activeSubscriptions.includes("talkio_companion_monthly")
-  ) {
-    userTier = "companion";
-    localStorage.setItem("talkio_cached_plan", "Talkio Companion");
-  }
+  active["Talkio Presence"] ||
+  active["presence"] ||
+  activeSubscriptions.includes("talkio_presence_monthly_v2")
+) {
+  userTier = "presence";
+  localStorage.setItem("talkio_cached_plan", "Talkio Presence");
+} else if (
+  active["Talkio Companion"] ||
+  active["companion"] ||
+  activeSubscriptions.includes("talkio_companion_monthly")
+) {
+  userTier = "companion";
+  localStorage.setItem("talkio_cached_plan", "Talkio Companion");
+} else {
+  userTier = "free";
+  localStorage.removeItem("talkio_cached_plan");
+}
 } catch (err) {
   console.log("Failed to resolve chat tier:", err);
 

@@ -15,11 +15,7 @@ export default function SettingsPage() {
   useEffect(() => {
   const auth = getFirebaseAuth();
 
-  const cachedPlan = localStorage.getItem("talkio_cached_plan");
-
-if (cachedPlan === "Talkio Companion" || cachedPlan === "Talkio Presence") {
-  setPlanName(cachedPlan);
-}
+  setPlanName("Free Plan");
 
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
     try {
@@ -44,10 +40,10 @@ const result = await getTalkioCustomerInfo();
 console.log("RevenueCat full customerInfo:", result?.customerInfo);
 
       if (!result?.customerInfo) {
-        const cachedPlan = localStorage.getItem("talkio_cached_plan");
-        setPlanName(cachedPlan || "Free Plan");
-        return;
-      }
+  localStorage.removeItem("talkio_cached_plan");
+  setPlanName("Free Plan");
+  return;
+}
 
       const active = result.customerInfo.entitlements.active || {};
 const activeSubscriptions = result.customerInfo.activeSubscriptions || [];
@@ -70,22 +66,17 @@ console.log("RevenueCat app user:", user.uid);
 ) {
   localStorage.setItem("talkio_cached_plan", "Talkio Companion");
   setPlanName("Talkio Companion");
+
 } else {
-  const cachedPlan = localStorage.getItem("talkio_cached_plan");
-
-  if (cachedPlan === "Talkio Companion" || cachedPlan === "Talkio Presence") {
-    setPlanName(cachedPlan);
-    return;
-  }
-
-  localStorage.setItem("talkio_cached_plan", "Free Plan");
+  localStorage.removeItem("talkio_cached_plan");
   setPlanName("Free Plan");
 }
+
     } catch (err) {
-      console.log("Failed to load plan:", err);
-      const cachedPlan = localStorage.getItem("talkio_cached_plan");
-      setPlanName(cachedPlan || "Free Plan");
-    }
+  console.log("Failed to load plan:", err);
+  localStorage.removeItem("talkio_cached_plan");
+  setPlanName("Free Plan");
+}
   });
 
   return () => unsubscribe();

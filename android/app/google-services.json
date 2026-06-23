@@ -14,11 +14,27 @@
       },
       "oauth_client": [
         {
+          "client_id": "813406735573-1uifqd9civd2jhn96a3qf53cot8qsmq2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.talkio.app",
+            "certificate_hash": "f75d00c93dc5d9a8645140bb9c0b8e4cefece782"
+          }
+        },
+        {
           "client_id": "813406735573-n2th0ui2rge3kb016jicleuugtpdahak.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.talkio.app",
             "certificate_hash": "25bd095469c2e4686e10f8321916b9664b38b2e6"
+          }
+        },
+        {
+          "client_id": "813406735573-sp96v177elaeme28vg227fprtgej5pj9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.talkio.app",
+            "certificate_hash": "4a67dd6e29180c2380f889a8b8b6cb67249b8113"
           }
         },
         {

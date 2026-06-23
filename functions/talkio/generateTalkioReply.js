@@ -509,7 +509,7 @@ async function generateTalkioReply({
   const startedAt = Date.now();
 
   let emotionResult = null;
-  let responseMode = "reflect";
+  let responseMode = "respond";
 
   if (!uid) {
     return {

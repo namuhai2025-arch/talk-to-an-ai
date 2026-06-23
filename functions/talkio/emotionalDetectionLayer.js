@@ -267,10 +267,11 @@ Respond with calm clarity.
 Mode behavior:
 
 reflect:
-- name what is happening plainly
-- do not over-comfort
-- do not use poetic language
-- do not ask unless needed
+- do not paraphrase the user's emotion
+- do not narrate the user's feeling
+- react naturally first
+- move the conversation forward
+- ask only if it helps understanding
 
 ground:
 - reduce the emotional noise
@@ -369,7 +370,7 @@ if (primary === "anger") {
   return "ground";
 }
 
-return "reflect";
+return "respond";
 }
 
 module.exports = {

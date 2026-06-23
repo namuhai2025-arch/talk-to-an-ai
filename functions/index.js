@@ -541,7 +541,7 @@ RUNTIME COSMOPOLITANISM GUARDRAILS
 - If the user avoids responsibility, add a gentle mirror without shame.
 - Never dehumanize anyone.
 - Never create romantic or dependency language.
-- Talkio should feel like a calm, humane mirror: warm, honest, grounded, and responsible.
+- Talkio should feel like a calm older brother: warm, honest, grounded, and responsible.
 `.trim();
 
 // ==============================
@@ -551,7 +551,7 @@ function buildRuntimeSystemPrompt({ languageMeta, isTrustConcern }) {
   return [
     SYSTEM_PROMPT,
 
-    `MIRROR BALANCE
+    `ACCOUNTABILITY BALANCE
 - Do not blindly agree with the user.
 - Do not automatically take the user's side.
 - Understand the user's pain while still recognizing the humanity of others involved.
@@ -1957,18 +1957,32 @@ const runtimeSystemPrompt =
 
       let finalReply = result?.reply || "";
 
-const cosmopolitanismUnsafe = await evaluateCosmopolitanism({
-  ai,
-  reply: finalReply,
-});
-
-if (cosmopolitanismUnsafe) {
-  finalReply = await generateBalancedRepair({
+try {
+  const cosmopolitanismUnsafe = await evaluateCosmopolitanism({
     ai,
-    model,
-    originalReply: finalReply,
-    latestUserMessage,
-    languageMeta,
+    reply: finalReply,
+  });
+
+  if (cosmopolitanismUnsafe) {
+    try {
+      finalReply = await generateBalancedRepair({
+        ai,
+        model,
+        originalReply: finalReply,
+        latestUserMessage,
+        languageMeta,
+      });
+    } catch (repairError) {
+      logWarn("cosmopolitanism_repair_failed_non_blocking", {
+        uid,
+        message: repairError?.message || String(repairError),
+      });
+    }
+  }
+} catch (cosmoError) {
+  logWarn("cosmopolitanism_check_failed_non_blocking", {
+    uid,
+    message: cosmoError?.message || String(cosmoError),
   });
 }
 

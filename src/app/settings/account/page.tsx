@@ -59,6 +59,7 @@ export default function AccountSettingsPage() {
     localStorage.removeItem("talkio_signed_out");
 
     await signInWithPopup(auth, provider);
+    window.location.href = "/";
   } catch (error) {
     console.error("Google sign in failed:", error);
     alert("Google sign in failed. Please try again.");
@@ -76,6 +77,7 @@ const handleAppleSignIn = async () => {
     localStorage.removeItem("talkio_signed_out");
 
     await signInWithPopup(auth, provider);
+    window.location.href = "/";
   } catch (error) {
     console.error("Apple sign in failed:", error);
     alert("Apple sign in failed. Please try again.");

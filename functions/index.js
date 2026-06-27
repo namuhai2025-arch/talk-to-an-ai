@@ -1669,7 +1669,7 @@ if (safetyInterruption.blocked) {
   });
 
   return;
-}
+}  
 
     // crisis guard continues here...
 

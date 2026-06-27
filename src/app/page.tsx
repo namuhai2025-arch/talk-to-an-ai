@@ -195,6 +195,20 @@ export default function Page() {
 }, []);
 
   useEffect(() => {
+  if (!mounted) return;
+
+  const auth = getFirebaseAuth();
+
+  const unsubscribe = auth.onAuthStateChanged((user) => {
+    if (!user || user.isAnonymous) {
+      window.location.href = "/settings/account";
+    }
+  });
+
+  return unsubscribe;
+}, [mounted]);
+
+  useEffect(() => {
     setMounted(true);
   }, []);
 
@@ -406,27 +420,20 @@ export default function Page() {
   const unsubscribe = auth.onAuthStateChanged(async (user) => {
   console.log("AUTH STATE CHANGED", user?.uid, user?.email);
 
-  if (user) {
-    setUserId(user.uid);
+  if (!user || user.isAnonymous) {
+  setCheckingAuth(false);
+  setAuthReady(true);
+  setUserId("signed_out");
+  return;
+}
 
-    await registerTalkioPushToken().catch(console.error);
-    await configureRevenueCat(user.uid).catch(console.error);
+setUserId(user.uid);
 
-    setCheckingAuth(false);
-    setAuthReady(true);
-    return;
-  }
+await registerTalkioPushToken().catch(console.error);
+await configureRevenueCat(user.uid).catch(console.error);
 
-  setCheckingAuth(true);
-
-  setTimeout(() => {
-    if (!auth.currentUser) {
-      setUserId("signed_out");
-    }
-
-    setCheckingAuth(false);
-    setAuthReady(true);
-  }, 2000);
+setCheckingAuth(false);
+setAuthReady(true);  
 });
 
   return unsubscribe;

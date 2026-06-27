@@ -50,12 +50,12 @@ export default function TalkioOnboarding() {
     }
 
     localStorage.setItem("talkio_onboarding_complete", "true");
-    window.location.href = "/";
+    window.location.href = "/settings/account";
   }
 
   function skip() {
     localStorage.setItem("talkio_onboarding_complete", "true");
-    window.location.href = "/";
+    window.location.href = "/settings/account";
   }
 
   function back() {

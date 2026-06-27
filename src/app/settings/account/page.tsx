@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import {
   GoogleAuthProvider,
+  OAuthProvider,
+  signInWithPopup,
   signOut,
   reauthenticateWithPopup,
 } from "firebase/auth";
@@ -48,6 +50,37 @@ export default function AccountSettingsPage() {
 
   return () => unsubscribe();
 }, []);
+
+  const handleGoogleSignIn = async () => {
+  try {
+    const auth = getFirebaseAuth();
+    const provider = new GoogleAuthProvider();
+
+    localStorage.removeItem("talkio_signed_out");
+
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    console.error("Google sign in failed:", error);
+    alert("Google sign in failed. Please try again.");
+  }
+};
+
+const handleAppleSignIn = async () => {
+  try {
+    const auth = getFirebaseAuth();
+    const provider = new OAuthProvider("apple.com");
+
+    provider.addScope("email");
+    provider.addScope("name");
+
+    localStorage.removeItem("talkio_signed_out");
+
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    console.error("Apple sign in failed:", error);
+    alert("Apple sign in failed. Please try again.");
+  }
+};
 
   const handleSignOut = async () => {
   try {
@@ -163,9 +196,31 @@ export default function AccountSettingsPage() {
               </button>
             </>
           ) : (
-            <div className="rounded-2xl bg-stone-50 px-4 py-4 text-sm leading-6 text-stone-500">
-              You are not signed in. Return to Talkio to sign in.
-            </div>
+            <div className="rounded-2xl bg-stone-50 px-4 py-4 text-sm leading-6 text-stone-600">
+  <p className="font-medium text-stone-900">
+    Sign in to your Talkio account.
+  </p>
+
+  <p className="mt-1">
+    Use the same Google or Apple account from your iPhone or Android device.
+  </p>
+
+  <button
+    type="button"
+    onClick={handleGoogleSignIn}
+    className="mt-4 w-full rounded-2xl bg-emerald-600 px-4 py-3 font-semibold text-white"
+  >
+    Continue with Google
+  </button>
+
+  <button
+    type="button"
+    onClick={handleAppleSignIn}
+    className="mt-3 w-full rounded-2xl bg-stone-900 px-4 py-3 font-semibold text-white"
+  >
+    Continue with Apple
+  </button>
+</div>
           )}
         </section>
 

@@ -729,21 +729,9 @@ await new Promise((resolve) =>
 
 try {
   userTier = await resolveTalkioTier();
-
 } catch (err) {
-  console.log("Failed to resolve chat tier:", err);
-
-  const cachedPlan =
-    typeof window !== "undefined"
-      ? localStorage.getItem("talkio_cached_plan")
-      : "";
-
-  userTier =
-    cachedPlan === "Talkio Presence"
-      ? "presence"
-      : cachedPlan === "Talkio Companion"
-        ? "companion"
-        : "free";
+  console.warn("Failed to resolve chat tier. Falling back to free.", err);
+  userTier = "free";
 }
 
       const res = await fetch("/api/chat", {
@@ -862,33 +850,38 @@ if (
   }, 1800);
 }
 
-} catch (error) {
-  console.error("Chat request failed");
-console.error(error);
-console.error(error instanceof Error ? error.stack : error);
-setMessages((prev): ChatMessage[] => {
-  const nextMessages: ChatMessage[] = [
-    ...prev,
-    {
-      role: "assistant" as const,
-      content: "...",
-      timestamp: Date.now(),
-    },
-  ];
+  } catch (error) {
+    console.error("========== CHAT ERROR ==========");
+    console.error(error);
 
-  return nextMessages.slice(-MAX_MESSAGES);
-
-  }); 
-    } finally {
-      clearTimeout(typingTimer);
-      setShowTyping(false);
-      setLoading(false);
-
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-      });
+    if (error instanceof Error) {
+      console.error(error.message);
+      console.error(error.stack);
     }
+
+    setMessages((prev): ChatMessage[] => {
+      const nextMessages: ChatMessage[] = [
+        ...prev,
+        {
+          role: "assistant" as const,
+          content:
+            "Sorry, something went wrong. Could you try sending that again?",
+          timestamp: Date.now(),
+        },
+      ];
+
+      return nextMessages.slice(-MAX_MESSAGES);
+    });
+  } finally {
+    clearTimeout(typingTimer);
+    setShowTyping(false);
+    setLoading(false);
+
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
   }
+}
 
   if (
   !mounted ||

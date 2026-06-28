@@ -31,8 +31,8 @@ export async function resolveTalkioTier(): Promise<TalkioTier> {
     localStorage.removeItem("talkio_cached_plan");
     return "free";
   } catch (error) {
-    console.log("Failed to resolve Talkio tier:", error);
-    localStorage.removeItem("talkio_cached_plan");
-    return "free";
-  }
+  console.warn("Failed to resolve Talkio tier:", error);
+  localStorage.removeItem("talkio_cached_plan");
+  return "free";
+}
 }

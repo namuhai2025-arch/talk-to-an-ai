@@ -762,7 +762,18 @@ try {
 }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      console.log("Chat status:", res.status);
+
+const data = await res.json().catch((jsonError) => {
+  console.error("Chat JSON parse failed:", jsonError);
+  return {};
+});
+
+console.log("Chat response:", data);
+
+if (!res.ok) {
+  throw new Error(data?.error || `Chat request failed with status ${res.status}`);
+}
 
       if (data?.safetyBlocked === true) {
   setCrisisLock(true);
@@ -770,10 +781,14 @@ try {
   setLoading(false);
   return;
 }
+      
+      const analytics = await getFirebaseAnalytics();
 
-      logEvent(getFirebaseAnalytics(), "chat_message_sent", {
-  source: "chat",
-});
+if (analytics) {
+  logEvent(analytics, "chat_message_sent", {
+    source: "chat",
+  });
+}
 
       if (typeof window !== "undefined") {
       sessionStorage.removeItem("talkio_checkin_reply_context");
@@ -843,7 +858,8 @@ if (
   }, 1800);
 }
 
-} catch {
+} catch (error) {
+  console.error("Chat request failed:", error);
 setMessages((prev): ChatMessage[] => {
   const nextMessages: ChatMessage[] = [
     ...prev,

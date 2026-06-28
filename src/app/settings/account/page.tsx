@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import {
   GoogleAuthProvider,
   OAuthProvider,
-  signInWithPopup,
   signOut,
   reauthenticateWithPopup,
 } from "firebase/auth";
@@ -19,132 +18,110 @@ export default function AccountSettingsPage() {
   const [authLoaded, setAuthLoaded] = useState(false);
 
   useEffect(() => {
-  const auth = getFirebaseAuth();
-
-  const unsubscribe = auth.onAuthStateChanged((user) => {
-    setAuthLoaded(true);
-
-    if (!user || user.isAnonymous) {
-      setIsSignedIn(false);
-      setAccountEmail(null);
-      setAccountProvider(null);
-      return;
-    }
-
-    setIsSignedIn(true);
-    setAccountEmail(user.email || "Apple account");
-
-    const providerId =
-      user.providerData.find((p) => p.providerId === "google.com")?.providerId ||
-      user.providerData.find((p) => p.providerId === "apple.com")?.providerId ||
-      user.providerData[0]?.providerId;
-
-    if (providerId === "apple.com") {
-      setAccountProvider("Apple");
-    } else if (providerId === "google.com") {
-      setAccountProvider("Google");
-    } else {
-      setAccountProvider(providerId || "Signed in");
-    }
-  });
-
-  return () => unsubscribe();
-}, []);
-
-  const handleGoogleSignIn = async () => {
-  try {
     const auth = getFirebaseAuth();
-    const provider = new GoogleAuthProvider();
 
-    localStorage.removeItem("talkio_signed_out");
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setAuthLoaded(true);
 
-    await signInWithPopup(auth, provider);
-    window.location.href = "/";
-  } catch (error) {
-    console.error("Google sign in failed:", error);
-    alert("Google sign in failed. Please try again.");
-  }
-};
+      if (!user || user.isAnonymous) {
+        setIsSignedIn(false);
+        setAccountEmail(null);
+        setAccountProvider(null);
+        return;
+      }
 
-const handleAppleSignIn = async () => {
-  try {
-    const auth = getFirebaseAuth();
-    const provider = new OAuthProvider("apple.com");
+      setIsSignedIn(true);
+      setAccountEmail(user.email || "Apple account");
 
-    provider.addScope("email");
-    provider.addScope("name");
+      const providerId =
+        user.providerData.find((p) => p.providerId === "google.com")
+          ?.providerId ||
+        user.providerData.find((p) => p.providerId === "apple.com")
+          ?.providerId ||
+        user.providerData[0]?.providerId;
 
-    localStorage.removeItem("talkio_signed_out");
+      if (providerId === "apple.com") {
+        setAccountProvider("Apple");
+      } else if (providerId === "google.com") {
+        setAccountProvider("Google");
+      } else {
+        setAccountProvider(providerId || "Signed in");
+      }
+    });
 
-    await signInWithPopup(auth, provider);
-    window.location.href = "/";
-  } catch (error) {
-    console.error("Apple sign in failed:", error);
-    alert("Apple sign in failed. Please try again.");
-  }
-};
+    return () => unsubscribe();
+  }, []);
 
   const handleSignOut = async () => {
-  try {
-    const auth = getFirebaseAuth();
-
-    localStorage.setItem("talkio_signed_out", "true");
-    localStorage.removeItem("talkio_cached_plan");
-   
-    await logOutRevenueCat();
-    await signOut(auth);
-
-    window.location.replace("/");
-  } catch (error) {
-    console.error("Sign out failed:", error);
-  }
-};
-
-  const handleDeleteAccount = async () => {
-    const auth = getFirebaseAuth();
-    const user = auth.currentUser;
-
-    if (!user) {
-      alert("Please sign in again.");
-      return;
-    }
-
-    setIsDeleting(true);
-
     try {
-      const provider = new GoogleAuthProvider();
-
-      await reauthenticateWithPopup(user, provider);
-
-      const token = await user.getIdToken(true);
-
-      const res = await fetch(
-        "https://generatetalkioreply-ndury54xsq-uc.a.run.app/deleteMyAccount",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!res.ok) {
-        throw new Error("Failed to delete");
-      }
+      const auth = getFirebaseAuth();
 
       localStorage.setItem("talkio_signed_out", "true");
       localStorage.removeItem("talkio_cached_plan");
-      
+
       await logOutRevenueCat();
       await signOut(auth);
 
       window.location.replace("/");
     } catch (error) {
-      console.error("Delete account failed:", error);
-      alert("Failed to delete account.");
-      setIsDeleting(false);
+      console.error("Sign out failed:", error);
     }
   };
+
+  const handleDeleteAccount = async () => {
+  const auth = getFirebaseAuth();
+  const user = auth.currentUser;
+
+  if (!user || user.isAnonymous) {
+    return;
+  }
+
+  setIsDeleting(true);
+
+  try {
+    const providerId =
+      user.providerData.find((p) => p.providerId === "google.com")?.providerId ||
+      user.providerData.find((p) => p.providerId === "apple.com")?.providerId;
+
+    let provider: GoogleAuthProvider | OAuthProvider;
+
+    if (providerId === "apple.com") {
+      provider = new OAuthProvider("apple.com");
+    } else {
+      provider = new GoogleAuthProvider();
+    }
+
+    await reauthenticateWithPopup(user, provider);
+
+    const token = await user.getIdToken(true);
+
+    const res = await fetch(
+      "https://generatetalkioreply-ndury54xsq-uc.a.run.app/deleteMyAccount",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error("Failed to delete account.");
+    }
+
+    localStorage.setItem("talkio_signed_out", "true");
+    localStorage.removeItem("talkio_cached_plan");
+
+    await logOutRevenueCat();
+    await signOut(auth);
+
+    window.location.replace("/");
+  } catch (error) {
+    console.error("Delete account failed:", error);
+    alert("Failed to delete account.");
+    setIsDeleting(false);
+  }
+};
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 pb-6 pt-[calc(env(safe-area-inset-top)+3.5rem)]">
@@ -167,10 +144,10 @@ const handleAppleSignIn = async () => {
 
         <section className="mt-8 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
           {!authLoaded ? (
-  <div className="rounded-2xl bg-stone-50 px-4 py-4 text-sm leading-6 text-stone-500">
-    Checking account...
-  </div>
-) : isSignedIn ? (
+            <div className="rounded-2xl bg-stone-50 px-4 py-4 text-sm leading-6 text-stone-500">
+              Checking account...
+            </div>
+          ) : isSignedIn ? (
             <>
               <div className="mb-4 rounded-2xl bg-emerald-50 px-4 py-4 ring-1 ring-emerald-100">
                 <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
@@ -199,37 +176,29 @@ const handleAppleSignIn = async () => {
             </>
           ) : (
             <div className="rounded-2xl bg-stone-50 px-4 py-4 text-sm leading-6 text-stone-600">
-  <p className="font-medium text-stone-900">
-    Sign in to your Talkio account.
-  </p>
+              <p className="font-medium text-stone-900">
+                You are not signed in.
+              </p>
 
-  <p className="mt-1">
-    Use the same Google or Apple account from your iPhone or Android device.
-  </p>
+              <p className="mt-1">
+                Please sign in first to manage your Talkio account.
+              </p>
 
-  <button
-    type="button"
-    onClick={handleGoogleSignIn}
-    className="mt-4 w-full rounded-2xl bg-emerald-600 px-4 py-3 font-semibold text-white"
-  >
-    Continue with Google
-  </button>
-
-  <button
-    type="button"
-    onClick={handleAppleSignIn}
-    className="mt-3 w-full rounded-2xl bg-stone-900 px-4 py-3 font-semibold text-white"
-  >
-    Continue with Apple
-  </button>
-</div>
+              <button
+                type="button"
+                onClick={() => (window.location.href = "/signin")}
+                className="mt-4 w-full rounded-2xl bg-emerald-600 px-4 py-3 font-semibold text-white"
+              >
+                Go to Sign In
+              </button>
+            </div>
           )}
         </section>
 
         <section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-sm">
           <button
             type="button"
-            disabled={isDeleting}
+            disabled={isDeleting || !isSignedIn}
             onClick={() => {
               const confirmed = window.confirm(
                 "Delete your Talkio account?\n\nThis permanently removes your account and conversations."
@@ -259,6 +228,7 @@ const handleAppleSignIn = async () => {
           <p className="font-medium text-stone-900">
             Your privacy and conversations matter.
           </p>
+
           <p className="mt-1 text-sm leading-6 text-stone-500">
             You stay in control of your account and data.
           </p>

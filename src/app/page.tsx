@@ -8,11 +8,7 @@ import {
 } from "@/lib/firebase";
 import { registerTalkioPushToken } from "@/lib/registerPushToken";
 import { Share } from "@capacitor/share";
-import { Keyboard } from "@capacitor/keyboard";
-import {
-  configureRevenueCat,
-  getTalkioCustomerInfo,
-} from "@/lib/revenuecat";
+import { configureRevenueCat } from "@/lib/revenuecat";
 import { App } from "@capacitor/app";
 
 import {
@@ -30,6 +26,8 @@ import {
 import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 
 import { useAutoScroll } from "@/hooks/useAutoScroll";
+import { resolveTalkioTier } from "@/lib/subscription";
+import { useKeyboard } from "@/hooks/useKeyboard";
 
 type ChatRole = "user" | "assistant";
 
@@ -187,12 +185,15 @@ export default function Page() {
     }),
     []
   );
+
   useAutoScroll({
   bottomRef,
   messages,
   showTyping,
   mounted,
 });
+  
+  useKeyboard();
 
   useEffect(() => {
   const done = localStorage.getItem("talkio_onboarding_complete");
@@ -466,10 +467,6 @@ return unsubscribe;
 
 }, [messages, showTyping, mounted]);
 
-   useEffect(() => {
-  Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(console.error);
-}, []);
-
   async function shareTalkio() {
   try {
     await Share.share({
@@ -727,29 +724,8 @@ await new Promise((resolve) =>
       let userTier = "free";
 
 try {
-  const customerResult = await getTalkioCustomerInfo();
-  const active = customerResult?.customerInfo?.entitlements?.active || {};
-  const activeSubscriptions =
-    customerResult?.customerInfo?.activeSubscriptions || [];
+  userTier = await resolveTalkioTier();
 
-  if (
-  active["Talkio Presence"] ||
-  active["presence"] ||
-  activeSubscriptions.includes("talkio_presence_monthly_v2")
-) {
-  userTier = "presence";
-  localStorage.setItem("talkio_cached_plan", "Talkio Presence");
-} else if (
-  active["Talkio Companion"] ||
-  active["companion"] ||
-  activeSubscriptions.includes("talkio_companion_monthly")
-) {
-  userTier = "companion";
-  localStorage.setItem("talkio_cached_plan", "Talkio Companion");
-} else {
-  userTier = "free";
-  localStorage.removeItem("talkio_cached_plan");
-}
 } catch (err) {
   console.log("Failed to resolve chat tier:", err);
 

@@ -40,8 +40,6 @@ export async function configureRevenueCat(userId?: string) {
   appUserID: userId,
 });
 
-await Purchases.logIn({ appUserID: userId });
-
 configured = true;
 configuredUserId = userId;
 

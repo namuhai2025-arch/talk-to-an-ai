@@ -15,18 +15,14 @@ type BillingCycle = "monthly" | "yearly";
 
 export default function PaywallPage() {
   const [showSuccess, setShowSuccess] = useState(false);
-  const [userId, setUserId] = useState<string | undefined>(undefined);
-  
+    
   useEffect(() => {
   const auth = getFirebaseAuth();
 
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
     if (!user || user.isAnonymous) {
-      setUserId(undefined);
       return;
     }
-
-    setUserId(user.uid);
 
     await configureRevenueCat(user.uid);
   });
@@ -41,12 +37,6 @@ export default function PaywallPage() {
   const auth = getFirebaseAuth();
   const user = auth.currentUser;
 
-console.log(
-  "PAYWALL USER",
-  auth.currentUser?.uid,
-  auth.currentUser?.email,
-  auth.currentUser?.isAnonymous
-);
 
   if (!user || user.isAnonymous) {
   alert("Please sign in from the Welcome screen first.");
@@ -55,11 +45,8 @@ console.log(
 }
 
   try {
-    await configureRevenueCat(user.uid);
-
+    
       const offerings = await getTalkioOfferings();
-
-      console.log("RevenueCat offerings:", offerings);
 
       if (!offerings || !offerings.current) {
         alert("Subscriptions are not available yet. Please try again later.");
@@ -112,40 +99,34 @@ console.log(
 
   const restorePurchases = async () => {
   try {
-
     const auth = getFirebaseAuth();
-const user = auth.currentUser;
+    const user = auth.currentUser;
 
-if (!user || user.isAnonymous) {
-  alert("Please sign in from the Welcome screen first.");
-  window.location.href = "/";
-  return;
-}
-    await configureRevenueCat(user.uid);
+    if (!user || user.isAnonymous) {
+      alert("Please sign in from the Welcome screen first.");
+      window.location.href = "/";
+      return;
+    }
 
     const result = await restoreTalkioPurchases();
 
-    console.log(
-  "FULL CUSTOMER INFO",
-  JSON.stringify(result.customerInfo, null, 2)
-);
+    const active = result.customerInfo.entitlements.active || {};
+    const activeSubscriptions = result.customerInfo.activeSubscriptions || [];
 
-const active = result.customerInfo.entitlements.active || {};
+    if (
+      active["Talkio Companion"] ||
+      active["companion"] ||
+      activeSubscriptions.includes("talkio_companion_monthly")
+    ) {
+      localStorage.setItem("talkio_cached_plan", "Talkio Companion");
+      setShowSuccess(true);
 
-console.log(
-  "ENTITLEMENT KEYS",
-  Object.keys(active)
-);
+      setTimeout(() => {
+        window.location.replace("/");
+      }, 500);
 
-console.log(
-  "ACTIVE SUBSCRIPTIONS",
-  result.customerInfo.activeSubscriptions
-);
-
-    if (active["Talkio Companion"] || active["companion"]) {
-  setShowSuccess(true);
-  return;
-}
+      return;
+    }
 
     alert("No active subscription found to restore.");
   } catch (error: any) {

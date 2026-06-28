@@ -1,6 +1,12 @@
+import { Capacitor } from "@capacitor/core";
 import { getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-import { getAnalytics, logEvent, type Analytics } from "firebase/analytics";
+import {
+  getAnalytics,
+  isSupported,
+  logEvent,
+  type Analytics,
+} from "firebase/analytics";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -13,7 +19,6 @@ const firebaseConfig = {
 
 let app: FirebaseApp | null = null;
 let authInstance: Auth | null = null;
-
 let analyticsInstance: Analytics | null = null;
 
 export function getFirebaseApp(): FirebaseApp {
@@ -38,15 +43,17 @@ export function getFirebaseAuth(): Auth {
   return authInstance;
 }
 
-export function getFirebaseAnalytics(): Analytics {
-  if (typeof window === "undefined") {
-    throw new Error("Firebase analytics should only be initialized in the browser");
-  }
+export async function getFirebaseAnalytics(): Promise<Analytics | null> {
+  if (typeof window === "undefined") return null;
+
+  if (Capacitor.isNativePlatform()) return null;
+
+  const supported = await isSupported();
+  if (!supported) return null;
 
   if (analyticsInstance) return analyticsInstance;
 
   analyticsInstance = getAnalytics(getFirebaseApp());
-
   return analyticsInstance;
 }
 

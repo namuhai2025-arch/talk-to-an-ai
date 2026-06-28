@@ -8,9 +8,9 @@ export default function TalkioOnboarding() {
   const screens = [
     {
       image: "/onboarding-webp/screen1-heavy-thoughts.webp",
-      buttonColor: "bg-[#14A978]",
+      buttonColor: "bg-[#2F9F84]",
       finalButtonColor: "bg-[#0F8A5F]",
-      dotColor: "bg-[#14A978]",
+      dotColor: "bg-[#2F9F84]",
     },
     {
       image: "/onboarding-webp/screen2-no-advice.webp",
@@ -66,15 +66,15 @@ export default function TalkioOnboarding() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f1e8] px-5 pb-6 pt-14 text-stone-900">
-      <div className="mx-auto flex min-h-[calc(100vh-80px)] w-full max-w-md flex-col">
-        <div className="mb-5 flex items-center justify-between">
+    <main className="min-h-screen bg-[#f7f1e8] px-5 pb-5 pt-12 text-stone-900">
+      <div className="mx-auto flex min-h-[calc(100vh-68px)] w-full max-w-md flex-col">
+        <div className="mb-4 flex items-center justify-between">
           <div className="flex gap-2">
             {screens.map((screen, i) => (
               <div
                 key={screen.image}
                 className={`h-2 rounded-full transition-all ${
-                  i === index ? `w-10 ${current.dotColor}` : "w-2 bg-stone-300"
+                  i === index ? `w-9 ${current.dotColor}` : "w-2 bg-stone-300"
                 }`}
               />
             ))}
@@ -84,7 +84,7 @@ export default function TalkioOnboarding() {
             <button
               type="button"
               onClick={skip}
-              className="text-sm text-stone-500"
+              className="text-sm font-medium text-stone-500"
             >
               Skip
             </button>
@@ -93,32 +93,32 @@ export default function TalkioOnboarding() {
 
         <div className="relative flex-1 overflow-hidden rounded-[34px] bg-[#f7f1e8]">
           <Image
-  key={current.image}
-  src={current.image}
-  alt="Talkio onboarding"
-  fill
-  priority={index === 0}
-  loading={index === 0 ? "eager" : "lazy"}
-  quality={75}
-  sizes="100vw"
-  className="object-contain"
-/>
+            key={current.image}
+            src={current.image}
+            alt="Talkio onboarding"
+            fill
+            priority={index === 0}
+            loading={index === 0 ? "eager" : "lazy"}
+            quality={75}
+            sizes="100vw"
+            className="object-contain"
+          />
 
-          <div className="absolute bottom-6 left-6 right-6">
+          <div className="absolute bottom-5 left-7 right-7">
             {isFirst ? (
               <button
                 type="button"
                 onClick={next}
-                className={`w-full rounded-full ${current.buttonColor} px-5 py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99]`}
+                className={`mx-auto block min-h-[42px] w-[82%] rounded-full ${current.buttonColor} px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99]`}
               >
                 Continue
               </button>
             ) : (
-              <div className="flex gap-3">
+              <div className="mx-auto flex w-[88%] gap-3">
                 <button
                   type="button"
                   onClick={back}
-                  className="w-[32%] rounded-full border border-stone-200 bg-white/90 px-4 py-3 text-sm font-medium text-stone-700 shadow-sm backdrop-blur transition active:scale-[0.99]"
+                  className="min-h-[42px] w-[34%] rounded-full border border-stone-200 bg-white/90 px-4 py-2.5 text-sm font-medium text-stone-700 shadow-sm backdrop-blur transition active:scale-[0.99]"
                 >
                   Back
                 </button>
@@ -126,10 +126,8 @@ export default function TalkioOnboarding() {
                 <button
                   type="button"
                   onClick={next}
-                  className={`w-[68%] rounded-full px-5 text-sm font-semibold text-white transition active:scale-[0.99] ${
-                    isLast
-                      ? `${current.finalButtonColor} py-3.5 shadow-md tracking-wide`
-                      : `${current.buttonColor} py-3 shadow-sm`
+                  className={`min-h-[42px] w-[66%] rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99] ${
+                    isLast ? current.finalButtonColor : current.buttonColor
                   }`}
                 >
                   {isLast ? "Start Talking" : "Continue"}
@@ -139,7 +137,7 @@ export default function TalkioOnboarding() {
           </div>
         </div>
 
-        <p className="mt-4 text-center text-sm text-stone-400">
+        <p className="mt-3 text-center text-sm text-stone-400">
           Talkio • Vent. Reflect. Move Forward.
         </p>
       </div>

@@ -766,21 +766,16 @@ try {
 }),
       });
 
-      console.log("Chat status:", res.status);
-
 const data = await res.json().catch((jsonError) => {
   console.error("Chat JSON parse failed:", jsonError);
   return {};
 });
-
-console.log("Chat response:", data);
 
 if (!res.ok) {
   throw new Error(data?.error || `Chat request failed with status ${res.status}`);
 }
 
       if (data?.safetyBlocked === true) {
-        console.log("STEP 2");
   setCrisisLock(true);
   setShowTyping(false);
   setLoading(false);
@@ -797,7 +792,6 @@ if (analytics) {
 
       if (typeof window !== "undefined") {
       sessionStorage.removeItem("talkio_checkin_reply_context");
-      console.log("STEP 3");
       }
 
       if (data?.crisisLock === true) {
@@ -821,8 +815,7 @@ if (analytics) {
   typeof data?.reply === "string" && data.reply.trim()
     ? data.reply
     : "I lost your message while I was thinking. Could you send it again?";
-    console.log("STEP 4");
-
+    
       if (res.status === 429) {
         setIsLimitReached(true);
       }

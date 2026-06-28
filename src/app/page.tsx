@@ -668,10 +668,14 @@ if (safetyInterruption.blocked) {
   setShowTyping(false);
   setLoading(false);
 
-  logEvent(getFirebaseAnalytics(), "safety_interruption_triggered", {
+  const safetyAnalytics = await getFirebaseAnalytics();
+
+if (safetyAnalytics) {
+  logEvent(safetyAnalytics, "safety_interruption_triggered", {
     reason: safetyInterruption.reason || "unknown",
     source: "frontend",
   });
+}
 
   return;
 }
@@ -776,6 +780,7 @@ if (!res.ok) {
 }
 
       if (data?.safetyBlocked === true) {
+        console.log("STEP 2");
   setCrisisLock(true);
   setShowTyping(false);
   setLoading(false);
@@ -792,6 +797,7 @@ if (analytics) {
 
       if (typeof window !== "undefined") {
       sessionStorage.removeItem("talkio_checkin_reply_context");
+      console.log("STEP 3");
       }
 
       if (data?.crisisLock === true) {
@@ -815,6 +821,7 @@ if (analytics) {
   typeof data?.reply === "string" && data.reply.trim()
     ? data.reply
     : "I lost your message while I was thinking. Could you send it again?";
+    console.log("STEP 4");
 
       if (res.status === 429) {
         setIsLimitReached(true);
@@ -836,10 +843,14 @@ if (analytics) {
   return nextMessages.slice(-MAX_MESSAGES);
 });
 
-logEvent(getFirebaseAnalytics(), "reply_generated", {
-  mode: data?.dynamicMode || "unknown",
-  path: data?.path || "unknown",
-});
+const replyAnalytics = await getFirebaseAnalytics();
+
+if (replyAnalytics) {
+  logEvent(replyAnalytics, "reply_generated", {
+    mode: data?.dynamicMode || "unknown",
+    path: data?.path || "unknown",
+  });
+}
 
 const reviewCompleted =
   typeof window !== "undefined" &&
@@ -859,7 +870,9 @@ if (
 }
 
 } catch (error) {
-  console.error("Chat request failed:", error);
+  console.error("Chat request failed");
+console.error(error);
+console.error(error instanceof Error ? error.stack : error);
 setMessages((prev): ChatMessage[] => {
   const nextMessages: ChatMessage[] = [
     ...prev,

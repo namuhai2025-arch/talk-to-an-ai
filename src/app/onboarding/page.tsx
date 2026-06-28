@@ -93,12 +93,16 @@ export default function TalkioOnboarding() {
 
         <div className="relative flex-1 overflow-hidden rounded-[34px] bg-[#f7f1e8]">
           <Image
-           key={current.image}
-           src={current.image}
-           alt="Talkio onboarding"
-           fill
-           className="object-contain"
-          />
+  key={current.image}
+  src={current.image}
+  alt="Talkio onboarding"
+  fill
+  priority={index === 0}
+  loading={index === 0 ? "eager" : "lazy"}
+  quality={75}
+  sizes="100vw"
+  className="object-contain"
+/>
 
           <div className="absolute bottom-6 left-6 right-6">
             {isFirst ? (

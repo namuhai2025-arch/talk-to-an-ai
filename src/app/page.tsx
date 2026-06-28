@@ -200,10 +200,16 @@ export default function Page() {
   const auth = getFirebaseAuth();
 
   const unsubscribe = auth.onAuthStateChanged((user) => {
-    if (!user || user.isAnonymous) {
-      window.location.href = "/settings/account";
+  if (Capacitor.isNativePlatform()) {
+    return;
+  }
+
+  if (!user || user.isAnonymous) {
+    if (!window.location.pathname.startsWith("/signin")) {
+      window.location.replace("/signin");
     }
-  });
+  }
+});
 
   return unsubscribe;
 }, [mounted]);

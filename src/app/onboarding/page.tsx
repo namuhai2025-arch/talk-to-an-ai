@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import React from "react";
+import { Capacitor } from "@capacitor/core";
 
 export default function TalkioOnboarding() {
   const screens = [
@@ -50,12 +51,12 @@ export default function TalkioOnboarding() {
     }
 
     localStorage.setItem("talkio_onboarding_complete", "true");
-    window.location.href = "/settings/account";
+    window.location.href = Capacitor.isNativePlatform() ? "/" : "/signin";
   }
 
   function skip() {
     localStorage.setItem("talkio_onboarding_complete", "true");
-    window.location.href = "/settings/account";
+    window.location.href = Capacitor.isNativePlatform() ? "/" : "/signin";
   }
 
   function back() {

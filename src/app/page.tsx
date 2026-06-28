@@ -29,6 +29,8 @@ import {
 } from "@capawesome/capacitor-apple-sign-in";
 import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 
+import { useAutoScroll } from "@/hooks/useAutoScroll";
+
 type ChatRole = "user" | "assistant";
 
 type ChatMessage = {
@@ -185,6 +187,12 @@ export default function Page() {
     }),
     []
   );
+  useAutoScroll({
+  bottomRef,
+  messages,
+  showTyping,
+  mounted,
+});
 
   useEffect(() => {
   const done = localStorage.getItem("talkio_onboarding_complete");
@@ -377,10 +385,8 @@ export default function Page() {
 
   const setupAppLock = async () => {
     cleanup = await App.addListener("appStateChange", ({ isActive }) => {
-      console.log("APP STATE:", isActive);
-
+      
       if (localStorage.getItem("talkio_auth_in_progress") === "true") {
-  console.log("Auth in progress. Skipping app lock.");
   return;
 }
 
@@ -391,19 +397,16 @@ export default function Page() {
       if (!enabled || !savedPin) return;
 
       if (!isActive) {
-        console.log("APP BACKGROUND");
         localStorage.setItem("talkio_pin_locked", "true");
         setPinUnlocked(false);
       }
 
       if (isActive) {
-        console.log("APP FOREGROUND");
-
+        
         const locked =
           localStorage.getItem("talkio_pin_locked") === "true";
 
         if (locked) {
-          console.log("PIN LOCK TRIGGERED");
           setPinRequired(true);
           setPinUnlocked(false);
         }
@@ -423,26 +426,30 @@ export default function Page() {
 
   const auth = getFirebaseAuth();
 
-  const unsubscribe = auth.onAuthStateChanged(async (user) => {
-  console.log("AUTH STATE CHANGED", user?.uid, user?.email);
-
+const unsubscribe = auth.onAuthStateChanged(async (user) => {
   if (!user || user.isAnonymous) {
-  setCheckingAuth(false);
-  setAuthReady(true);
-  setUserId("signed_out");
-  return;
-}
+    setUserId("signed_out");
+    setCheckingAuth(false);
+    setAuthReady(true);
+    return;
+  }
 
-setUserId(user.uid);
+  setUserId(user.uid);
 
-await registerTalkioPushToken().catch(console.error);
-await configureRevenueCat(user.uid).catch(console.error);
-
-setCheckingAuth(false);
-setAuthReady(true);  
+  try {
+    await Promise.all([
+      registerTalkioPushToken(),
+      configureRevenueCat(user.uid),
+    ]);
+  } catch (error) {
+    console.error("Startup auth services failed:", error);
+  } finally {
+    setCheckingAuth(false);
+    setAuthReady(true);
+  }
 });
 
-  return unsubscribe;
+return unsubscribe;
 }, [mounted]);
 
   useEffect(() => {
@@ -457,31 +464,6 @@ setAuthReady(true);
   useEffect(() => {
   if (!mounted) return;
 
-  const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
-  };
-
-  const timers = [
-    window.setTimeout(scrollToBottom, 80),
-    window.setTimeout(scrollToBottom, 250),
-    window.setTimeout(scrollToBottom, 500),
-  ];
-
-  const handleResize = () => {
-    window.setTimeout(scrollToBottom, 120);
-  };
-
-  window.visualViewport?.addEventListener("resize", handleResize);
-  window.addEventListener("resize", handleResize);
-
-  return () => {
-    timers.forEach((timer) => window.clearTimeout(timer));
-    window.visualViewport?.removeEventListener("resize", handleResize);
-    window.removeEventListener("resize", handleResize);
-  };
 }, [messages, showTyping, mounted]);
 
    useEffect(() => {

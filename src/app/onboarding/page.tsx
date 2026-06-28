@@ -8,15 +8,15 @@ export default function TalkioOnboarding() {
   const screens = [
     {
       image: "/onboarding-webp/screen1-heavy-thoughts.webp",
-      buttonColor: "bg-[#2F9F84]",
+      buttonColor: "bg-[#90A88B]",
       finalButtonColor: "bg-[#0F8A5F]",
-      dotColor: "bg-[#2F9F84]",
+      dotColor: "bg-[#90A88B]",
     },
     {
       image: "/onboarding-webp/screen2-no-advice.webp",
-      buttonColor: "bg-[#3F8F62]",
+      buttonColor: "bg-[#89A17E]",
       finalButtonColor: "bg-[#0F8A5F]",
-      dotColor: "bg-[#3F8F62]",
+      dotColor: "bg-[#89A17E]",
     },
     {
       image: "/onboarding-webp/screen3-no-judgment.webp",

@@ -1,6 +1,7 @@
 "use strict";
 
 const { generateTalkioReply } = require("./generateTalkioReply");
+const { BASE_SYSTEM_PROMPT } = require("./prompts");
 
 function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -42,15 +43,9 @@ function buildConversationMessages(messages = [], latestUserMessage = "") {
   return safeHistory;
 }
 
-function buildTalkioSystemPrompt({
-  coreIdentityPrompt,
-  cosmopolitanismPrompt = "",
-  latestUserMessage,
-}) {
+function buildTalkioSystemPrompt({ latestUserMessage }) {
   return `
-${coreIdentityPrompt}
-
-${cosmopolitanismPrompt}
+${BASE_SYSTEM_PROMPT}
 
 RUNTIME CONTEXT
 - Mirror the user's current language naturally.
@@ -63,8 +58,6 @@ LATEST USER MESSAGE
 
 async function generateTalkioReplyEngine({
   modelGenerate,
-  coreIdentityPrompt,
-  cosmopolitanismPrompt = "",
   messages,
   latestUserMessage,
 }) {
@@ -76,8 +69,6 @@ async function generateTalkioReplyEngine({
   );
 
   const systemPrompt = buildTalkioSystemPrompt({
-    coreIdentityPrompt,
-    cosmopolitanismPrompt,
     latestUserMessage: cleanedLatestUserMessage,
   });
 

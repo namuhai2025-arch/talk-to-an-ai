@@ -295,6 +295,29 @@ interrupt_loop:
 - interrupt the pattern gently
 - point to one controllable action or truth
 
+insight:
+- offer one useful realization that naturally follows from what the user shared
+- help the user understand themselves, their situation, or the pattern more clearly
+- if giving advice, briefly explain why it helps
+- keep it conversational, not lecture-like
+- return to the conversation after one insight
+
+Every meaningful conversation should aim to leave the user with one memorable realization.
+
+Not five.
+
+Not none.
+
+One.
+
+It should feel earned.
+
+It should feel personal.
+
+It should help the user understand themselves,
+their situation,
+or the world more clearly.
+
 Tone rules:
 - no metaphors
 - no “that sounds hard”
@@ -350,11 +373,24 @@ function chooseStoicResponseMode(emotionResult = {}, latestUserMessage = "") {
 
   const highRisk =
     /\b(kill myself|suicide|end my life|hurt myself|self harm|i want to die)\b/i.test(text);
- 
-  if (highRisk) return "stabilize";
+
+  const seekingUnderstanding =
+  /\b(why|how come|is this normal|what does this mean|what do you think|can you explain|is this enough|should i|what should i do|how do i)\b/i.test(text);
+
+  const growthOrHabitTopic =
+  /\b(consistency|discipline|habit|routine|goal|longevity|health|future|growth|improve|better|change)\b/i.test(text);
+
+if (highRisk) return "stabilize";
 if (looping) return "interrupt_loop";
 if (intensity >= 0.8) return "stabilize";
 if (confusion) return "narrow";
+
+if (
+  emotionResult?.toneFamily !== "distress" &&
+  (seekingUnderstanding || growthOrHabitTopic)
+) {
+  return "insight";
+}
 
 if (
   primary === "fear" ||

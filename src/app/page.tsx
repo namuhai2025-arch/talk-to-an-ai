@@ -505,10 +505,9 @@ return unsubscribe;
     setDisplayName(clean);
     setDraftNickname(clean);
     setShowNamePrompt(false);
-  }
-
+  
   const handleGoogleSignIn = async () => {
-  if (!acceptedTerms || isSigningIn) return; 
+  if (!acceptedTerms || isSigningIn) return;
 
   localStorage.setItem("talkio_auth_in_progress", "true");
   setIsSigningIn(true);
@@ -522,16 +521,11 @@ return unsubscribe;
     if (platform === "android" || platform === "ios") {
       const result = await FirebaseAuthentication.signInWithGoogle();
       const idToken = result?.credential?.idToken;
-      
-      if (!idToken) {
-        throw new Error("No Google ID token returned.");
-      }
 
-      const auth = getFirebaseAuth();
+      if (!idToken) throw new Error("No Google ID token returned.");
+
       const credential = GoogleAuthProvider.credential(idToken);
       const userCredential = await signInWithCredential(auth, credential);
-
-      console.log("GOOGLE LOGIN SUCCESS", userCredential.user.uid);
 
       localStorage.removeItem("talkio_signed_out");
       localStorage.removeItem("talkio_auth_in_progress");
@@ -555,22 +549,16 @@ return unsubscribe;
     setAuthInProgress(false);
   } catch (error: any) {
     localStorage.removeItem("talkio_auth_in_progress");
-
     setSigningProvider(null);
     setIsSigningIn(false);
     setAuthInProgress(false);
-
     console.error("Google sign-in failed:", error);
     alert(`Google sign in failed.\n\n${error?.message || JSON.stringify(error)}`);
   }
 };
 
-const handleAppleSignIn = async () => {
+  const handleAppleSignIn = async () => {
   if (!acceptedTerms || isSigningIn) return;
-
-  if (Capacitor.isNativePlatform()) {
-  throw new Error("Native Apple sign-in failed before web fallback.");
-}
 
   setIsSigningIn(true);
   setAuthInProgress(true);
@@ -589,14 +577,10 @@ const handleAppleSignIn = async () => {
       const idToken =
         (result as any).idToken || (result as any).identityToken;
 
-      if (!idToken) {
-        throw new Error("No Apple identity token returned.");
-      }
+      if (!idToken) throw new Error("No Apple identity token returned.");
 
       const credential = provider.credential({ idToken });
       const userCredential = await signInWithCredential(auth, credential);
-
-      await signInWithCredential(auth, credential);
 
       localStorage.removeItem("talkio_signed_out");
       localStorage.removeItem("talkio_auth_in_progress");
@@ -606,9 +590,7 @@ const handleAppleSignIn = async () => {
       setIsSigningIn(false);
       setAuthInProgress(false);
       return;
-      }
-
-    await signInWithPopup(auth, provider);
+    }
 
     const userCredential = await signInWithPopup(auth, provider);
 
@@ -621,21 +603,18 @@ const handleAppleSignIn = async () => {
     setAuthInProgress(false);
   } catch (error: any) {
     localStorage.removeItem("talkio_auth_in_progress");
+    setSigningProvider(null);
+    setIsSigningIn(false);
+    setAuthInProgress(false);
+    console.error("Apple sign-in failed:", error);
+    alert(
+      `Apple sign in failed.\n\nCode: ${error?.code || "none"}\nMessage: ${
+        error?.message || String(error)
+      }`
+    );
+  }
+};
 
-  setSigningProvider(null);
-  setIsSigningIn(false);
-  setAuthInProgress(false);
-
-  console.error("Apple sign-in failed raw:", error);
-  console.error("Apple sign-in failed code:", error?.code);
-  console.error("Apple sign-in failed message:", error?.message);
-
-  alert(
-    `Apple sign in failed.\n\nCode: ${
-      error?.code || "none"
-    }\nMessage: ${error?.message || String(error)}`
-  );
-}
 };
   async function sendMessage(overrideText?: string) {
     const text = (overrideText ?? input).trim();
@@ -657,7 +636,6 @@ const positiveSignals = [
 const isPositiveMoment = positiveSignals.some((signal) =>
   normalizedText.includes(signal)
 );
-
     if (!text || loading || isLimitReached || showSafety || crisisLock) return;
 
     const safetyInterruption = classifySafetyInterruption(text);

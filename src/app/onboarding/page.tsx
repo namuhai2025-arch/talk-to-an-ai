@@ -6,37 +6,37 @@ import { Capacitor } from "@capacitor/core";
 
 export default function TalkioOnboarding() {
   const screens = [
-    {
-      image: "/onboarding-webp/screen1-heavy-thoughts.webp",
-      buttonColor: "bg-[#90A88B]",
-      finalButtonColor: "bg-[#0F8A5F]",
-      dotColor: "bg-[#90A88B]",
-    },
-    {
-      image: "/onboarding-webp/screen2-no-advice.webp",
-      buttonColor: "bg-[#89A17E]",
-      finalButtonColor: "bg-[#0F8A5F]",
-      dotColor: "bg-[#89A17E]",
-    },
-    {
-      image: "/onboarding-webp/screen3-no-judgment.webp",
-      buttonColor: "bg-[#6F8A4A]",
-      finalButtonColor: "bg-[#0F8A5F]",
-      dotColor: "bg-[#6F8A4A]",
-    },
-    {
-      image: "/onboarding-webp/screen4-clarity.webp",
-      buttonColor: "bg-[#D08A4E]",
-      finalButtonColor: "bg-[#B9743C]",
-      dotColor: "bg-[#D08A4E]",
-    },
-    {
-      image: "/onboarding-webp/screen5-feel-lighter.webp",
-      buttonColor: "bg-[#7F8F58]",
-      finalButtonColor: "bg-[#687A42]",
-      dotColor: "bg-[#7F8F58]",
-    },
-  ];
+  {
+    image: "/onboarding-ios/screen1-heavy-thoughts.jpg",
+    buttonColor: "bg-[#90A88B]",
+    finalButtonColor: "bg-[#0F8A5F]",
+    dotColor: "bg-[#90A88B]",
+  },
+  {
+    image: "/onboarding-ios/screen2-no-advice.jpg",
+    buttonColor: "bg-[#89A17E]",
+    finalButtonColor: "bg-[#0F8A5F]",
+    dotColor: "bg-[#89A17E]",
+  },
+  {
+    image: "/onboarding-ios/screen3-no-judgment.jpg",
+    buttonColor: "bg-[#6F8A4A]",
+    finalButtonColor: "bg-[#0F8A5F]",
+    dotColor: "bg-[#6F8A4A]",
+  },
+  {
+    image: "/onboarding-ios/screen4-clarity.jpg",
+    buttonColor: "bg-[#D08A4E]",
+    finalButtonColor: "bg-[#B9743C]",
+    dotColor: "bg-[#D08A4E]",
+  },
+  {
+    image: "/onboarding-ios/screen5-feel-lighter.jpg",
+    buttonColor: "bg-[#7F8F58]",
+    finalButtonColor: "bg-[#687A42]",
+    dotColor: "bg-[#7F8F58]",
+  },
+];
 
   const [index, setIndex] = React.useState(0);
 

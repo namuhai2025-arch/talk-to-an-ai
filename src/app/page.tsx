@@ -176,6 +176,8 @@ export default function Page() {
   const [feedbackAsked, setFeedbackAsked] = useState(false);
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
 
+  const startupServicesUidRef = useRef<string | null>(null);
+
   const storageKeys = useMemo(
     () => ({
       messages: "talkio_messages",
@@ -209,10 +211,7 @@ export default function Page() {
   const auth = getFirebaseAuth();
 
   const unsubscribe = auth.onAuthStateChanged((user) => {
-  if (Capacitor.isNativePlatform()) {
-    return;
-  }
-
+  
   if (!user || user.isAnonymous) {
     if (!window.location.pathname.startsWith("/signin")) {
       window.location.replace("/signin");
@@ -437,6 +436,9 @@ const unsubscribe = auth.onAuthStateChanged(async (user) => {
 
   setUserId(user.uid);
 
+if (startupServicesUidRef.current !== user.uid) {
+  startupServicesUidRef.current = user.uid;
+
   try {
     await Promise.all([
       registerTalkioPushToken(),
@@ -444,10 +446,11 @@ const unsubscribe = auth.onAuthStateChanged(async (user) => {
     ]);
   } catch (error) {
     console.error("Startup auth services failed:", error);
-  } finally {
-    setCheckingAuth(false);
-    setAuthReady(true);
   }
+}
+
+setCheckingAuth(false);
+setAuthReady(true);
 });
 
 return unsubscribe;

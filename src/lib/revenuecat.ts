@@ -32,7 +32,7 @@ export async function configureRevenueCat(userId?: string) {
 }
 
   configuringPromise = (async () => {
-    await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+    await Purchases.setLogLevel({ level: LOG_LEVEL.ERROR });
 
     if (!configured) {
       await Purchases.configure({

@@ -706,7 +706,7 @@ async function generateModelText({ ai, model, systemPrompt, messages }) {
       },
     });
 
-    console.log("RAW_MODEL_RESULT:", JSON.stringify(response, null, 2));
+    console.log("RAW_MODEL_RESULT_RECEIVED");
 
     let text = "";
 
@@ -1122,8 +1122,6 @@ export const bootstrapTalkioMemory = onRequest({ cors: true }, async (req, res) 
       });
       return;
     }
-
-    await ensureUserBase(uid, "Asia/Manila");
 
     const auth = await requireVerifiedUser(req);
     uid = auth.uid;

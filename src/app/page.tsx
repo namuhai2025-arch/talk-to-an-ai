@@ -206,27 +206,6 @@ export default function Page() {
 }, []);
 
   useEffect(() => {
-  if (!mounted) return;
-
-  const auth = getFirebaseAuth();
-
-  const unsubscribe = auth.onAuthStateChanged((user) => {
-  
-  if (!user || user.isAnonymous) {
-  if (Capacitor.isNativePlatform()) {
-    return;
-  }
-
-  if (!window.location.pathname.startsWith("/signin")) {
-    window.location.replace("/signin");
-  }
-}
-});
-
-  return unsubscribe;
-}, [mounted]);
-
-  useEffect(() => {
     setMounted(true);
   }, []);
 
@@ -894,7 +873,7 @@ if (
 ) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f7f1e8] px-6">
-      <div className="w-full max-w-sm rounded-[32px] border border-stone-200 bg-white/80 p-8 text-center shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+      <div className="w-full max-w-sm rounded-[32px] border border-stone-200 bg-white/80 p-8 text-center shadow-sm ">
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl">
           🌿
         </div>
@@ -911,11 +890,9 @@ if (
           Getting your calm space ready...
         </p>
 
-        <div className="mt-6 flex justify-center gap-1">
-          <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.3s]" />
-          <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.15s]" />
-          <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400" />
-        </div>
+        <div className="mt-6 text-sm text-stone-500">
+    Loading...
+</div>
       </div>
     </main>
   );
@@ -1146,7 +1123,7 @@ if (
         </div>
       )}
       {showReviewPrompt && (
-  <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-sm rounded-none border border-stone-200 bg-white/95 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
+  <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-sm rounded-none border border-stone-200 bg-white/95 p-5 shadow-sm ">
     <button
       type="button"
       onClick={() => setShowReviewPrompt(false)}
@@ -1240,7 +1217,7 @@ if (
   <div className="relative z-30 flex shrink-0 items-center gap-2 pt-1">
   <button
     type="button"
-    className="rounded-none border border-stone-200 bg-white/60 backdrop-blur-md px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
+    className="rounded-none border border-stone-200 bg-white/60  px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
     onClick={() => (window.location.href = "/settings")}
   >
     ⚙️
@@ -1248,7 +1225,7 @@ if (
 
   <button
     type="button"
-    className="rounded-none border border-stone-200 bg-white/60 backdrop-blur-md px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
+    className="rounded-none border border-stone-200 bg-white/60 px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
     disabled={loading || messages.length <= 1}
     onClick={clearChat}
   >
@@ -1326,7 +1303,7 @@ if (m.role === "user") {
 
           {isLimitReached && (
   <div className="pointer-events-none fixed bottom-20 left-0 right-0 z-40 px-4">
-    <div className="pointer-events-auto mx-auto flex max-w-md animate-[paywallSlideUp_260ms_ease-out] items-center justify-between gap-3 rounded-[24px] border border-stone-200 bg-white/90 px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.12)] backdrop-blur-xl">
+    <div className="pointer-events-auto mx-auto flex max-w-md animate-[paywallSlideUp_260ms_ease-out] items-center justify-between gap-3 rounded-[24px] border border-stone-200 bg-white/90 px-4 py-3 shadow-sm ">
       <div>
         <p className="text-sm font-semibold text-stone-900">
           Daily limit reached
@@ -1354,14 +1331,12 @@ if (m.role === "user") {
 )}
 
           {showTyping && (
-            <div className="talkio-ai-bubble ml-6 self-start max-w-[78%] px-4 py-3">
-              <div className="flex gap-1">
-                <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.3s]" />
-                <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.15s]" />
-                <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400" />
-              </div>
-            </div>
-          )}
+  <div className="talkio-ai-bubble ml-6 self-start max-w-[78%] px-4 py-3">
+    <span className="text-stone-500 text-sm">
+      Thinking...
+    </span>
+  </div>
+)}
         
           {messages.length === 1 &&
             !loading &&

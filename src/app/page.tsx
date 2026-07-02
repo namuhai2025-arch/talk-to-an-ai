@@ -188,7 +188,7 @@ export default function Page() {
 
   useAutoScroll({
   bottomRef,
-  messages,
+  messageCount: messages.length,
   showTyping,
   mounted,
 });
@@ -1295,7 +1295,10 @@ if (m.role === "user") {
 }
 
             return (              
-              <div key={i} className="flex flex-col">
+              <div
+  key={`${m.role}-${m.timestamp}-${i}`}
+  className="flex flex-col"
+>
                 <div className={bubbleClass}>
                   <div className="whitespace-pre-wrap break-words text-[17px] leading-[1.45]">
                     {m.content}

@@ -2,48 +2,27 @@ import { RefObject, useEffect } from "react";
 
 type UseAutoScrollOptions = {
   bottomRef: RefObject<HTMLDivElement | null>;
-  messages: unknown[];
+  messageCount: number;
   showTyping: boolean;
   mounted: boolean;
 };
 
 export function useAutoScroll({
   bottomRef,
-  messages,
+  messageCount,
   showTyping,
   mounted,
 }: UseAutoScrollOptions) {
   useEffect(() => {
     if (!mounted) return;
 
-    const scrollToBottom = () => {
+    const timer = window.setTimeout(() => {
       bottomRef.current?.scrollIntoView({
-        behavior: "smooth",
+        behavior: "auto",
         block: "end",
       });
-    };
+    }, 80);
 
-    const timers = [
-      window.setTimeout(scrollToBottom, 80),
-      window.setTimeout(scrollToBottom, 250),
-      window.setTimeout(scrollToBottom, 500),
-    ];
-
-    let resizeTimer: number | undefined;
-
-    const handleResize = () => {
-      if (resizeTimer) window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(scrollToBottom, 120);
-    };
-
-    window.visualViewport?.addEventListener("resize", handleResize);
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      timers.forEach((timer) => window.clearTimeout(timer));
-      if (resizeTimer) window.clearTimeout(resizeTimer);
-      window.visualViewport?.removeEventListener("resize", handleResize);
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [bottomRef, messages, showTyping, mounted]);
+    return () => window.clearTimeout(timer);
+  }, [messageCount, showTyping, mounted, bottomRef]);
 }

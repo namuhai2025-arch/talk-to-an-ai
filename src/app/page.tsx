@@ -508,7 +508,7 @@ return unsubscribe;
   }
 
   const handleGoogleSignIn = async () => {
-  if (!acceptedTerms || isSigningIn) return;
+  if (!acceptedTerms || isSigningIn) return; 
 
   localStorage.setItem("talkio_auth_in_progress", "true");
   setIsSigningIn(true);
@@ -517,12 +517,12 @@ return unsubscribe;
 
   try {
     const platform = Capacitor.getPlatform();
+    const auth = getFirebaseAuth();
 
     if (platform === "android" || platform === "ios") {
       const result = await FirebaseAuthentication.signInWithGoogle();
-
       const idToken = result?.credential?.idToken;
-
+      
       if (!idToken) {
         throw new Error("No Google ID token returned.");
       }
@@ -542,8 +542,20 @@ return unsubscribe;
       setAuthInProgress(false);
       return;
     }
+
+    const provider = new GoogleAuthProvider();
+    const userCredential = await signInWithPopup(auth, provider);
+
+    localStorage.removeItem("talkio_signed_out");
+    localStorage.removeItem("talkio_auth_in_progress");
+
+    setUserId(userCredential.user.uid);
+    setSigningProvider(null);
+    setIsSigningIn(false);
+    setAuthInProgress(false);
   } catch (error: any) {
     localStorage.removeItem("talkio_auth_in_progress");
+
     setSigningProvider(null);
     setIsSigningIn(false);
     setAuthInProgress(false);
@@ -556,15 +568,19 @@ return unsubscribe;
 const handleAppleSignIn = async () => {
   if (!acceptedTerms || isSigningIn) return;
 
+  if (Capacitor.isNativePlatform()) {
+  throw new Error("Native Apple sign-in failed before web fallback.");
+}
+
   setIsSigningIn(true);
   setAuthInProgress(true);
   setSigningProvider("apple");
   localStorage.setItem("talkio_auth_in_progress", "true");
 
-  const auth = getFirebaseAuth();
-  const provider = new OAuthProvider("apple.com");
-
   try {
+    const auth = getFirebaseAuth();
+    const provider = new OAuthProvider("apple.com");
+
     if (Capacitor.getPlatform() === "ios") {
       const result = await AppleSignIn.signIn({
         scopes: [SignInScope.Email, SignInScope.FullName],
@@ -578,33 +594,33 @@ const handleAppleSignIn = async () => {
       }
 
       const credential = provider.credential({ idToken });
+      const userCredential = await signInWithCredential(auth, credential);
 
       await signInWithCredential(auth, credential);
 
       localStorage.removeItem("talkio_signed_out");
       localStorage.removeItem("talkio_auth_in_progress");
 
-      setUserId(auth.currentUser?.uid || null);
+      setUserId(userCredential.user.uid);
       setSigningProvider(null);
       setIsSigningIn(false);
       setAuthInProgress(false);
-
       return;
       }
 
     await signInWithPopup(auth, provider);
 
-localStorage.removeItem("talkio_signed_out");
-localStorage.removeItem("talkio_auth_in_progress");
+    const userCredential = await signInWithPopup(auth, provider);
 
-setUserId(auth.currentUser?.uid || null);
-setSigningProvider(null);
-setIsSigningIn(false);
-setAuthInProgress(false);
+    localStorage.removeItem("talkio_signed_out");
+    localStorage.removeItem("talkio_auth_in_progress");
 
-
-    } catch (error: any) {
-  localStorage.removeItem("talkio_auth_in_progress");
+    setUserId(userCredential.user.uid);
+    setSigningProvider(null);
+    setIsSigningIn(false);
+    setAuthInProgress(false);
+  } catch (error: any) {
+    localStorage.removeItem("talkio_auth_in_progress");
 
   setSigningProvider(null);
   setIsSigningIn(false);

@@ -505,8 +505,9 @@ return unsubscribe;
     setDisplayName(clean);
     setDraftNickname(clean);
     setShowNamePrompt(false);
+  } 
   
-  const handleGoogleSignIn = async () => {
+  async function handleGoogleSignIn() {
   if (!acceptedTerms || isSigningIn) return;
 
   localStorage.setItem("talkio_auth_in_progress", "true");
@@ -557,7 +558,7 @@ return unsubscribe;
   }
 };
 
-  const handleAppleSignIn = async () => {
+  async function handleAppleSignIn() {
   if (!acceptedTerms || isSigningIn) return;
 
   setIsSigningIn(true);
@@ -613,7 +614,6 @@ return unsubscribe;
       }`
     );
   }
-};
 
 };
   async function sendMessage(overrideText?: string) {

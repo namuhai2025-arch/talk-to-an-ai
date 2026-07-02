@@ -213,10 +213,14 @@ export default function Page() {
   const unsubscribe = auth.onAuthStateChanged((user) => {
   
   if (!user || user.isAnonymous) {
-    if (!window.location.pathname.startsWith("/signin")) {
-      window.location.replace("/signin");
-    }
+  if (Capacitor.isNativePlatform()) {
+    return;
   }
+
+  if (!window.location.pathname.startsWith("/signin")) {
+    window.location.replace("/signin");
+  }
+}
 });
 
   return unsubscribe;

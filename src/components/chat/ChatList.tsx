@@ -2,6 +2,7 @@
 
 import React from "react";
 import MessageBubble from "./MessageBubble";
+import TypingIndicator from "./TypingIndicator";
 
 type ChatRole = "user" | "assistant";
 
@@ -15,10 +16,11 @@ type ChatMessage = {
 type ChatListProps = {
   messages: ChatMessage[];
   isLimitReached: boolean;
+  showTyping: boolean;
   bottomRef: React.RefObject<HTMLDivElement | null>;
 };
 
-function ChatList({ messages, isLimitReached, bottomRef }: ChatListProps) {
+function ChatList({ messages, isLimitReached, showTyping, bottomRef }: ChatListProps) {
   return (
     <div className="flex-1 overflow-y-auto px-4 pb-4 pt-2 md:px-10">
       <div className="flex flex-col gap-2">
@@ -49,7 +51,8 @@ function ChatList({ messages, isLimitReached, bottomRef }: ChatListProps) {
             />
           );
         })}
-
+        
+        {showTyping && <TypingIndicator />}
         <div ref={bottomRef} />
       </div>
     </div>

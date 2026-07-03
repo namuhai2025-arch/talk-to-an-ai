@@ -1233,8 +1233,9 @@ if (
 <ChatList
   messages={messages}
   isLimitReached={isLimitReached}
+  showTyping={showTyping}
   bottomRef={bottomRef}
-/>      
+/>     
       {!isLimitReached && (
   <>
     {crisisLock && (

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import MessageBubble from "./MessageBubble";
 
 type ChatRole = "user" | "assistant";
 
@@ -39,28 +40,13 @@ function ChatList({ messages, isLimitReached, bottomRef }: ChatListProps) {
           }
 
           return (
-            <div
+            <MessageBubble
               key={`${m.timestamp}-${i}`}
-              className={[
-                "max-w-[82%] whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-[15px] leading-7",
-                m.role === "user"
-                  ? "self-end bg-[#dfe8d2] text-stone-900"
-                  : "self-start bg-white text-stone-800 shadow-sm",
-                sameAsPrev ? "mt-1" : "mt-3",
-                sameAsNext ? "mb-0" : "mb-2",
-              ].join(" ")}
-            >
-              {m.content}
-
-              {showTimestamp && (
-                <div className="mt-2 text-[10px] text-stone-400">
-                  {new Date(m.timestamp).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-              )}
-            </div>
+              message={m}
+              sameAsPrev={sameAsPrev}
+              sameAsNext={sameAsNext}
+              showTimestamp={showTimestamp}
+            />
           );
         })}
 

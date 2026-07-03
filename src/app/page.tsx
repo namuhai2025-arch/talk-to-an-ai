@@ -129,6 +129,12 @@ function loadJson<T>(key: string, fallback: T): T {
   }
 }
 
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 export default function Page() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -351,13 +357,13 @@ export default function Page() {
     if (alreadyInserted) return prev;
 
     return [
-      ...prev,
-      {
-        role: "assistant" as const,
-        content: checkinMessage,
-        timestamp: Date.now(),
-      },
-    ];
+  ...prev,
+  {
+    role: "assistant" as const,
+    content: checkinMessage,
+    timestamp: Date.now(),
+  },
+].slice(-MAX_MESSAGES);
   });
 }, [mounted]);
 
@@ -447,11 +453,6 @@ return unsubscribe;
     setShowNamePrompt(true);
   }
 }, []);
-
-  useEffect(() => {
-  if (!mounted) return;
-
-}, [messages, showTyping, mounted]);
 
   async function shareTalkio() {
   try {
@@ -689,9 +690,7 @@ if (safetyAnalytics) {
 
 const humanDelay = Math.floor(Math.random() * 700) + 300;
 
-await new Promise((resolve) =>
-  setTimeout(resolve, humanDelay)
-);
+await sleep(humanDelay);
 
     try {
       const auth = getFirebaseAuth();
@@ -789,7 +788,7 @@ if (analytics) {
       }
 
       const replyDelay = 700 + Math.min(assistantReply.length * 5, 700);
-      await new Promise((resolve) => setTimeout(resolve, replyDelay));
+      await sleep(replyDelay);
 
       setMessages((prev): ChatMessage[] => {
   const nextMessages: ChatMessage[] = [
@@ -824,10 +823,7 @@ if (
   isPositiveMoment
 ) {
   setFeedbackAsked(true);
-
-  setTimeout(() => {
-    setShowReviewPrompt(true);
-  }, 1800);
+  setShowReviewPrompt(true);
 }
 
   } catch (error) {
@@ -835,8 +831,7 @@ if (
     console.error(error);
 
     if (error instanceof Error) {
-      console.error(error.message);
-      console.error(error.stack);
+      console.error(error.message);      
     }
 
     setMessages((prev): ChatMessage[] => {

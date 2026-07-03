@@ -11,6 +11,8 @@ import { Share } from "@capacitor/share";
 import { configureRevenueCat } from "@/lib/revenuecat";
 import { App } from "@capacitor/app";
 
+import ChatList from "@/components/chat/ChatList";
+
 import {
   GoogleAuthProvider,
   OAuthProvider,
@@ -1228,138 +1230,11 @@ if (
   </button>
 </div>
 </div>
-      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-2 md:px-10">
-        <div className="flex flex-col gap-2">
-          {messages.map((m, i) => {
-            const prev = messages[i - 1];
-            const next = messages[i + 1];
-
-            const sameAsPrev = prev?.role === m.role;
-            const sameAsNext = next?.role === m.role;
-            const showTimestamp = !next || next.role !== m.role;
-
-            if (
-  isLimitReached &&
-  m.role === "assistant" &&
-  typeof m.content === "string" &&
-  m.content.includes("free limit")
-) {
-  return null;
-}
-
-const isFirstUserReply =
-  m.role === "user" &&
-  i === 1 &&
-  messages[0]?.role === "assistant";
-
-let bubbleClass =
-  m.role === "user"
-    ? isFirstUserReply
-      ? "talkio-user-bubble self-end mr-4 max-w-[70%] px-4 py-3"
-      : "talkio-user-bubble self-end mr-4 max-w-[74%] px-4 py-3"
-      : "talkio-ai-bubble self-start ml-4 max-w-[74%] px-4 py-3";
-
-if (m.role === "user") {
-  if (sameAsPrev) bubbleClass += " rounded-tr-md";
-  if (sameAsNext) bubbleClass += " rounded-br-md";
-} else {
-  if (sameAsPrev) bubbleClass += " rounded-tl-md";
-  if (sameAsNext) bubbleClass += " rounded-bl-md";
-}
-
-            return (              
-              <div
-  key={`${m.role}-${m.timestamp}-${i}`}
-  className="flex flex-col"
->
-                <div className={bubbleClass}>
-                  <div className="whitespace-pre-wrap break-words text-[17px] leading-[1.45]">
-                    {m.content}
-                  </div>
-                </div>
-
-                {showTimestamp && (
-                  <div
-                    className={
-                      m.role === "user"
-                        ? "mt-2 self-end px-4 text-[12px] text-stone-300"
-                        : "mt-2 self-start px-4 text-[12px] text-stone-300"
-                    }
-                  >
-                    {new Date(m.timestamp).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {isLimitReached && (
-  <div className="pointer-events-none fixed bottom-20 left-0 right-0 z-40 px-4">
-    <div className="pointer-events-auto mx-auto flex max-w-md animate-[paywallSlideUp_260ms_ease-out] items-center justify-between gap-3 rounded-[24px] border border-stone-200 bg-white/90 px-4 py-3 shadow-sm ">
-      <div>
-        <p className="text-sm font-semibold text-stone-900">
-          Daily limit reached
-        </p>
-        <div className="mt-1 space-y-1">
-  <p className="text-xs font-medium text-stone-800">
-    Your free messages for today are finished.
-  </p>
-
-  <p className="text-xs leading-5 text-stone-500">
-    Talkio Pro keeps the conversation going with higher limits, deeper memory, and scheduled check-ins.
-  </p>
-</div>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => (window.location.href = "/paywall")}
-        className="shrink-0 rounded-full bg-stone-900 px-4 py-2 text-sm font-medium text-white active:scale-95 transition"
-      >
-        Upgrade
-      </button>
-    </div>
-  </div>
-)}
-
-          {showTyping && (
-  <div className="talkio-ai-bubble ml-6 self-start max-w-[78%] px-4 py-3">
-    <span className="text-stone-500 text-sm">
-      Thinking...
-    </span>
-  </div>
-)}
-        
-          {messages.length === 1 &&
-            !loading &&
-            !isLimitReached &&
-            !showSafety && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {[
-                  "I'm stressed",
-                  "I can't sleep",
-                  "Just bored",
-                  "Something happened today",
-                ].map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
-                    onClick={() => sendMessage(prompt)}
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            )}
-
-          <div ref={bottomRef} />
-        </div>
-      </div>
-
+<ChatList
+  messages={messages}
+  isLimitReached={isLimitReached}
+  bottomRef={bottomRef}
+/>      
       {!isLimitReached && (
   <>
     {crisisLock && (

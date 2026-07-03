@@ -30,7 +30,7 @@ function MessageBubble({
     <div className={["flex flex-col", isUser ? "items-end" : "items-start"].join(" ")}>
       <div
         className={[
-          "whitespace-pre-wrap break-words px-4 py-3 text-[15px] leading-6",
+          "whitespace-pre-wrap break-words px-4 py-3 text-[15px] leading-5.5",
           isUser
             ? "mr-4 max-w-[74%] bg-[#dfe8d2] text-stone-900"
             : "ml-4 max-w-[74%] bg-white text-stone-800 shadow-sm",

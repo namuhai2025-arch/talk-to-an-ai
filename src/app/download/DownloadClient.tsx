@@ -5,33 +5,14 @@ import { useEffect } from "react";
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.talkio.app";
 
-const APP_STORE_URL = "PASTE_YOUR_APP_STORE_LINK_HERE";
+const APP_STORE_URL = "https://apps.apple.com/us/app/talkio-reflect-ai-companion/id6770395386";
 
 export default function DownloadClient() {
 
   useEffect(() => {
-    const ua = navigator.userAgent;
-
-    if (/iPhone|iPad|iPod/i.test(ua) && APP_STORE_URL !== "PASTE_YOUR_APP_STORE_LINK_HERE") {
-      window.location.href = APP_STORE_URL;
-      return;
-    }
-
-    if (/Android/i.test(ua)) {
-      window.location.href = PLAY_STORE_URL;
-    }
-  }, []);
-
-   useEffect(() => {
-  console.log("Current URL:", window.location.href);
-  console.log("User Agent:", navigator.userAgent);
-
   const ua = navigator.userAgent;
 
-  if (
-    /iPhone|iPad|iPod/i.test(ua) &&
-    APP_STORE_URL !== "PASTE_YOUR_APP_STORE_LINK_HERE"
-  ) {
+  if (/iPhone|iPad|iPod/i.test(ua)) {
     window.location.href = APP_STORE_URL;
     return;
   }
@@ -53,15 +34,14 @@ export default function DownloadClient() {
         </p>
 
         <div className="mt-6 flex flex-col gap-3">
-          {APP_STORE_URL !== "PASTE_YOUR_APP_STORE_LINK_HERE" && (
-            <a
-              href={APP_STORE_URL}
-              className="rounded-2xl bg-stone-900 px-5 py-3 text-sm font-medium text-white"
-            >
-              Download on the App Store
-            </a>
-          )}
 
+          <a
+  href={APP_STORE_URL}
+  className="rounded-2xl bg-stone-900 px-5 py-3 text-sm font-medium text-white"
+>
+  Download on the App Store
+</a>
+      
           <a
             href={PLAY_STORE_URL}
             className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-medium text-white"

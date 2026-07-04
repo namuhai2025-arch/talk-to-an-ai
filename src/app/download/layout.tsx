@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     siteName: "Talkio",
     images: [
       {
-        url: "https://talkiochat.com/og-image.jpg",
+        url: "https://talkiochat.com/og-image.png",
         width: 1200,
         height: 630,
         alt: "Talkio",
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Talkio",
     description: "Talkio helped me organize my thoughts and emotions.",
-    images: ["https://talkiochat.com/og-image.jpg"],
+    images: ["https://talkiochat.com/og-image.png"],
   },
   icons: {
     icon: "https://talkiochat.com/icon.png",

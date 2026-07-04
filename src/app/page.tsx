@@ -7,7 +7,6 @@ import {
   logEvent,
 } from "@/lib/firebase";
 import { registerTalkioPushToken } from "@/lib/registerPushToken";
-import { Share } from "@capacitor/share";
 import { configureRevenueCat } from "@/lib/revenuecat";
 import { App } from "@capacitor/app";
 
@@ -455,20 +454,6 @@ return unsubscribe;
     setShowNamePrompt(true);
   }
 }, []);
-
-  async function shareTalkio() {
-  try {
-    await Share.share({
-      title: "Talkio",
-      text: "A calm AI space to think, breathe, and talk things through.",
-      url: "https://talkiochat.com/download",
-      dialogTitle: "Share Talkio",
-    });
-  } catch (err) {
-    console.error("Share failed:", err);
-    alert("Sharing is not available on this device yet.");
-  }
-}
 
   function clearChat() {
   const greeting = buildGreeting(displayName);

@@ -8,6 +8,7 @@ const PLAY_STORE_URL =
 const APP_STORE_URL = "PASTE_YOUR_APP_STORE_LINK_HERE";
 
 export default function DownloadClient() {
+
   useEffect(() => {
     const ua = navigator.userAgent;
 
@@ -20,6 +21,25 @@ export default function DownloadClient() {
       window.location.href = PLAY_STORE_URL;
     }
   }, []);
+
+   useEffect(() => {
+  console.log("Current URL:", window.location.href);
+  console.log("User Agent:", navigator.userAgent);
+
+  const ua = navigator.userAgent;
+
+  if (
+    /iPhone|iPad|iPod/i.test(ua) &&
+    APP_STORE_URL !== "PASTE_YOUR_APP_STORE_LINK_HERE"
+  ) {
+    window.location.href = APP_STORE_URL;
+    return;
+  }
+
+  if (/Android/i.test(ua)) {
+    window.location.href = PLAY_STORE_URL;
+  }
+}, []);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-white px-6 text-center">

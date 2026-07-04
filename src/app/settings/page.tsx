@@ -45,7 +45,7 @@ console.log("RevenueCat full customerInfo:", result?.customerInfo);
   return;
 }
 
-      const active = result.customerInfo.entitlements.active || {};
+const active = result.customerInfo.entitlements.active || {};
 const activeSubscriptions = result.customerInfo.activeSubscriptions || [];
 
 console.log("RevenueCat active entitlements:", active);
@@ -81,6 +81,19 @@ console.log("RevenueCat app user:", user.uid);
 
   return () => unsubscribe();
 }, []);
+
+  async function shareTalkio() {
+  try {
+    await Share.share({
+      title: "Talkio",
+      text: "A calm AI space to think, breathe, and talk things through.",
+      url: "https://talkiochat.com/download",
+      dialogTitle: "Share Talkio",
+    });
+  } catch (err) {
+    console.error("Share failed:", err);
+  }
+}
 
   const isFree = planName === "Free Plan";
   const isCompanion = planName === "Talkio Companion";
@@ -229,21 +242,10 @@ console.log("RevenueCat app user:", user.uid);
 
         <section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-sm">
           <button
-            type="button"
-            onClick={async () => {
-              try {
-                await Share.share({
-                  title: "Talkio",
-                  text: "A calm AI space to think, breathe, and talk things through.",
-                  url: "https://talkiochat.com",
-                  dialogTitle: "Share Talkio",
-                });
-              } catch (err) {
-                console.log(err);
-              }
-            }}
-            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
-          >
+  type="button"
+  onClick={shareTalkio}
+  className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+>
             <div>
               <p className="font-medium text-stone-900">Share Talkio</p>
               <p className="mt-1 text-sm text-stone-500">

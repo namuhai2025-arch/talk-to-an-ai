@@ -4,11 +4,8 @@ const MEMORY_TYPES = {
   PROFILE: "profile",
   PREFERENCE: "preference",
   GOAL: "goal",
-  ROUTINE: "routine",
-  REMINDERS_META: "reminders_meta",
   CONVERSATION_SUMMARY: "conversation_summary",
   PERSON: "person",
-  REMINDER_FOLLOWUP: "reminder_followup",
 };
 
 const MEMORY_SOURCES = {

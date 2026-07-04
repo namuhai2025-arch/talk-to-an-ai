@@ -59,7 +59,6 @@ async function getUserMemorySummary(userId) {
     people: [],
     preferences: [],
     goals: [],
-    routines: [],
     other: [],
   };
 
@@ -67,7 +66,6 @@ async function getUserMemorySummary(userId) {
     if (item.type === "person") grouped.people.push(item.value);
     else if (item.type === "preference") grouped.preferences.push(item.value);
     else if (item.type === "goal") grouped.goals.push(item.value);
-    else if (item.type === "routine") grouped.routines.push(item.value);
     else grouped.other.push(item.value);
   }
 
@@ -88,12 +86,6 @@ async function getUserMemorySummary(userId) {
     lines.push("");
     lines.push("Goals:");
     grouped.goals.slice(0, 8).forEach((v) => lines.push(`- ${v}`));
-  }
-
-  if (grouped.routines.length) {
-    lines.push("");
-    lines.push("Routines:");
-    grouped.routines.slice(0, 8).forEach((v) => lines.push(`- ${v}`));
   }
 
   if (grouped.other.length) {

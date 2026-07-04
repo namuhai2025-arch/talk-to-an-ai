@@ -2,7 +2,6 @@
 
 import admin from "firebase-admin";
 import { onRequest } from "firebase-functions/v2/https";
-import { onSchedule } from "firebase-functions/v2/scheduler";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
@@ -839,25 +838,6 @@ function violatesTrustSafeMode(reply = "") {
   ].some((bad) => r.includes(bad));
 }
 
-async function updateSmartCheckinState(uid, message) {
-  const update = {
-    lastUserMessageAt: admin.firestore.FieldValue.serverTimestamp(),
-  };
-
-  const moodSignal = detectMoodSignal(message);
-  if (moodSignal) {
-    update.lastMoodSignal = moodSignal;
-    update.lastMoodSignalAt = admin.firestore.FieldValue.serverTimestamp();
-  }
-
-  if (shouldCreateOpenLoop(message)) {
-    update.lastOpenLoop = message.slice(0, 200);
-    update.lastOpenLoopAt = admin.firestore.FieldValue.serverTimestamp();
-  }
-
-  await db.collection("users").doc(uid).set(update, { merge: true });
-}
-
 async function sendPushToUser(userId, notification) {
   const snapshot = await db
     .collection("users")
@@ -934,84 +914,6 @@ async function sendPushToUser(userId, notification) {
   };
 }
 
-async function upsertCheckin(uid, data = {}) {
-  const payload = {
-    enabled: typeof data.enabled === "boolean" ? data.enabled : true,
-    timezone: data.timezone || "Asia/Manila",
-    localHour: typeof data.localHour === "number" ? data.localHour : 12,
-    localMinute: typeof data.localMinute === "number" ? data.localMinute : 0,
-    message:
-      typeof data.message === "string" && data.message.trim()
-        ? data.message.trim()
-        : "Hey… just checking in. How are you feeling today?",
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  };
-
-  const ref = db.collection("checkins").doc(uid);
-  const snap = await ref.get();
-
-  if (!snap.exists) {
-    payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
-    payload.lastSentDate = null;
-  }
-
-  await ref.set(payload, { merge: true });
-}
-
-function getLocalDateKey(date, timeZone) {
-  const local = new Date(date.toLocaleString("en-US", { timeZone }));
-  const yyyy = local.getFullYear();
-  const mm = String(local.getMonth() + 1).padStart(2, "0");
-  const dd = String(local.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function getLocalNowParts(date, timeZone) {
-  const local = new Date(date.toLocaleString("en-US", { timeZone }));
-  return {
-    year: local.getFullYear(),
-    month: local.getMonth() + 1,
-    day: local.getDate(),
-    hour: local.getHours(),
-    minute: local.getMinutes(),
-    totalMinutes: local.getHours() * 60 + local.getMinutes(),
-  };
-}
-
-function isWithinCheckinWindow(nowParts, targetHour, targetMinute, windowMinutes = 2) {
-  const targetTotal = targetHour * 60 + targetMinute;
-  return (
-    nowParts.totalMinutes >= targetTotal &&
-    nowParts.totalMinutes < targetTotal + windowMinutes
-  );
-}
-
-function wasRecentlyActive(userDoc, minutes = 180) {
-  const lastUserMessageAt = userDoc?.lastUserMessageAt?.toDate?.();
-  if (!lastUserMessageAt) return false;
-
-  const diffMs = Date.now() - lastUserMessageAt.getTime();
-  return diffMs < minutes * 60 * 1000;
-}
-
-function pickCheckinMessage(checkin, userData = {}) {
-  const customMessage =
-    typeof checkin?.message === "string" && checkin.message.trim()
-      ? checkin.message.trim()
-      : null;
-
-  if (customMessage) return customMessage;
-
-  const options = [
-    "Hey… just checking in. How are you feeling today?",
-    "Hi — just wanted to check in a bit. How’s your day going?",
-    "Hey, how have you been holding up today?",
-    "Just checking in for a moment. How are you doing?",
-  ];
-
-  return options[Math.floor(Math.random() * options.length)];
-}
-
 export const mergeUserData = onRequest(async (req, res) => {
   try {
     if (req.method !== "POST") {
@@ -1059,16 +961,6 @@ export const mergeUserData = onRequest(async (req, res) => {
     for (const doc of tokensSnap.docs) {
       await newRef
         .collection("device_tokens")
-        .doc(doc.id)
-        .set(doc.data(), { merge: true });
-    }
-
-    // migrate checkins if stored under users/{uid}/checkins
-    const checkinsSnap = await oldRef.collection("checkins").get();
-
-    for (const doc of checkinsSnap.docs) {
-      await newRef
-        .collection("checkins")
         .doc(doc.id)
         .set(doc.data(), { merge: true });
     }
@@ -1321,175 +1213,6 @@ export const saveTalkioProfile = onRequest({ cors: true }, async (req, res) => {
   }
 });
 
-export const createCheckin = onRequest({ cors: true }, async (req, res) => {
-  let uid = "unknown";
-
-  try {
-    if (req.method !== "POST") {
-      res.status(405).json({ error: "Method not allowed" });
-      return;
-    }
-
-    const origin = req.headers.origin || "";
-    const allowedOrigins = getAllowedOrigins();
-
-    if (origin && !allowedOrigins.includes(origin)) {
-      res.status(403).json({
-        error: "Blocked origin",
-        reply: "Unauthorized domain.",
-      });
-      return;
-    }
-
-    const incomingAppKey = req.headers["x-talkio-app-key"];
-    if (!INTERNAL_APP_KEY) {
-      res.status(500).json({
-        error: "Missing INTERNAL_APP_KEY",
-        reply: "Server security configuration is missing.",
-      });
-      return;
-    }
-
-    if (incomingAppKey !== INTERNAL_APP_KEY) {
-      res.status(403).json({
-        error: "Forbidden",
-        reply: "Unauthorized request.",
-      });
-      return;
-    }
-
-    const auth = await requireVerifiedUser(req);
-    uid = auth.uid;
-
-    const body = req.body && typeof req.body === "object" ? req.body : {};
-    const timezone =
-      typeof body.timezone === "string" && body.timezone.trim()
-        ? body.timezone.trim().slice(0, 80)
-        : "Asia/Manila";
-
-    const localHour =
-      typeof body.localHour === "number" &&
-      Number.isFinite(body.localHour) &&
-      body.localHour >= 0 &&
-      body.localHour <= 23
-        ? body.localHour
-        : 12;
-
-    const localMinute =
-      typeof body.localMinute === "number" &&
-      Number.isFinite(body.localMinute) &&
-      body.localMinute >= 0 &&
-      body.localMinute <= 59
-        ? body.localMinute
-        : 0;
-
-    const message =
-      typeof body.message === "string" && body.message.trim()
-        ? body.message.trim().slice(0, 200)
-        : "Hey… just checking in. How are you feeling today?";
-
-    await upsertCheckin(uid, {
-      timezone,
-      localHour,
-      localMinute,
-      message,
-    });
-
-    res.status(200).json({
-      ok: true,
-      reply: "Check-in created.",
-    });
-  } catch (error) {
-    const statusCode = error?.statusCode || 500;
-    logError("create_checkin_failed", error, { uid });
-
-    if (statusCode === 401) {
-      res.status(401).json({
-        error: "Unauthorized",
-        reply: "Please sign in again and try once more.",
-      });
-      return;
-    }
-
-    res.status(500).json({
-      error: "Failed to create check-in",
-      reply: "Something went wrong while saving your check-in.",
-    });
-  }
-});
-
-export const processDueCheckins = onSchedule(
-  {
-    schedule: "* * * * *",
-    timeZone: "Asia/Manila",
-  },
-  async () => {
-    try {
-      logInfo("process_due_checkins_started");
-
-      const now = new Date();
-      const hourQueries = Array.from({ length: 24 }, (_, hour) =>
-        db
-          .collection("checkins")
-          .where("enabled", "==", true)
-          .where("localHour", "==", hour)
-          .get()
-      );
-
-      const hourSnapshots = await Promise.all(hourQueries);
-      const docs = hourSnapshots.flatMap((snap) => snap.docs);
-
-      for (const doc of docs) {
-        const checkin = doc.data();
-        const uid = doc.id;
-        const timeZone = checkin.timezone || "Asia/Manila";
-        const localHour =
-          typeof checkin.localHour === "number" ? checkin.localHour : 12;
-        const localMinute =
-          typeof checkin.localMinute === "number" ? checkin.localMinute : 0;
-
-        const localDateKey = getLocalDateKey(now, timeZone);
-        const localNow = getLocalNowParts(now, timeZone);
-
-        if (localNow.hour !== localHour) continue;
-
-        const isDue = isWithinCheckinWindow(localNow, localHour, localMinute, 2);
-        if (!isDue) continue;
-
-        if (checkin.lastSentDate === localDateKey) continue;
-
-        const userSnap = await db.collection("users").doc(uid).get();
-
-        const userData = userSnap.exists ? userSnap.data() : {};
-
-        if (wasRecentlyActive(userData, 30)) continue;
-
-        const message = pickCheckinMessage(checkin, userData);
-        const pushResult = await sendPushToUser(uid, {
-          title: "Talkio",
-          body: message,
-          data: { type: "checkin" },
-        });
-
-                if (pushResult?.successCount > 0) {
-          await db.collection("checkins").doc(uid).set(
-            {
-              lastSentDate: localDateKey,
-              lastSentAt: admin.firestore.FieldValue.serverTimestamp(),
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          );
-        }
-      }
-
-      logInfo("process_due_checkins_finished");
-    } catch (error) {
-      logError("process_due_checkins_failed", error);
-    }
-  }
-);
-
 async function getOrCreateFreeTrial(uid) {
   const userRef = db.collection("users").doc(uid);
   const snap = await userRef.get();
@@ -1577,7 +1300,6 @@ export const deleteMyAccount = onRequest({ cors: true }, async (req, res) => {
     const batch = db.batch();
 
     batch.delete(db.collection("users").doc(uid));
-    batch.delete(db.collection("checkins").doc(uid));
     batch.delete(db.collection("talkioUserProfiles").doc(uid));
 
     await batch.commit();

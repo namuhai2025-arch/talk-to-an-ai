@@ -30,31 +30,9 @@ function scoreMemory(memory, message) {
   if (memory.type === "person" && (msg.includes("girlfriend") || msg.includes("friend") || msg.includes("coworker") || msg.includes("family"))) {
     score += 4;
   }
-  if (memory.type === "routine" && (msg.includes("routine") || msg.includes("schedule") || msg.includes("morning"))) {
-    score += 4;
-  }
   if (memory.type === "goal" && (msg.includes("goal") || msg.includes("plan") || msg.includes("help me"))) {
     score += 3;
   }
-
-  if (
-  memory.type === "reminder_followup" &&
-  (
-    msg.includes("today") ||
-    msg.includes("later") ||
-    msg.includes("done") ||
-    msg.includes("finished") ||
-    msg.includes("forgot") ||
-    msg.includes("how") ||
-    msg.includes("what happened") ||
-    msg.includes("update") ||
-    msg.includes("i'm back") ||
-    msg.includes("hello") ||
-    msg.includes("hi")
-  )
-) {
-  score += 6;
-}
 
   return score;
 }
@@ -73,15 +51,12 @@ function formatMemoryForPrompt(memories, summary) {
   const lines = [];
 
   if (memories && memories.length) {
-    lines.push("Relevant user memory:");
-    for (const m of memories) {
-  if (m.type === "reminder_followup") {
-    lines.push(`- follow-up cue: ${m.value}. If natural, briefly ask how it went.`);
-  } else {
+  lines.push("Relevant user memory:");
+
+  for (const m of memories) {
     lines.push(`- ${m.type}: ${m.value}`);
   }
 }
-  }
 
   if (summary && String(summary).trim()) {
     lines.push("");

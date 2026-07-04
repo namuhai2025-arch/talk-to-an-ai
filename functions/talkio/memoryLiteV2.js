@@ -210,101 +210,6 @@ function buildContinuityBlock(memory) {
 ${lines.join("\n")}`;
 }
 
-function extractUnknownExpressions(text = "") {
-  const t = String(text || "").toLowerCase();
-  const tokens = t.split(/\s+/);
-  const candidates = [];
-
-  for (const token of tokens) {
-    if (token.length < 3) continue;
-    if (/^[^\w]+$/.test(token)) continue;
-    if (token.length > 20) continue;
-
-    if (
-      /^(the|and|but|like|just|really|very|have|this|that|what|when|where|why)$/i.test(
-        token
-      )
-    ) {
-      continue;
-    }
-
-    if (
-      /[^\w\s]/.test(token) ||
-      /[aeiou]{2,}/i.test(token) ||
-      /(haha|hehe|lol|lmao|wtf|omg)/i.test(token) ||
-      token.length > 12 ||
-      !/^[a-z]+$/i.test(token)
-    ) {
-      candidates.push(token);
-    }
-  }
-
-  return [...new Set(candidates)];
-}
-
-function extractContinuityPatch({
-  latestUserMessage = "",
-  responseMode = "reflect",
-  emotionResult = {},
-}) {
-  const text = String(latestUserMessage || "").toLowerCase();
-  const patch = {};
-
-  // Theme memory
-  if (/\bwork|job|boss|office|coworker|career\b/.test(text)) {
-    patch.activeTheme = "work_stress_or_career";
-  }
-
-  if (/\bfamily|mom|mother|dad|father|sibling|parents\b/.test(text)) {
-    patch.activeTheme = "family_relationships";
-  }
-
-  if (/\brelationship|partner|boyfriend|girlfriend|husband|wife|breakup\b/.test(text)) {
-    patch.activeTheme = "romantic_relationships";
-  }
-
-  if (/\bapp|talkio|business|launch|startup|project|build\b/.test(text)) {
-    patch.activeTheme = "building_talkio_or_personal_project";
-  }
-
-  // Situation memory
-  if (/\boverwhelmed|too much|stressed|pressure|burned out|exhausted\b/.test(text)) {
-    patch.activeSituation = "User is dealing with pressure or overwhelm.";
-    patch.userPattern = "needs_narrowing_when_overwhelmed";
-  }
-
-  if (/\bconfused|lost|i don't know|i dont know|not sure\b/.test(text)) {
-    patch.userPattern = "needs_clarity_when_confused";
-  }
-
-  if (/\bwhat should i do|next step|help me decide|how do i\b/.test(text)) {
-    patch.responsePreference = "clear_next_step";
-  }
-
-  if (/\bjust tell me|be direct|quick answer|short answer\b/.test(text)) {
-    patch.responsePreference = "direct_and_concise";
-  }
-
-  if (/\bexplain|why|help me understand|what does it mean\b/.test(text)) {
-    patch.responsePreference = "reflective_explanation";
-  }
-
-  // Emotion-informed memory, but no duplicate emotional brain
-  if (emotionResult?.toneFamily) {
-    patch.lastToneFamily = emotionResult.toneFamily;
-  }
-
-  if (emotionResult?.primaryEmotion) {
-    patch.lastPrimaryEmotion = emotionResult.primaryEmotion;
-  }
-
-  if (responseMode) {
-    patch.lastResponseMode = responseMode;
-  }
-
-  return patch;
-}
-
 function extractNativeExpressions(text = "") {
   const t = String(text || "").toLowerCase();
 
@@ -431,11 +336,9 @@ function detectRegionalStyle(text = "") {
 
 function extractNativeExpressionPatch(latestUserMessage = "") {
   const known = extractNativeExpressions(latestUserMessage);
-  const unknown = extractUnknownExpressions(latestUserMessage);
 
   const combined = [
-    ...known,
-    ...unknown.map((x) => ({ value: x, language: "unknown" })),
+    ...known,    
   ];
 
   const languageMix = detectLanguageMix(latestUserMessage);

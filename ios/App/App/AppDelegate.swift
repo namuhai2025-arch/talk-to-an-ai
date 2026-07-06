@@ -1,11 +1,14 @@
 import UIKit
 import Capacitor
 import FirebaseCore
+import TikTokBusinessSDK
+import AppTrackingTransparency
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
+    private var didRequestATT = false
 
     func application(
         _ application: UIApplication,
@@ -14,7 +17,42 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         FirebaseApp.configure()
 
+        let config = TikTokConfig(
+            appId: "7658586227125272594",
+            tiktokAppId: "6770395386"
+        )
+
+        TikTokBusiness.initializeSdk(config) { success, error in
+            if success {
+                print("TikTok Business SDK initialized")
+            } else {
+                print("TikTok Business SDK init failed: \(String(describing: error))")
+            }
+        }
+
         return true
+    }
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        requestTrackingPermissionIfNeeded()
+    }
+
+    private func requestTrackingPermissionIfNeeded() {
+        guard !didRequestATT else { return }
+        didRequestATT = true
+
+        if #available(iOS 14, *) {
+            guard ATTrackingManager.trackingAuthorizationStatus == .notDetermined else {
+                print("ATT status: \(ATTrackingManager.trackingAuthorizationStatus.rawValue)")
+                return
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                ATTrackingManager.requestTrackingAuthorization { status in
+                    print("ATT status: \(status.rawValue)")
+                }
+            }
+        }
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
@@ -24,9 +62,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
-    }
-
-    func applicationDidBecomeActive(_ application: UIApplication) {
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

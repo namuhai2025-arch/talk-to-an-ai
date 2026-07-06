@@ -12,12 +12,41 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.messaging.FirebaseMessaging;
 
 import java.util.HashMap;
+import com.tiktok.TikTokBusinessSdk;
 
 public class MainActivity extends BridgeActivity {
+
+    private static final String TALKIO_PACKAGE_ID = "com.talkio.app";
+    private static final String TIKTOK_APP_ID = "7658585151747768327";
+    private static final String TIKTOK_APP_SECRET = "TTBYToksiVOjCoQkNTTLjBEzopVJZoQ0";
+
+    private void initializeTikTokSdk() {
+        try {
+            if (TikTokBusinessSdk.isInitialized()) {
+                Log.d("TalkioTikTok", "TikTok SDK already initialized");
+                return;
+            }
+
+            TikTokBusinessSdk.TTConfig config =
+                    new TikTokBusinessSdk.TTConfig(getApplication(), TIKTOK_APP_SECRET)
+                            .setAppId(TALKIO_PACKAGE_ID)
+                            .setTTAppId(TIKTOK_APP_ID)
+                            .openDebugMode()
+                            .setLogLevel(TikTokBusinessSdk.LogLevel.DEBUG);
+
+            TikTokBusinessSdk.initializeSdk(config);
+
+            Log.d("TalkioTikTok", "TikTok SDK initialized successfully for Talkio Android");
+        } catch (Throwable error) {
+            Log.e("TalkioTikTok", "TikTok SDK initialization failed. Talkio will continue normally.", error);
+        }
+    }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        initializeTikTokSdk();
 
         handleDeepLink(getIntent());
 
@@ -81,7 +110,6 @@ public class MainActivity extends BridgeActivity {
                     saveTokenToFirestore(token);
                 });
     }
-
     private void saveTokenToFirestore(String token) {
         FirebaseAuth auth = FirebaseAuth.getInstance();
 

@@ -60,5 +60,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+
+	<key>NSUserTrackingUsageDescription</key>
+<string>Talkio uses your device identifier to measure app installs and improve the relevance of advertisements while respecting your privacy.</string>
+	
 </dict>
 </plist>

@@ -180,21 +180,15 @@ export default function ProjectSunriseHome() {
             </p>
           </div>
 
-          <div className="mx-auto w-full max-w-md rounded-[2.5rem] bg-stone-950 p-10 text-[#f7f1e8] shadow-2xl shadow-stone-400/30">
-            <p className="text-sm uppercase tracking-[0.32em] text-[#d8c08a]">
-              Volume I
-            </p>
+                    <div className="mx-auto w-full max-w-md lg:max-w-lg">
+            <div className="relative">
+              <div className="absolute -inset-10 rounded-full bg-[#d8c08a]/20 blur-3xl" />
 
-            <h3 className="mt-24 text-6xl font-semibold tracking-[-0.06em]">
-              Your Story
-            </h3>
-
-            <p className="mt-5 text-3xl text-stone-300">2026</p>
-
-            <div className="mt-28 border-t border-white/20 pt-7">
-              <p className="text-base leading-7 text-stone-300">
-                A year of becoming. Written by you. Remembered with Talkio.
-              </p>
+              <img
+                src="/project-sunrise-book.png"
+                alt="Your Story annual reflection book"
+                className="relative w-full rounded-[2rem] shadow-2xl shadow-stone-400/30"
+              />
             </div>
           </div>
         </div>

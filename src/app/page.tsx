@@ -1192,7 +1192,7 @@ if (
   <div>
     <h1 className="text-[2.15rem] font-semibold tracking-[-0.04em]">Talkio</h1>
     <p className="mt-1 text-sm text-stone-500">
-  The older brother you wish you had.
+  Reflect. Find Clarity.
 </p>
   </div>
 

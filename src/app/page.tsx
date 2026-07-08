@@ -1192,7 +1192,7 @@ if (
   <div>
     <h1 className="text-[2.15rem] font-semibold tracking-[-0.04em]">Talkio</h1>
     <p className="mt-1 text-sm text-stone-500">
-  Reflect. Find Clarity.
+  Reflect. Find Clarity. Grow. 
 </p>
   </div>
 

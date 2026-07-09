@@ -196,9 +196,9 @@ const IP_MINUTE_CAP = 30;
 const FREE_TRIAL_DAYS = 3;
 const FREE_TRIAL_DAILY_LIMIT = 10;
 
-const FREE_MODEL = "gemini-2.5-flash";
-const PREMIUM_MODEL = "gemini-2.5-flash";
-const ULTRA_MODEL = "gemini-2.5-pro";
+const FREE_MODEL = "gemini-3.1-flash-lite";
+const COMPANION_MODEL = "gemini-3.5-flash";
+const PRESENCE_MODEL = "gemini-3.5-flash";
 
 function logInfo(event, data = {}) {  
   logger.info(event, {
@@ -590,7 +590,7 @@ UNSAFE
 `;
 
   const result = await ai.models.generateContent({
-    model: "gemini-2.5-flash-lite",
+    model: "gemini-3.1-flash-lite",
     contents: [
       {
         role: "user",
@@ -1677,13 +1677,11 @@ const runtimeSystemPrompt =
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const model =
-    access?.plan === "professionals" ||
-    access?.plan === "elite"
-      ? ULTRA_MODEL
-      : access?.plan === "presence" ||
-        access?.plan === "companion"
-        ? PREMIUM_MODEL
-        : FREE_MODEL;
+  access?.plan === "presence"
+    ? PRESENCE_MODEL
+    : access?.plan === "companion"
+      ? COMPANION_MODEL
+      : FREE_MODEL;
 
     // =========================
     // 🤖 9. CALL BRAIN ENGINE

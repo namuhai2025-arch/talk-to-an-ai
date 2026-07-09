@@ -30,9 +30,7 @@ public class MainActivity extends BridgeActivity {
             TikTokBusinessSdk.TTConfig config =
                     new TikTokBusinessSdk.TTConfig(getApplication(), TIKTOK_APP_SECRET)
                             .setAppId(TALKIO_PACKAGE_ID)
-                            .setTTAppId(TIKTOK_APP_ID)
-                            .openDebugMode()
-                            .setLogLevel(TikTokBusinessSdk.LogLevel.DEBUG);
+                            .setTTAppId(TIKTOK_APP_ID);
 
             TikTokBusinessSdk.initializeSdk(config);
 

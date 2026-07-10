@@ -193,7 +193,7 @@ function normalizeEmail(email) {
 const IP_DAILY_CAP = 120;
 const IP_MINUTE_CAP = 30;
 
-const FREE_TRIAL_DAYS = 3;
+const FREE_TRIAL_DAYS = 1;
 const FREE_TRIAL_DAILY_LIMIT = 10;
 
 const FREE_MODEL = "gemini-3.1-flash-lite";

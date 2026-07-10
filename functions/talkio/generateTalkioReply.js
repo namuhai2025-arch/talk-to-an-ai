@@ -61,8 +61,8 @@ function isSoftUsableReply(reply) {
 
   const text = reply.trim();
 
-  if (text.length < 1) return false;
-  if (text.length > 2000) return false;
+  if (text.length < 20) return false;
+
   if (/^\W+$/.test(text)) return false;
 
   if (
@@ -664,11 +664,11 @@ if (isSoftUsableReply(reply)) {
     path: "core_identity_soft_accept",
     dynamicMode: responseMode,
     humanState: {
-  emotionResult,
-  responseMode,
-  source,
-  behavioralSafety,
-},
+      emotionResult,
+      responseMode,
+      source,
+      behavioralSafety,
+    },
     memoryUpdate: {
       lastEmotion: emotionResult?.primaryEmotion ?? null,
       lastToneFamily: emotionResult?.toneFamily ?? null,
@@ -680,53 +680,98 @@ if (isSoftUsableReply(reply)) {
   };
 }
 
-    const path = source === "checkin" ? "checkin_recovery" : "core_recovery";
+// Relaxed acceptance.
+// If Gemini produced readable text, do not discard it.
+if (
+  typeof reply === "string" &&
+  reply.trim().length >= 20
+) {
+  debugLog("TALKIO_PATH", {
+    path: "core_identity_relaxed_accept",
+    latencyMs: Date.now() - startedAt,
+  });
 
-    debugLog("TALKIO_PATH", {
-      path,
-      latencyMs: Date.now() - startedAt,
-    });
+  await logLatency(Date.now() - startedAt);
+  await logResponseMode(responseMode);
 
-    await logFallback(path);
+  return {
+    reply: reply.trim(),
+    path: "core_identity_relaxed_accept",
+    dynamicMode: responseMode,
+    humanState: {
+      emotionResult,
+      responseMode,
+      source,
+      behavioralSafety,
+    },
+    memoryUpdate: {
+      lastEmotion: emotionResult?.primaryEmotion ?? null,
+      lastToneFamily: emotionResult?.toneFamily ?? null,
+      lastIntensity: emotionResult?.intensity ?? null,
+      lastResponseMode: responseMode ?? null,
+      lastBehavioralRisk: behavioralSafety?.riskLevel ?? "none",
+      lastBehavioralCategory: behavioralSafety?.category ?? "none",
+    },
+  };
+}
 
-        return {
-      reply: buildHumanRecovery(latestUserMessage, emotionResult),
-      path,
-      dynamicMode: responseMode,
-      humanState: {
-        emotionResult,
-        responseMode,
-        source,
-      },
-      memoryUpdate: null,
-    };
-  } catch (err) {
-    console.error("Talkio error:", {
-      message: err?.message || String(err),
-      latencyMs: Date.now() - startedAt,
-    });
+const path =
+  source === "checkin"
+    ? "checkin_recovery"
+    : "core_recovery";
 
-    const path = source === "checkin" ? "checkin_recovery" : "core_recovery";
+debugLog("TALKIO_PATH", {
+  path,
+  latencyMs: Date.now() - startedAt,
+});
 
-    debugLog("TALKIO_PATH", {
-      path,
-      latencyMs: Date.now() - startedAt,
-      error: err?.message || String(err),
-    });
+await logFallback(path);
 
-    return {
-      reply: buildHumanRecovery(latestUserMessage, emotionResult),
-      path,
-      dynamicMode: responseMode || "reflect",
-      humanState: {
-        emotionResult,
-        responseMode,
-        source,
-        behavioralSafety,
-      },
-      memoryUpdate: null,
-    };
-  }
+return {
+  reply: buildHumanRecovery(latestUserMessage, emotionResult),
+  path,
+  dynamicMode: responseMode,
+  humanState: {
+    emotionResult,
+    responseMode,
+    source,
+    behavioralSafety,
+  },
+  memoryUpdate: null,
+};
+
+} catch (err) {
+  console.error("Talkio error:", {
+    message: err?.message || String(err),
+    latencyMs: Date.now() - startedAt,
+  });
+
+  const path =
+    source === "checkin"
+      ? "checkin_recovery"
+      : "core_recovery";
+
+  debugLog("TALKIO_PATH", {
+    path,
+    latencyMs: Date.now() - startedAt,
+    error: err?.message || String(err),
+  });
+
+  await logFallback(path);
+
+  return {
+    reply: buildHumanRecovery(latestUserMessage, emotionResult),
+    path,
+    dynamicMode: responseMode || "reflect",
+    humanState: {
+      emotionResult,
+      responseMode,
+      source,
+      behavioralSafety,
+    },
+    memoryUpdate: null,
+  };
+}
 }
 
 module.exports = {

@@ -18,7 +18,6 @@ public class MainActivity extends BridgeActivity {
 
     private static final String TALKIO_PACKAGE_ID = "com.talkio.app";
     private static final String TIKTOK_APP_ID = "7658585151747768327";
-    private static final String TIKTOK_APP_SECRET = "TTBYToksiVOjCoQkNTTLjBEzopVJZoQ0";
 
     private void initializeTikTokSdk() {
         try {
@@ -28,15 +27,25 @@ public class MainActivity extends BridgeActivity {
             }
 
             TikTokBusinessSdk.TTConfig config =
-                    new TikTokBusinessSdk.TTConfig(getApplication(), TIKTOK_APP_SECRET)
+                    new TikTokBusinessSdk.TTConfig(
+                            getApplication(),
+                            BuildConfig.TIKTOK_APP_SECRET
+                    )
                             .setAppId(TALKIO_PACKAGE_ID)
                             .setTTAppId(TIKTOK_APP_ID);
 
             TikTokBusinessSdk.initializeSdk(config);
 
-            Log.d("TalkioTikTok", "TikTok SDK initialized successfully for Talkio Android");
+            Log.d(
+                    "TalkioTikTok",
+                    "TikTok SDK initialized successfully for Talkio Android"
+            );
         } catch (Throwable error) {
-            Log.e("TalkioTikTok", "TikTok SDK initialization failed. Talkio will continue normally.", error);
+            Log.e(
+                    "TalkioTikTok",
+                    "TikTok SDK initialization failed. Talkio will continue normally.",
+                    error
+            );
         }
     }
 
@@ -103,7 +112,7 @@ public class MainActivity extends BridgeActivity {
                     }
 
                     String token = task.getResult();
-                    Log.d("TalkioFCM", "FCM token: " + token);
+                    Log.d("TalkioFCM", "FCM token retrieved successfully");
 
                     saveTokenToFirestore(token);
                 });

@@ -6,7 +6,10 @@ import {
   getFirebaseAnalytics,
   logEvent,
 } from "@/lib/firebase";
-import { registerTalkioPushToken } from "@/lib/registerPushToken";
+import {
+  registerTalkioPushToken,
+  syncTalkioProfile,
+} from "@/lib/registerPushToken";
 import { configureRevenueCat } from "@/lib/revenuecat";
 import { App } from "@capacitor/app";
 
@@ -430,13 +433,15 @@ if (startupServicesUidRef.current !== user.uid) {
   startupServicesUidRef.current = user.uid;
 
   try {
-    await Promise.all([
-      registerTalkioPushToken(),
-      configureRevenueCat(user.uid),
-    ]);
-  } catch (error) {
-    console.error("Startup auth services failed:", error);
-  }
+  await syncTalkioProfile();
+
+  await Promise.all([
+    registerTalkioPushToken(),
+    configureRevenueCat(user.uid),
+  ]);
+} catch (error) {
+  console.error("Startup auth services failed:", error);
+}
 }
 
 setCheckingAuth(false);

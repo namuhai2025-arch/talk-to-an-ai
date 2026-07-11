@@ -15,6 +15,7 @@ type BillingCycle = "monthly" | "yearly";
 
 export default function PaywallPage() {
   const [showSuccess, setShowSuccess] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
     
   useEffect(() => {
   const auth = getFirebaseAuth();
@@ -34,70 +35,87 @@ export default function PaywallPage() {
   plan: TalkioPlan,
   billingCycle: BillingCycle
 ) => {
+  if (purchasing) {
+    return;
+  }
+
   const auth = getFirebaseAuth();
   const user = auth.currentUser;
 
-
   if (!user || user.isAnonymous) {
-  alert("Please sign in from the Welcome screen first.");
-  window.location.href = "/";
-  return;
-}
+    alert("Please sign in from the Welcome screen first.");
+    window.location.href = "/";
+    return;
+  }
+
+  setPurchasing(true);
 
   try {
-    
-      const offerings = await getTalkioOfferings();
+    const offerings = await getTalkioOfferings();
 
-      if (!offerings || !offerings.current) {
-        alert("Subscriptions are not available yet. Please try again later.");
-        return;
-      }
-
-      const currentOffering = offerings.current;
-
-      const packageToPurchase = currentOffering.availablePackages.find((pkg) => {
-        const identifier = pkg.identifier.toLowerCase();
-        const productId = pkg.product.identifier.toLowerCase();
-
-        return (
-          (identifier.includes(plan) || productId.includes(plan)) &&
-          (identifier.includes(billingCycle) || productId.includes(billingCycle))
-        );
-      });
-
-      if (!packageToPurchase) {
-        alert("This subscription option is not available yet.");
-        return;
-      }
-
-      const purchaseResult = await purchaseTalkioPackage(packageToPurchase);
-
-      if (purchaseResult.customerInfo) {
-  localStorage.setItem(
-    "talkio_cached_plan",
-    "Talkio Companion"
-  );
-
-  setShowSuccess(true);
-
-  setTimeout(() => {
-    window.location.replace("/");
-  }, 500);
-}
-    } catch (error: any) {
-      console.error("Purchase failed:", error);
-
-      if (error?.userCancelled) return;
-
-      alert(
-        `Purchase failed.\n\nCode: ${error?.code || "none"}\nMessage: ${
-          error?.message || JSON.stringify(error)
-        }`
-      );
+    if (!offerings?.current) {
+      alert("Subscriptions are not available yet. Please try again later.");
+      return;
     }
-  };
+
+    const currentOffering = offerings.current;
+
+    const packageToPurchase = currentOffering.availablePackages.find((pkg) => {
+      const identifier = pkg.identifier.toLowerCase();
+      const productId = pkg.product.identifier.toLowerCase();
+
+      return (
+        (identifier.includes(plan) || productId.includes(plan)) &&
+        (identifier.includes(billingCycle) ||
+          productId.includes(billingCycle))
+      );
+    });
+
+    if (!packageToPurchase) {
+      alert("This subscription option is not available yet.");
+      return;
+    }
+
+    console.log("RevenueCat purchase starting", {
+      offering: currentOffering.identifier,
+      packageIdentifier: packageToPurchase.identifier,
+      productIdentifier: packageToPurchase.product.identifier,
+    });
+
+    const purchaseResult =
+      await purchaseTalkioPackage(packageToPurchase);
+
+    if (purchaseResult.customerInfo) {
+      localStorage.setItem(
+        "talkio_cached_plan",
+        "Talkio Companion"
+      );
+
+      setShowSuccess(true);
+      
+    }
+  } catch (error: any) {
+    console.error("Purchase failed:", error);
+
+    if (error?.userCancelled) {
+      return;
+    }
+
+    alert(
+      `Purchase failed.\n\nCode: ${error?.code || "none"}\nMessage: ${
+        error?.message || JSON.stringify(error)
+      }`
+    );
+  } finally {
+    setPurchasing(false);
+  }
+};
 
   const restorePurchases = async () => {
+  if (purchasing) return;
+
+  setPurchasing(true);
+
   try {
     const auth = getFirebaseAuth();
     const user = auth.currentUser;
@@ -120,24 +138,22 @@ export default function PaywallPage() {
     ) {
       localStorage.setItem("talkio_cached_plan", "Talkio Companion");
       setShowSuccess(true);
-
-      setTimeout(() => {
-        window.location.replace("/");
-      }, 500);
-
-      return;
+return;
     }
 
     alert("No active subscription found to restore.");
-  } catch (error: any) {
-    console.error("Restore purchases failed:", error);
+  
+    } catch (error: any) {
+  console.error("Restore purchases failed:", error);
 
-    alert(
-      `Restore failed.\n\nMessage: ${
-        error?.message || JSON.stringify(error)
-      }`
-    );
-  }
+  alert(
+    `Restore failed.\n\nMessage: ${
+      error?.message || JSON.stringify(error)
+    }`
+  );
+} finally {
+  setPurchasing(false);
+}
 };
 
   return (
@@ -156,8 +172,10 @@ export default function PaywallPage() {
 
             <button
   type="button"
-  onClick={() => (window.location.href = "/")}
-  className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-600 hover:shadow-lg"
+  onClick={() => {
+    window.location.replace("/");
+  }}
+  className="mt-6 h-14 w-full rounded-full bg-[#10C67A] text-white font-semibold"
 >
   Start Chatting
 </button>
@@ -167,12 +185,20 @@ export default function PaywallPage() {
 
       <div className="mx-auto max-w-5xl pt-2">
         <button
-          type="button"
-          onClick={() => (window.location.href = "/")}
-          className="relative z-50 mb-8 text-sm text-stone-500 hover:text-stone-800"
-        >
-          ← Back to chat
-        </button>
+  type="button"
+  disabled={purchasing}
+  onClick={() => {
+  if (purchasing) return;
+  window.location.href = "/";
+}}
+  className={`relative z-50 mb-8 text-sm ${
+    purchasing
+      ? "opacity-50 cursor-not-allowed text-stone-400"
+      : "text-stone-500 hover:text-stone-800"
+  }`}
+>
+  ← Back to chat
+</button>
 
         <section className="mx-auto max-w-3xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
@@ -193,10 +219,20 @@ export default function PaywallPage() {
 
         <section className="mx-auto mt-14 grid max-w-3xl gap-5 md:grid-cols-2">
           <button
-            type="button"
-            onClick={() => (window.location.href = "/")}
-            className="rounded-[30px] border border-emerald-200 bg-white/90 p-6 text-left shadow-[0_10px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md"
-          >
+  type="button"
+  disabled={purchasing}
+  onClick={() => {
+    if (purchasing) return;
+    window.location.href = "/";
+  }}
+  className={[
+    "rounded-[30px] border border-emerald-200 bg-white/90 p-6 text-left",
+    "shadow-[0_10px_40px_rgba(0,0,0,0.06)] transition duration-200",
+    purchasing
+      ? "cursor-not-allowed opacity-60"
+      : "hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md",
+  ].join(" ")}
+>
             <div className="flex h-full min-h-[280px] flex-col justify-between">
               <div>
                 <div className="flex items-start justify-between gap-4">
@@ -228,10 +264,18 @@ export default function PaywallPage() {
           </button>
 
           <button
-            type="button"
-            onClick={() => selectPlan("companion", "monthly")}
-            className="rounded-[30px] border border-stone-200 bg-white/80 p-6 text-left shadow-[0_10px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md"
-          >
+  type="button"
+  disabled={purchasing}
+  onClick={() => selectPlan("companion", "monthly")}
+  className={[
+    "rounded-[30px] border border-stone-200 bg-white/80 p-6 text-left",
+    "shadow-[0_10px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl",
+    "transition duration-200",
+    purchasing
+      ? "cursor-not-allowed opacity-60"
+      : "hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md",
+  ].join(" ")}
+>
             <div className="flex h-full min-h-[280px] flex-col justify-between">
               <div>
                 <div className="flex items-start justify-between gap-4">
@@ -259,7 +303,7 @@ Always there when you need it.
               </div>
 
               <div className="mt-7 flex h-14 w-full items-center justify-center rounded-full bg-[#10C67A] px-4 text-[16px] font-semibold tracking-[-0.01em] text-white shadow-[0_10px_25px_rgba(16,198,122,0.22)] transition-all hover:bg-[#0FBF74] hover:shadow-md">
-                Talkio Companion
+                {purchasing ? "Opening secure payment…" : "Talkio Companion"}
               </div>
             </div>
           </button>
@@ -267,10 +311,14 @@ Always there when you need it.
 
         <div className="mt-6 text-center">
   <button
-    type="button"
+    disabled={purchasing}
     onClick={restorePurchases}
-    className="text-sm font-medium text-emerald-700 underline underline-offset-4"
-  >
+    className={`text-sm font-medium underline underline-offset-4 ${
+      purchasing
+        ? "opacity-50 cursor-not-allowed"
+        : "text-emerald-700"
+    }`}
+>
     Restore Purchases
   </button>
 </div>

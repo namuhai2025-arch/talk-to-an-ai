@@ -25,23 +25,29 @@ export async function configureRevenueCat(userId?: string) {
   }
 
   if (configuringPromise) {
-  await configuringPromise;
-  if (configured && configuredUserId === userId) {
-    return;
+    await configuringPromise;
+
+    if (configured && configuredUserId === userId) {
+      return;
+    }
   }
-}
 
   configuringPromise = (async () => {
-    await Purchases.setLogLevel({ level: LOG_LEVEL.ERROR });
+    await Purchases.setLogLevel({
+      level: LOG_LEVEL.ERROR,
+    });
 
     if (!configured) {
       await Purchases.configure({
-  apiKey: platform === "ios" ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY,
-  appUserID: userId,
-});
+        apiKey:
+          platform === "ios"
+            ? REVENUECAT_IOS_KEY
+            : REVENUECAT_ANDROID_KEY,
+        appUserID: userId,
+      });
 
-configured = true;
-configuredUserId = userId;
+      configured = true;
+      configuredUserId = userId;
 
       console.log("RevenueCat configured successfully", {
         platform,
@@ -52,7 +58,9 @@ configuredUserId = userId;
     }
 
     if (configuredUserId !== userId) {
-      await Purchases.logIn({ appUserID: userId });
+      await Purchases.logIn({
+        appUserID: userId,
+      });
 
       configuredUserId = userId;
 
@@ -64,10 +72,10 @@ configuredUserId = userId;
   })();
 
   try {
-  await configuringPromise;
-} finally {
-  configuringPromise = null;
-}
+    await configuringPromise;
+  } finally {
+    configuringPromise = null;
+  }
 }
 
 export function isRevenueCatConfigured() {
@@ -92,14 +100,37 @@ export async function getTalkioCustomerInfo() {
   return Purchases.getCustomerInfo();
 }
 
-export async function purchaseTalkioPackage(packageToPurchase: PurchasesPackage) {
+type PurchaseResult = Awaited<
+  ReturnType<typeof Purchases.purchasePackage>
+>;
+
+let purchasePromise: Promise<PurchaseResult> | null = null;
+
+export async function purchaseTalkioPackage(
+  packageToPurchase: PurchasesPackage
+): Promise<PurchaseResult> {
   if (!configured) {
     throw new Error("RevenueCat is not configured yet.");
   }
 
-  return Purchases.purchasePackage({
+  if (!packageToPurchase) {
+    throw new Error("No RevenueCat package was selected.");
+  }
+
+  if (purchasePromise) {
+    console.warn("Purchase already in progress. Ignoring duplicate request.");
+    return purchasePromise;
+  }
+
+  purchasePromise = Purchases.purchasePackage({
     aPackage: packageToPurchase,
   });
+
+  try {
+    return await purchasePromise;
+  } finally {
+    purchasePromise = null;
+  }
 }
 
 export async function restoreTalkioPurchases() {

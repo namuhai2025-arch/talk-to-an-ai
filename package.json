@@ -18,7 +18,7 @@
     "@capacitor/keyboard": "^8.0.3",
     "@capacitor/share": "^8.0.1",
     "@capawesome/capacitor-apple-sign-in": "^0.1.0",
-    "@revenuecat/purchases-capacitor": "^13.1.3",
+    "@revenuecat/purchases-capacitor": "^13.2.0",
     "@stripe/stripe-js": "^9.8.0",
     "firebase": "^12.11.0",
     "next": "^16.2.6",

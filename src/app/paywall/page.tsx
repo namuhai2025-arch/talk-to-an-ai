@@ -31,6 +31,7 @@ export default function PaywallPage() {
   return () => unsubscribe();
 }, []);
 
+ 
   const selectPlan = async (
   plan: TalkioPlan,
   billingCycle: BillingCycle
@@ -46,11 +47,12 @@ export default function PaywallPage() {
     alert("Please sign in from the Welcome screen first.");
     window.location.href = "/";
     return;
-  }
+  } 
 
   setPurchasing(true);
 
   try {
+    await configureRevenueCat(user.uid);
     const offerings = await getTalkioOfferings();
 
     if (!offerings?.current) {
@@ -125,7 +127,8 @@ export default function PaywallPage() {
       window.location.href = "/";
       return;
     }
-
+    
+    await configureRevenueCat(user.uid);
     const result = await restoreTalkioPurchases();
 
     const active = result.customerInfo.entitlements.active || {};

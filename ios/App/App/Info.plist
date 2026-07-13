@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
@@ -60,9 +62,7 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-
 	<key>NSUserTrackingUsageDescription</key>
-<string>Talkio uses your device identifier to measure app installs and improve the relevance of advertisements while respecting your privacy.</string>
-	
+	<string>Talkio uses your device identifier to measure app installs and improve the relevance of advertisements while respecting your privacy.</string>
 </dict>
 </plist>

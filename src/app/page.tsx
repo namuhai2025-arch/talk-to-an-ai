@@ -1026,7 +1026,7 @@ if (
 }
 
   return (
-    <main className="mx-auto flex h-[100dvh] max-w-2xl flex-col text-stone-900">
+    <main className="mx-auto flex h-[100dvh] max-w-2xl flex-col overflow-hidden text-stone-900">
       <style jsx global>{`
       @keyframes paywallSlideUp {
         from {

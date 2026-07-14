@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   getFirebaseAuth,
   getFirebaseAnalytics,
@@ -14,6 +19,7 @@ import { configureRevenueCat } from "@/lib/revenuecat";
 import { App } from "@capacitor/app";
 
 import ChatList from "@/components/chat/ChatList";
+import ChatComposer from "@/components/chat/ChatComposer";
 
 import {
   GoogleAuthProvider,
@@ -140,7 +146,6 @@ function sleep(ms: number) {
 }
 
 export default function Page() {
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const [acceptedTerms, setAcceptedTerms] = useState(() => {
@@ -173,6 +178,7 @@ export default function Page() {
     useState("New conversation");
 
   const [input, setInput] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
 
@@ -471,9 +477,6 @@ return unsubscribe;
   setIsLimitReached(false);
   setCrisisLock(false);
 
-  requestAnimationFrame(() => {
-    inputRef.current?.focus();
-  });
 }
   
   function saveNickname() {
@@ -619,7 +622,6 @@ const isPositiveMoment = positiveSignals.some((signal) =>
 if (safetyInterruption.blocked) {
   if (!overrideText) {
     setInput("");
-    if (inputRef.current) inputRef.current.style.height = "auto";
   }
 
   const nextMessages: ChatMessage[] = [
@@ -658,7 +660,6 @@ if (safetyAnalytics) {
 
     if (!overrideText) {
       setInput("");
-      if (inputRef.current) inputRef.current.style.height = "auto";
     }
 
     const nextMessages: ChatMessage[] = [
@@ -842,11 +843,7 @@ if (
   } finally {
     clearTimeout(typingTimer);
     setShowTyping(false);
-    setLoading(false);
-
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
+    setLoading(false);    
   }
 }
 
@@ -1231,7 +1228,9 @@ if (
     {crisisLock && (
       <div className="mx-3 mb-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
         <p>
-          Talkio paused this conversation because it mentioned serious violence or immediate harm. If anyone may be in danger, contact local emergency services now.
+          Talkio paused this conversation because it mentioned serious violence
+          or immediate harm. If anyone may be in danger, contact local emergency
+          services now.
         </p>
 
         <button
@@ -1244,30 +1243,16 @@ if (
       </div>
     )}
 
-    <form
-  className="sticky bottom-0 z-40 flex shrink-0 items-end gap-2 border-t border-stone-200 bg-[#f7f1e8]/95 px-3 pb-2 pt-2"
-  onSubmit={(e) => {
-    e.preventDefault();
-    sendMessage();
-  }}
->
-  <div className="talkio-input flex min-h-[44px] flex-1 items-end border border-stone-300 bg-white px-3 py-2 rounded-md">
-      <textarea
-        ref={inputRef}
-        value={input}
-        autoCorrect="off"
-        autoCapitalize="off"
-        spellCheck={false}
-        autoComplete="off"
-        onChange={(e) => {
-        setInput(e.target.value);
-
-        e.target.style.height = "32px";
-        const nextHeight = Math.min(e.target.scrollHeight, 92);
-        e.target.style.height = `${nextHeight}px`;
-        e.target.style.overflowY =
-          e.target.scrollHeight > 92 ? "auto" : "hidden";
-      }}
+    <ChatComposer
+      value={input}
+      onChange={setInput}
+      onSend={() => sendMessage()}
+      disabled={
+        loading ||
+        showSafety ||
+        crisisLock ||
+        isLimitReached
+      }
       placeholder={
         crisisLock
           ? "Chat paused for safety"
@@ -1275,40 +1260,9 @@ if (
             ? "Daily free limit reached."
             : "Type your message..."
       }
-      disabled={loading || showSafety || crisisLock || isLimitReached}
-      rows={1}
-      className="h-[32px] max-h-[92px] w-full resize-none border-0 bg-transparent p-0 text-[16px] leading-6 outline-none placeholder:text-stone-400"
-      style={{
-        borderRadius: "0px",
-        WebkitAppearance: "none",
-        appearance: "none",
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          (e.target as HTMLTextAreaElement).form?.requestSubmit();
-        }
-      }}
     />
-  </div>
-
-  <button
-  type="submit"
-  disabled={
-    loading ||
-    showSafety ||
-    crisisLock ||
-    isLimitReached ||
-    !input.trim()
-  }
-  className="h-[48px] min-w-[64px] rounded-md bg-[#78906f] px-4 text-sm font-medium text-white transition active:scale-95 disabled:opacity-50"
->
-  Send
-</button>
-</form>
-
   </>
-      )}
-    </main>
+)}
+ </main>
   );
 }

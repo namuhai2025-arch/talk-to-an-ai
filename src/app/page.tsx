@@ -26,8 +26,13 @@ import {
   OAuthProvider,
   signInWithPopup,
   signInWithCredential,
-  
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
 } from "firebase/auth";
+
+import EmailAuthCard from "@/components/auth/EmailAuthCard";
+
 import { Capacitor } from "@capacitor/core";
 import {
   AppleSignIn,
@@ -152,9 +157,19 @@ export default function Page() {
   if (typeof window === "undefined") return false;
   return localStorage.getItem("talkio_terms_accepted") === "true";
 });
-  const [isSigningIn, setIsSigningIn] = useState(false);
-  const [signingProvider, setSigningProvider] =
-  useState<"google" | "apple" | null>(null);
+  const [showEmailAuth, setShowEmailAuth] = useState(false);
+
+const [emailAuthMode, setEmailAuthMode] =
+  useState<"signup" | "signin">("signup");
+
+const [emailAddress, setEmailAddress] = useState("");
+const [emailPassword, setEmailPassword] = useState("");
+const [emailAuthError, setEmailAuthError] = useState("");
+
+const [isSigningIn, setIsSigningIn] = useState(false);
+
+const [signingProvider, setSigningProvider] =
+  useState<"google" | "apple" | "email" | null>(null);
 
   const [authInProgress, setAuthInProgress] = useState(false);
 
@@ -595,6 +610,125 @@ return unsubscribe;
   }
 
 };
+
+  async function handleEmailAuth() {
+  if (!acceptedTerms || isSigningIn) return;
+
+  const cleanEmail = emailAddress.trim().toLowerCase();
+
+  if (!cleanEmail) {
+    setEmailAuthError("Enter your email address.");
+    return;
+  }
+
+  if (emailPassword.length < 6) {
+    setEmailAuthError("Your password must contain at least 6 characters.");
+    return;
+  }
+
+  setEmailAuthError("");
+  setIsSigningIn(true);
+  setAuthInProgress(true);
+  setSigningProvider("email");
+  localStorage.setItem("talkio_auth_in_progress", "true");
+
+  try {
+    const auth = getFirebaseAuth();
+
+    if (emailAuthMode === "signup") {
+  const credential =
+    await createUserWithEmailAndPassword(
+      auth,
+      cleanEmail,
+      emailPassword
+    );
+
+  setUserId(credential.user.uid);
+
+  try {
+    await sendEmailVerification(credential.user);
+  } catch (verificationError) {
+    console.error(
+      "Account created, but verification email could not be sent:",
+      verificationError
+    );
+  }
+} else {
+  const credential =
+    await signInWithEmailAndPassword(
+      auth,
+      cleanEmail,
+      emailPassword
+    );
+
+  setUserId(credential.user.uid);
+}
+
+    localStorage.removeItem("talkio_signed_out");
+    setShowEmailAuth(false);
+    setEmailPassword("");
+    setEmailAuthError("");
+  } catch (error: unknown) {
+    console.error("Email authentication failed:", error);
+
+    const firebaseError =
+      error && typeof error === "object"
+        ? (error as { code?: string; message?: string })
+        : {};
+
+    switch (firebaseError.code) {
+      case "auth/email-already-in-use":
+        setEmailAuthError(
+          "An account already exists with this email. Choose Sign in."
+        );
+        break;
+
+      case "auth/invalid-credential":
+      case "auth/wrong-password":
+        setEmailAuthError("The email or password is incorrect.");
+        break;
+
+      case "auth/user-not-found":
+        setEmailAuthError(
+          "No account was found. Choose Create account."
+        );
+        break;
+
+      case "auth/invalid-email":
+        setEmailAuthError("Enter a valid email address.");
+        break;
+
+      case "auth/weak-password":
+        setEmailAuthError(
+          "Choose a stronger password with at least 6 characters."
+        );
+        break;
+
+      case "auth/too-many-requests":
+        setEmailAuthError(
+          "Too many attempts. Please wait before trying again."
+        );
+        break;
+
+      case "auth/network-request-failed":
+        setEmailAuthError(
+          "We could not connect. Check your internet connection and try again."
+        );
+        break;
+
+      default:
+        setEmailAuthError(
+          firebaseError.message || "Email authentication failed."
+        );
+    }
+  } finally {
+    localStorage.removeItem("talkio_auth_in_progress");
+    setSigningProvider(null);
+    setIsSigningIn(false);
+    setAuthInProgress(false);
+  }
+}
+
   async function sendMessage(overrideText?: string) {
     const text = (overrideText ?? input).trim();
     const normalizedText = text.toLowerCase();
@@ -975,29 +1109,64 @@ if (
 
 
         <div className="mt-8 space-y-3">
-          <button
-  type="button"
-  disabled={!acceptedTerms || isSigningIn}
-  onClick={handleGoogleSignIn}
-  className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
->
-  {signingProvider === "google"
-  ? "Opening Google..."
-  : "Continue with Google"}
-</button>
+  <button
+    type="button"
+    disabled={!acceptedTerms || isSigningIn}
+    onClick={handleGoogleSignIn}
+    className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
+  >
+    {signingProvider === "google"
+      ? "Opening Google..."
+      : "Continue with Google"}
+  </button>
 
-          <button
-  type="button"
-  disabled={!acceptedTerms || isSigningIn}
-  onClick={handleAppleSignIn}
-  className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
->
-  {signingProvider === "apple"
-  ? "Opening Apple..."
-  : "Continue with Apple"}
-</button>
-        </div>
-      </div>
+  <button
+    type="button"
+    disabled={!acceptedTerms || isSigningIn}
+    onClick={handleAppleSignIn}
+    className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
+  >
+    {signingProvider === "apple"
+      ? "Opening Apple..."
+      : "Continue with Apple"}
+  </button>
+
+  <button
+    type="button"
+    disabled={!acceptedTerms || isSigningIn}
+    onClick={() => {
+      setEmailAuthError("");
+      setShowEmailAuth(true);
+    }}
+    className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
+  >
+    Continue with Email Address
+  </button>
+</div>
+
+  {showEmailAuth && (
+  <EmailAuthCard
+    emailAuthMode={emailAuthMode}
+    emailAddress={emailAddress}
+    emailPassword={emailPassword}
+    emailAuthError={emailAuthError}
+    isSigningIn={isSigningIn}
+    signingProvider={signingProvider}
+    onModeChange={(mode) => {
+      setEmailAuthMode(mode);
+      setEmailAuthError("");
+    }}
+    onEmailChange={setEmailAddress}
+    onPasswordChange={setEmailPassword}
+    onSubmit={handleEmailAuth}
+    onCancel={() => {
+      setShowEmailAuth(false);
+      setEmailAuthError("");
+      setEmailPassword("");
+    }}
+  />
+)}
+            </div>
     </main>
   );
 }

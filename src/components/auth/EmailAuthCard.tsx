@@ -111,8 +111,7 @@ export default function EmailAuthCard({
 
       {emailAuthMode === "signup" && (
         <p className="mt-4 text-xs leading-5 text-stone-500">
-          You can begin using Talkio immediately. We will send a verification
-          link to protect your account before subscribing.
+          You can begin using Talkio immediately. If you choose to subscribe later, we’ll first send a link to verify your email.
         </p>
       )}
     </div>

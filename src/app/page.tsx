@@ -28,7 +28,6 @@ import {
   signInWithCredential,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendEmailVerification,
 } from "firebase/auth";
 
 import EmailAuthCard from "@/components/auth/EmailAuthCard";
@@ -645,14 +644,6 @@ return unsubscribe;
 
   setUserId(credential.user.uid);
 
-  try {
-    await sendEmailVerification(credential.user);
-  } catch (verificationError) {
-    console.error(
-      "Account created, but verification email could not be sent:",
-      verificationError
-    );
-  }
 } else {
   const credential =
     await signInWithEmailAndPassword(
@@ -1140,7 +1131,7 @@ if (
     }}
     className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
   >
-    Continue with Email Address
+    Continue with Email 
   </button>
 </div>
 

@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import {
+  getIdTokenResult,
+  onAuthStateChanged,
+  sendEmailVerification,
+  type User,
+} from "firebase/auth";
+
 import { getFirebaseAuth } from "@/lib/firebase";
+
 import {
   configureRevenueCat,
   getTalkioOfferings,
@@ -13,151 +20,394 @@ import {
 type TalkioPlan = "companion";
 type BillingCycle = "monthly" | "yearly";
 
+type FirebaseAuthError = {
+  code?: string;
+  message?: string;
+};
+
+function readFirebaseError(error: unknown): FirebaseAuthError {
+  if (!error || typeof error !== "object") {
+    return {};
+  }
+
+  return error as FirebaseAuthError;
+}
+
+/**
+ * Determines how the current Firebase session was authenticated.
+ *
+ * The ID token's sign_in_provider claim is the strongest signal.
+ * providerData is retained as a fallback for older or unusual sessions.
+ */
+async function getSignInProvider(user: User): Promise<string | null> {
+  try {
+    const tokenResult = await getIdTokenResult(user, true);
+
+    const providerFromToken =
+      typeof tokenResult.signInProvider === "string"
+        ? tokenResult.signInProvider
+        : null;
+
+    if (providerFromToken) {
+      return providerFromToken;
+    }
+  } catch (error) {
+    console.warn(
+      "Could not read Firebase sign-in provider from the ID token:",
+      error
+    );
+  }
+
+  const providerFromProfile =
+    user.providerData.find(
+      (provider) =>
+        provider.providerId === "password" ||
+        provider.providerId === "google.com" ||
+        provider.providerId === "apple.com"
+    )?.providerId ?? null;
+
+  return providerFromProfile;
+}
+
 export default function PaywallPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
-    
+
   useEffect(() => {
-  const auth = getFirebaseAuth();
+    const auth = getFirebaseAuth();
 
-  const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    if (!user || user.isAnonymous) {
-      return;
-    }
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user || user.isAnonymous) {
+        return;
+      }
 
-    await configureRevenueCat(user.uid);
-  });
+      try {
+        await configureRevenueCat(user.uid);
+      } catch (error) {
+        console.error(
+          "RevenueCat configuration failed on the paywall:",
+          error
+        );
+      }
+    });
 
-  return () => unsubscribe();
-}, []);
+    return unsubscribe;
+  }, []);
 
- 
+  /**
+   * Blocks billing for unverified email/password accounts.
+   *
+   * Google and Apple accounts are allowed immediately because their identity
+   * has already been authenticated by the provider.
+   */
+  const requireVerifiedEmailForBilling =
+    async (): Promise<boolean> => {
+      const auth = getFirebaseAuth();
+      const currentUser = auth.currentUser;
+
+      if (!currentUser || currentUser.isAnonymous) {
+        alert("Please sign in from the Welcome screen first.");
+        window.location.href = "/";
+        return false;
+      }
+
+      try {
+        await currentUser.reload();
+      } catch (error) {
+        console.error("Could not refresh the Firebase user:", error);
+
+        alert(
+          "We could not check your account right now. Please check your connection and try again."
+        );
+
+        return false;
+      }
+
+      const refreshedUser = auth.currentUser;
+
+      if (!refreshedUser || refreshedUser.isAnonymous) {
+        alert(
+          "Your sign-in session could not be found. Please sign in again."
+        );
+
+        window.location.href = "/";
+        return false;
+      }
+
+      const signInProvider = await getSignInProvider(refreshedUser);
+
+      console.log("Talkio billing identity check", {
+        uid: refreshedUser.uid,
+        email: refreshedUser.email,
+        emailVerified: refreshedUser.emailVerified,
+        signInProvider,
+        providerData: refreshedUser.providerData.map(
+          (provider) => provider.providerId
+        ),
+      });
+
+      const usesEmailAndPassword =
+        signInProvider === "password" ||
+        refreshedUser.providerData.some(
+          (provider) => provider.providerId === "password"
+        );
+
+      /**
+       * Google and Apple continue immediately.
+       *
+       * A verified email/password account also continues.
+       */
+      if (!usesEmailAndPassword || refreshedUser.emailVerified) {
+        return true;
+      }
+
+      /**
+       * This is an unverified email/password account.
+       * Send the verification message and stop before RevenueCat is opened.
+       */
+      try {
+        await sendEmailVerification(refreshedUser);
+
+        alert(
+          [
+            "Verify your email before subscribing.",
+            "",
+            "We sent a verification link to:",
+            refreshedUser.email ?? "your email address",
+            "",
+            "Open the message and tap the verification link.",
+            "Then return to Talkio and select Companion again.",
+          ].join("\n")
+        );
+      } catch (error: unknown) {
+        const firebaseError = readFirebaseError(error);
+
+        console.error("Verification email failed:", {
+          code: firebaseError.code,
+          message: firebaseError.message,
+          error,
+        });
+
+        if (firebaseError.code === "auth/too-many-requests") {
+          alert(
+            [
+              "A verification email was recently requested.",
+              "",
+              "Please check your inbox, Spam, and Promotions folders.",
+              "After verifying, return to Talkio and select Companion again.",
+            ].join("\n")
+          );
+        } else if (
+          firebaseError.code === "auth/network-request-failed"
+        ) {
+          alert(
+            "We could not send the verification email. Check your internet connection and try again."
+          );
+        } else {
+          alert(
+            [
+              "We could not send the verification email.",
+              "",
+              "Please try again in a moment.",
+            ].join("\n")
+          );
+        }
+      }
+
+      return false;
+    };
+
   const selectPlan = async (
-  plan: TalkioPlan,
-  billingCycle: BillingCycle
-) => {
-  if (purchasing) {
-    return;
-  }
-
-  const auth = getFirebaseAuth();
-  const user = auth.currentUser;
-
-  if (!user || user.isAnonymous) {
-    alert("Please sign in from the Welcome screen first.");
-    window.location.href = "/";
-    return;
-  } 
-
-  setPurchasing(true);
-
-  try {
-    await configureRevenueCat(user.uid);
-    const offerings = await getTalkioOfferings();
-
-    if (!offerings?.current) {
-      alert("Subscriptions are not available yet. Please try again later.");
+    plan: TalkioPlan,
+    billingCycle: BillingCycle
+  ) => {
+    if (purchasing) {
       return;
     }
 
-    const currentOffering = offerings.current;
+    setPurchasing(true);
 
-    const packageToPurchase = currentOffering.availablePackages.find((pkg) => {
-      const identifier = pkg.identifier.toLowerCase();
-      const productId = pkg.product.identifier.toLowerCase();
+    try {
+      /**
+       * Nothing related to RevenueCat or Google Play runs until this returns
+       * true.
+       */
+      const canContinue =
+        await requireVerifiedEmailForBilling();
 
-      return (
-        (identifier.includes(plan) || productId.includes(plan)) &&
-        (identifier.includes(billingCycle) ||
-          productId.includes(billingCycle))
+      if (!canContinue) {
+        return;
+      }
+
+      const auth = getFirebaseAuth();
+      const user = auth.currentUser;
+
+      if (!user || user.isAnonymous) {
+        return;
+      }
+
+      await configureRevenueCat(user.uid);
+
+      const offerings = await getTalkioOfferings();
+
+      if (!offerings?.current) {
+        alert(
+          "Subscriptions are not available yet. Please try again later."
+        );
+        return;
+      }
+
+      const currentOffering = offerings.current;
+
+      const packageToPurchase =
+        currentOffering.availablePackages.find((pkg) => {
+          const identifier = pkg.identifier.toLowerCase();
+          const productId =
+            pkg.product.identifier.toLowerCase();
+
+          const matchesPlan =
+            identifier.includes(plan) ||
+            productId.includes(plan);
+
+          const matchesBillingCycle =
+            identifier.includes(billingCycle) ||
+            productId.includes(billingCycle);
+
+          return matchesPlan && matchesBillingCycle;
+        });
+
+      if (!packageToPurchase) {
+        alert(
+          "This subscription option is not available yet."
+        );
+        return;
+      }
+
+      console.log("RevenueCat purchase starting", {
+        uid: user.uid,
+        offering: currentOffering.identifier,
+        packageIdentifier: packageToPurchase.identifier,
+        productIdentifier:
+          packageToPurchase.product.identifier,
+      });
+
+      const purchaseResult =
+        await purchaseTalkioPackage(packageToPurchase);
+
+      if (purchaseResult.customerInfo) {
+        localStorage.setItem(
+          "talkio_cached_plan",
+          "Talkio Companion"
+        );
+
+        setShowSuccess(true);
+      }
+    } catch (error: unknown) {
+      const purchaseError =
+        error && typeof error === "object"
+          ? (error as {
+              code?: string | number;
+              message?: string;
+              userCancelled?: boolean;
+            })
+          : {};
+
+      console.error("Purchase failed:", error);
+
+      if (purchaseError.userCancelled) {
+        return;
+      }
+
+      alert(
+        [
+          "Purchase failed.",
+          "",
+          `Code: ${purchaseError.code ?? "none"}`,
+          `Message: ${
+            purchaseError.message ?? JSON.stringify(error)
+          }`,
+        ].join("\n")
       );
-    });
-
-    if (!packageToPurchase) {
-      alert("This subscription option is not available yet.");
-      return;
+    } finally {
+      setPurchasing(false);
     }
-
-    console.log("RevenueCat purchase starting", {
-      offering: currentOffering.identifier,
-      packageIdentifier: packageToPurchase.identifier,
-      productIdentifier: packageToPurchase.product.identifier,
-    });
-
-    const purchaseResult =
-      await purchaseTalkioPackage(packageToPurchase);
-
-    if (purchaseResult.customerInfo) {
-      localStorage.setItem(
-        "talkio_cached_plan",
-        "Talkio Companion"
-      );
-
-      setShowSuccess(true);
-      
-    }
-  } catch (error: any) {
-    console.error("Purchase failed:", error);
-
-    if (error?.userCancelled) {
-      return;
-    }
-
-    alert(
-      `Purchase failed.\n\nCode: ${error?.code || "none"}\nMessage: ${
-        error?.message || JSON.stringify(error)
-      }`
-    );
-  } finally {
-    setPurchasing(false);
-  }
-};
+  };
 
   const restorePurchases = async () => {
-  if (purchasing) return;
-
-  setPurchasing(true);
-
-  try {
-    const auth = getFirebaseAuth();
-    const user = auth.currentUser;
-
-    if (!user || user.isAnonymous) {
-      alert("Please sign in from the Welcome screen first.");
-      window.location.href = "/";
+    if (purchasing) {
       return;
     }
-    
-    await configureRevenueCat(user.uid);
-    const result = await restoreTalkioPurchases();
 
-    const active = result.customerInfo.entitlements.active || {};
-    const activeSubscriptions = result.customerInfo.activeSubscriptions || [];
+    setPurchasing(true);
 
-    if (
-      active["Talkio Companion"] ||
-      active["companion"] ||
-      activeSubscriptions.includes("talkio_companion_monthly")
-    ) {
-      localStorage.setItem("talkio_cached_plan", "Talkio Companion");
-      setShowSuccess(true);
-return;
+    try {
+      /**
+       * Restore is also a billing/account-ownership action, so email/password
+       * users must verify before restoring.
+       */
+      const canContinue =
+        await requireVerifiedEmailForBilling();
+
+      if (!canContinue) {
+        return;
+      }
+
+      const auth = getFirebaseAuth();
+      const user = auth.currentUser;
+
+      if (!user || user.isAnonymous) {
+        return;
+      }
+
+      await configureRevenueCat(user.uid);
+
+      const result = await restoreTalkioPurchases();
+
+      const active =
+        result.customerInfo.entitlements.active ?? {};
+
+      const activeSubscriptions =
+        result.customerInfo.activeSubscriptions ?? [];
+
+      const hasCompanion =
+        Boolean(active["Talkio Companion"]) ||
+        Boolean(active.companion) ||
+        activeSubscriptions.includes(
+          "talkio_companion_monthly"
+        );
+
+      if (hasCompanion) {
+        localStorage.setItem(
+          "talkio_cached_plan",
+          "Talkio Companion"
+        );
+
+        setShowSuccess(true);
+        return;
+      }
+
+      alert("No active subscription was found to restore.");
+    } catch (error: unknown) {
+      const restoreError =
+        error && typeof error === "object"
+          ? (error as { message?: string })
+          : {};
+
+      console.error("Restore purchases failed:", error);
+
+      alert(
+        [
+          "Restore failed.",
+          "",
+          `Message: ${
+            restoreError.message ?? JSON.stringify(error)
+          }`,
+        ].join("\n")
+      );
+    } finally {
+      setPurchasing(false);
     }
-
-    alert("No active subscription found to restore.");
-  
-    } catch (error: any) {
-  console.error("Restore purchases failed:", error);
-
-  alert(
-    `Restore failed.\n\nMessage: ${
-      error?.message || JSON.stringify(error)
-    }`
-  );
-} finally {
-  setPurchasing(false);
-}
-};
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f4fbf7] via-white to-[#f7faf8] px-5 py-6 text-stone-900">
@@ -169,39 +419,42 @@ return;
             </h2>
 
             <p className="mt-3 text-sm leading-6 text-stone-600">
-              Your subscription is active and ready to use. Thank you for
-              supporting Talkio.
+              Your subscription is active and ready to use.
+              Thank you for supporting Talkio.
             </p>
 
             <button
-  type="button"
-  onClick={() => {
-    window.location.replace("/");
-  }}
-  className="mt-6 h-14 w-full rounded-full bg-[#10C67A] text-white font-semibold"
->
-  Start Chatting
-</button>
+              type="button"
+              onClick={() => {
+                window.location.replace("/");
+              }}
+              className="mt-6 h-14 w-full rounded-full bg-[#10C67A] font-semibold text-white"
+            >
+              Start Chatting
+            </button>
           </div>
         </div>
       )}
 
       <div className="mx-auto max-w-5xl pt-2">
         <button
-  type="button"
-  disabled={purchasing}
-  onClick={() => {
-  if (purchasing) return;
-  window.location.href = "/";
-}}
-  className={`relative z-50 mb-8 text-sm ${
-    purchasing
-      ? "opacity-50 cursor-not-allowed text-stone-400"
-      : "text-stone-500 hover:text-stone-800"
-  }`}
->
-  ← Back to chat
-</button>
+          type="button"
+          disabled={purchasing}
+          onClick={() => {
+            if (purchasing) {
+              return;
+            }
+
+            window.location.href = "/";
+          }}
+          className={`relative z-50 mb-8 text-sm ${
+            purchasing
+              ? "cursor-not-allowed text-stone-400 opacity-50"
+              : "text-stone-500 hover:text-stone-800"
+          }`}
+        >
+          ← Back to chat
+        </button>
 
         <section className="mx-auto max-w-3xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
@@ -215,27 +468,30 @@ return;
           </h1>
 
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-stone-700">
-            Start free. Vent, reflect, and feel lighter. Upgrade only when you
-            want deeper access.
+            Start free. Vent, reflect, and feel lighter.
+            Upgrade only when you want deeper access.
           </p>
         </section>
 
         <section className="mx-auto mt-14 grid max-w-3xl gap-5 md:grid-cols-2">
           <button
-  type="button"
-  disabled={purchasing}
-  onClick={() => {
-    if (purchasing) return;
-    window.location.href = "/";
-  }}
-  className={[
-    "rounded-[30px] border border-emerald-200 bg-white/90 p-6 text-left",
-    "shadow-[0_10px_40px_rgba(0,0,0,0.06)] transition duration-200",
-    purchasing
-      ? "cursor-not-allowed opacity-60"
-      : "hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md",
-  ].join(" ")}
->
+            type="button"
+            disabled={purchasing}
+            onClick={() => {
+              if (purchasing) {
+                return;
+              }
+
+              window.location.href = "/";
+            }}
+            className={[
+              "rounded-[30px] border border-emerald-200 bg-white/90 p-6 text-left",
+              "shadow-[0_10px_40px_rgba(0,0,0,0.06)] transition duration-200",
+              purchasing
+                ? "cursor-not-allowed opacity-60"
+                : "hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md",
+            ].join(" ")}
+          >
             <div className="flex h-full min-h-[280px] flex-col justify-between">
               <div>
                 <div className="flex items-start justify-between gap-4">
@@ -261,24 +517,26 @@ return;
               </div>
 
               <div className="mt-7 flex h-14 w-full items-center justify-center rounded-full bg-[#10C67A] px-4 text-[16px] font-semibold tracking-[-0.01em] text-white shadow-[0_10px_25px_rgba(16,198,122,0.22)] transition-all hover:bg-[#0FBF74] hover:shadow-md">
-  Continue Free
-</div>
+                Continue Free
+              </div>
             </div>
           </button>
 
           <button
-  type="button"
-  disabled={purchasing}
-  onClick={() => selectPlan("companion", "monthly")}
-  className={[
-    "rounded-[30px] border border-stone-200 bg-white/80 p-6 text-left",
-    "shadow-[0_10px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl",
-    "transition duration-200",
-    purchasing
-      ? "cursor-not-allowed opacity-60"
-      : "hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md",
-  ].join(" ")}
->
+            type="button"
+            disabled={purchasing}
+            onClick={() =>
+              selectPlan("companion", "monthly")
+            }
+            className={[
+              "rounded-[30px] border border-stone-200 bg-white/80 p-6 text-left",
+              "shadow-[0_10px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl",
+              "transition duration-200",
+              purchasing
+                ? "cursor-not-allowed opacity-60"
+                : "hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md",
+            ].join(" ")}
+          >
             <div className="flex h-full min-h-[280px] flex-col justify-between">
               <div>
                 <div className="flex items-start justify-between gap-4">
@@ -298,48 +556,51 @@ return;
                   </span>
                 </h2>
 
-                <p className="mt-4 max-w-[95%] text-[15px] leading-[1.35] text-stone-600">
-                  Unlimited conversations.
-Long-term memory and continuity.
-Always there when you need it.
+                <p className="mt-4 max-w-[95%] whitespace-pre-line text-[15px] leading-[1.35] text-stone-600">
+                  {"Unlimited conversations.\nLong-term memory and continuity.\nAlways there when you need it."}
                 </p>
               </div>
 
               <div className="mt-7 flex h-14 w-full items-center justify-center rounded-full bg-[#10C67A] px-4 text-[16px] font-semibold tracking-[-0.01em] text-white shadow-[0_10px_25px_rgba(16,198,122,0.22)] transition-all hover:bg-[#0FBF74] hover:shadow-md">
-                {purchasing ? "Opening secure payment…" : "Talkio Companion"}
+                {purchasing
+                  ? "Checking your account…"
+                  : "Talkio Companion"}
               </div>
             </div>
           </button>
         </section>
 
         <div className="mt-6 text-center">
-  <button
-    disabled={purchasing}
-    onClick={restorePurchases}
-    className={`text-sm font-medium underline underline-offset-4 ${
-      purchasing
-        ? "opacity-50 cursor-not-allowed"
-        : "text-emerald-700"
-    }`}
->
-    Restore Purchases
-  </button>
-</div>
-  
+          <button
+            type="button"
+            disabled={purchasing}
+            onClick={restorePurchases}
+            className={`text-sm font-medium underline underline-offset-4 ${
+              purchasing
+                ? "cursor-not-allowed opacity-50"
+                : "text-emerald-700"
+            }`}
+          >
+            Restore Purchases
+          </button>
+        </div>
+
         <div className="mt-14 text-center text-sm leading-relaxed text-stone-500">
           <p>
             Free plan available.
             <br />
-            Upgrade only if you want deeper conversations and continuity.
+            Upgrade only if you want deeper conversations and
+            continuity.
             <br />
             <br />
             Talkio Companion Monthly: $4.99/month.
             <br />
             Auto-renewable subscription.
             <br />
-            Cancel anytime through your Apple or Google account settings.
+            Cancel anytime through your Apple or Google account
+            settings.
           </p>
-     
+
           <div className="mt-4 flex items-center justify-center gap-4">
             <a
               href="/terms"

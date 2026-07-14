@@ -204,26 +204,6 @@ export default function Page() {
   showTyping,
   mounted,
 });
-
-  useEffect(() => {
-  if (!mounted || !conversationLoaded || messages.length === 0) return;
-
-  let secondFrame = 0;
-
-  const firstFrame = window.requestAnimationFrame(() => {
-    secondFrame = window.requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({
-        behavior: "auto",
-        block: "end",
-      });
-    });
-  });
-
-  return () => {
-    window.cancelAnimationFrame(firstFrame);
-    window.cancelAnimationFrame(secondFrame);
-  };
-}, [mounted, conversationLoaded]);
   
   useKeyboard();
 

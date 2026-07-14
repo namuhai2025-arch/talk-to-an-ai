@@ -28,13 +28,13 @@ export default function ChatComposer({
      * The visual viewport shrinks when the iPhone keyboard opens,
      * which was making the composer shrink while typing.
      */
-    const screenHeight =
-      window.screen?.height || window.innerHeight;
+    const availableHeight =
+  window.visualViewport?.height ?? window.innerHeight;
 
-    const maxHeight = Math.min(
-      Math.max(screenHeight * 0.45, 280),
-      420
-    );
+const maxHeight = Math.max(
+  144,
+  Math.min(availableHeight * 0.48, 320)
+);
 
     textarea.style.height = "0px";
 
@@ -61,7 +61,7 @@ export default function ChatComposer({
 
   return (
     <form
-      className="sticky bottom-0 z-40 flex shrink-0 items-end gap-2 border-t border-stone-200 bg-[#f7f1e8]/95 px-3 pb-2 pt-2"
+      className="relative z-40 flex shrink-0 items-end gap-2 border-t border-stone-200 bg-[#f7f1e8]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2"
       onSubmit={(event) => {
         event.preventDefault();
         submitMessage();

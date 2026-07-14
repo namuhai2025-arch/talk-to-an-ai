@@ -4,11 +4,12 @@ import DownloadClient from "./DownloadClient";
 export const metadata: Metadata = {
   title: "Download Talkio",
   description:
-    "A calm AI companion that helps you organize your thoughts and emotions.",
+    "Your own thinking space to reflect, organize your thoughts, and find clarity.",
+
   openGraph: {
     title: "Download Talkio",
     description:
-      "A calm AI companion that helps you organize your thoughts and emotions.",
+      "Your own thinking space to reflect, organize your thoughts, and find clarity.",
     url: "https://talkiochat.com/download",
     siteName: "Talkio",
     images: [
@@ -22,11 +23,12 @@ export const metadata: Metadata = {
     locale: "en_US",
     type: "website",
   },
+
   twitter: {
     card: "summary_large_image",
     title: "Download Talkio",
     description:
-      "A calm AI companion that helps you organize your thoughts and emotions.",
+      "Your own thinking space to reflect, organize your thoughts, and find clarity.",
     images: ["https://talkiochat.com/og-image.png"],
   },
 };

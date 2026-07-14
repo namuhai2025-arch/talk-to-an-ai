@@ -19,16 +19,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         let config = TikTokConfig(
             appId: "7658586227125272594",
-            tiktokAppId: "6770395386"
+            tiktokAppId: "6770395386"            
         )
 
         TikTokBusiness.initializeSdk(config) { success, error in
-            if success {
-                print("TikTok Business SDK initialized")
-            } else {
-                print("TikTok Business SDK init failed: \(String(describing: error))")
-            }
-        }
+    if success {
+        print("TikTok Business SDK initialized")
+
+        let testEvent = TikTokAppEvent(eventName: "view_content")
+        TikTokBusiness.getInstance().report(testEvent)
+        TikTokBusiness.explicitlyFlush()
+
+        print("TikTok test event submitted: view_content")
+    } else {
+        print("TikTok Business SDK init failed: \(String(describing: error))")
+    }
+}
 
         return true
     }

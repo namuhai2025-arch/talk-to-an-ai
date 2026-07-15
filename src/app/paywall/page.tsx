@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import {
   getIdTokenResult,
   onAuthStateChanged,
-  sendEmailVerification,
   type User,
 } from "firebase/auth";
 
@@ -25,12 +24,58 @@ type FirebaseAuthError = {
   message?: string;
 };
 
+const TALKIO_VERIFICATION_ENDPOINT =
+  "https://sendtalkioverificationemail-ndury54xsq-uc.a.run.app";
+
 function readFirebaseError(error: unknown): FirebaseAuthError {
   if (!error || typeof error !== "object") {
     return {};
   }
 
   return error as FirebaseAuthError;
+}
+
+type VerificationEmailResponse = {
+  ok?: boolean;
+  sent?: boolean;
+  alreadyVerified?: boolean;
+  email?: string;
+  error?: string;
+  retryAfterSeconds?: number;
+};
+
+async function requestTalkioVerificationEmail(
+  user: User
+): Promise<VerificationEmailResponse> {
+  const idToken = await user.getIdToken(true);
+
+  const response = await fetch(TALKIO_VERIFICATION_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({}),
+  });
+
+  const data =
+    (await response.json().catch(() => ({}))) as VerificationEmailResponse;
+
+  if (!response.ok) {
+    const error = new Error(
+      data.error || "Unable to send verification email."
+    ) as Error & {
+      status?: number;
+      retryAfterSeconds?: number;
+    };
+
+    error.status = response.status;
+    error.retryAfterSeconds = data.retryAfterSeconds;
+
+    throw error;
+  }
+
+  return data;
 }
 
 /**
@@ -160,62 +205,60 @@ export default function PaywallPage() {
       if (!usesEmailAndPassword || refreshedUser.emailVerified) {
         return true;
       }
+      
+  try {
+  const result =
+    await requestTalkioVerificationEmail(refreshedUser);
 
-      /**
-       * This is an unverified email/password account.
-       * Send the verification message and stop before RevenueCat is opened.
-       */
-      try {
-        await sendEmailVerification(refreshedUser);
+  if (result.alreadyVerified) {
+    await refreshedUser.reload();
 
-        alert(
-          [
-            "Verify your email before subscribing.",
-            "",
-            "We sent a verification link to:",
-            refreshedUser.email ?? "your email address",
-            "",
-            "Open the message and tap the verification link.",
-            "Then return to Talkio and select Companion again.",
-          ].join("\n")
-        );
-      } catch (error: unknown) {
-        const firebaseError = readFirebaseError(error);
+    if (getFirebaseAuth().currentUser?.emailVerified) {
+      return true;
+    }
+  }
 
-        console.error("Verification email failed:", {
-          code: firebaseError.code,
-          message: firebaseError.message,
-          error,
-        });
+  alert(
+    [
+      "Verify your email before subscribing.",
+      "",
+      "We sent a Talkio verification email to:",
+      result.email ??
+        refreshedUser.email ??
+        "your email address",
+      "",
+      "Open the email and tap Verify Email.",
+      "",
+      "After verifying, return to Talkio and choose Companion again.",
+      "",
+      "Please also check Spam or Promotions.",
+    ].join("\n")
+  );
+} catch (error: any) {
+  console.error(error);
 
-        if (firebaseError.code === "auth/too-many-requests") {
-          alert(
-            [
-              "A verification email was recently requested.",
-              "",
-              "Please check your inbox, Spam, and Promotions folders.",
-              "After verifying, return to Talkio and select Companion again.",
-            ].join("\n")
-          );
-        } else if (
-          firebaseError.code === "auth/network-request-failed"
-        ) {
-          alert(
-            "We could not send the verification email. Check your internet connection and try again."
-          );
-        } else {
-          alert(
-            [
-              "We could not send the verification email.",
-              "",
-              "Please try again in a moment.",
-            ].join("\n")
-          );
-        }
-      }
+  if (error.status === 429) {
+    alert(
+      [
+        "A verification email was recently requested.",
+        "",
+        "Please check your inbox first.",
+      ].join("\n")
+    );
+  } else if (error.status === 401) {
+    alert("Please sign in again.");
+    window.location.href = "/";
+  } else {
+    alert(
+      error.message ??
+        "Unable to send the verification email."
+    );
+  }
+}
 
-      return false;
-    };
+return false;
+
+};
 
   const selectPlan = async (
     plan: TalkioPlan,

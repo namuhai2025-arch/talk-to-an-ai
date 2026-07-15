@@ -4,12 +4,25 @@ import admin from "firebase-admin";
 import { onRequest } from "firebase-functions/v2/https";
 import { createRequire } from "module";
 
+import { defineSecret } from "firebase-functions/params";
+import { Resend } from "resend";
+
+import {
+  getApps,
+  initializeApp,
+} from "firebase-admin/app";
+
 const require = createRequire(import.meta.url);
 const { getTalkioPlan } = require("./talkio/planConfig");
 const logger = require("firebase-functions/logger");
 const { GoogleGenAI } = require("@google/genai");
 const crypto = require("crypto");
 const { Redis } = require("@upstash/redis");
+
+const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
+
+const TALKIO_VERIFICATION_TEMPLATE =
+  "90bfdd75-bfda-4ad9-96a0-4ea25123a81a";
 
 const { db } = require("./lib/firebase");
 const { ensureUserBase } = require("./memory_lite/helpers");
@@ -47,8 +60,8 @@ const {
   TRUST_SAFE_MODE_PROMPT,
 } = require("./talkio/prompts");
 
-if (!admin.apps.length) {
-  admin.initializeApp();
+if (getApps().length === 0) {
+  initializeApp();
 }
 
 console.log("generateTalkioReplyEngine type:", typeof generateTalkioReplyEngine);
@@ -1037,6 +1050,199 @@ ${languageMeta?.mirrorInstruction || "Reply in the same language the user is usi
     .filter(Boolean)
     .join("\n\n");
 }
+
+export const sendTalkioVerificationEmail = onRequest(
+  {
+    cors: true,
+    secrets: [RESEND_API_KEY],
+  },
+  async (req, res) => {
+    let uid = "unknown";
+
+    try {
+      if (req.method === "OPTIONS") {
+        res.status(204).send("");
+        return;
+      }
+
+      if (req.method !== "POST") {
+        res.status(405).json({
+          ok: false,
+          error: "Method not allowed",
+        });
+        return;
+      }
+
+      const origin = req.headers.origin || "";
+      const allowedOrigins = getAllowedOrigins();
+
+      if (origin && !allowedOrigins.includes(origin)) {
+        res.status(403).json({
+          ok: false,
+          error: "Blocked origin",
+        });
+        return;
+      }
+
+      const auth = await requireVerifiedUser(req);
+      uid = auth.uid;
+
+      const userRecord = await admin.auth().getUser(uid);
+
+      if (userRecord.disabled) {
+        res.status(403).json({
+          ok: false,
+          error: "Account disabled",
+        });
+        return;
+      }
+
+      if (!userRecord.email) {
+        res.status(400).json({
+          ok: false,
+          error: "No email address is associated with this account.",
+        });
+        return;
+      }
+
+      if (userRecord.emailVerified) {
+        res.status(200).json({
+          ok: true,
+          alreadyVerified: true,
+        });
+        return;
+      }
+
+      const usesPasswordProvider = userRecord.providerData.some(
+        (provider) => provider.providerId === "password"
+      );
+
+      if (!usesPasswordProvider) {
+        res.status(400).json({
+          ok: false,
+          error:
+            "Email verification is only required for email and password accounts.",
+        });
+        return;
+      }
+
+      /*
+       * Basic resend protection:
+       * prevent repeated button taps from generating excessive emails.
+       */
+      const userRef = db.collection("users").doc(uid);
+      const userSnapshot = await userRef.get();
+      const userData = userSnapshot.exists
+        ? userSnapshot.data() || {}
+        : {};
+
+      const lastSentAt =
+        userData.verificationEmailSentAt?.toMillis?.() || 0;
+
+      const cooldownMs = 60 * 1000;
+      const remainingMs =
+        cooldownMs - (Date.now() - lastSentAt);
+
+      if (remainingMs > 0) {
+        res.status(429).json({
+          ok: false,
+          error: "Verification email recently sent",
+          retryAfterSeconds: Math.ceil(remainingMs / 1000),
+        });
+        return;
+      }
+
+      /*
+       * Firebase creates the official one-time verification action code.
+       * Resend only delivers the branded email.
+       */
+      const verificationLink =
+        await admin.auth().generateEmailVerificationLink(
+          userRecord.email,
+          {
+            url: "https://talkiochat.com/?emailVerified=1",
+            handleCodeInApp: false,
+          }
+        );
+
+      const resend = new Resend(RESEND_API_KEY.value());
+
+      const { data, error } = await resend.emails.send({
+        from: "Talkio Reflect <noreply@talkiochat.com>",
+        to: [userRecord.email],
+        replyTo: "support@talkiochat.com",
+        template: {
+          id: TALKIO_VERIFICATION_TEMPLATE,
+          variables: {
+            VERIFY_URL: verificationLink,
+          },
+        },
+        tags: [
+          {
+            name: "email_type",
+            value: "email_verification",
+          },
+        ],
+      });
+
+      if (error) {
+        console.error(
+          "Resend verification email rejected:",
+          error
+        );
+
+        res.status(502).json({
+          ok: false,
+          error: "Email provider rejected the message.",
+        });
+        return;
+      }
+
+      await userRef.set(
+        {
+          verificationEmailSentAt:
+            admin.firestore.FieldValue.serverTimestamp(),
+          verificationEmailId: data?.id || "",
+          verificationEmailProvider: "resend",
+          updatedAt:
+            admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      res.status(200).json({
+        ok: true,
+        sent: true,
+        email: userRecord.email,
+      });
+    } catch (error) {
+      const statusCode = error?.statusCode || 500;
+
+      console.error(
+        "sendTalkioVerificationEmail failed:",
+        {
+          uid,
+          message: error?.message,
+          stack: error?.stack,
+        }
+      );
+
+      if (statusCode === 401) {
+        res.status(401).json({
+          ok: false,
+          error: "Please sign in again.",
+        });
+        return;
+      }
+
+      res.status(500).json({
+        ok: false,
+        error:
+          "We could not send the verification email.",
+      });
+    }
+  }
+);
 
 async function evaluateCosmopolitanism({
   ai,

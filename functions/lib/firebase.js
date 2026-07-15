@@ -1,14 +1,25 @@
-const admin = require("firebase-admin");
+"use strict";
 
-if (!admin.apps.length) {
-  admin.initializeApp();
+const admin = require("firebase-admin");
+const {
+  getApps,
+  initializeApp,
+} = require("firebase-admin/app");
+const {
+  getFirestore,
+} = require("firebase-admin/firestore");
+
+if (getApps().length === 0) {
+  initializeApp();
 }
 
-const db = admin.firestore();
+const db = getFirestore();
 
-// Optional: settings for performance
 db.settings({
   ignoreUndefinedProperties: true,
 });
 
-module.exports = { admin, db };
+module.exports = {
+  admin,
+  db,
+};

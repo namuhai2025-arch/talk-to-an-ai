@@ -1,1 +1,3 @@
+#include "App/App/Secrets.xcconfig"
+
 CAPACITOR_DEBUG = true

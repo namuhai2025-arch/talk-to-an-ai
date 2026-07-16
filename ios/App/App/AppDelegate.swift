@@ -11,33 +11,50 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private var didRequestATT = false
 
     func application(
-        _ application: UIApplication,
-        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-    ) -> Bool {
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+) -> Bool {
 
-        FirebaseApp.configure()
+    FirebaseApp.configure()
 
-        let config = TikTokConfig(
-            appId: "7658586227125272594",
-            tiktokAppId: "6770395386"            
-        )
+    guard
+        let appSecret = Bundle.main.object(
+            forInfoDictionaryKey: "TikTokAppSecret"
+        ) as? String,
+        !appSecret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        !appSecret.contains("$(")
+    else {
+        print("TikTok App Secret is missing or unresolved")
+        return true
+    }
 
-        TikTokBusiness.initializeSdk(config) { success, error in
+    let config = TikTokConfig(
+        accessToken: appSecret,
+        appId: "7658586227125272594",
+        tiktokAppId: "6770395386"
+    )
+
+    TikTokBusiness.initializeSdk(config) { success, error in
     if success {
+
         print("TikTok Business SDK initialized")
 
-        let testEvent = TikTokAppEvent(eventName: "view_content")
-        TikTokBusiness.getInstance().report(testEvent)
+        let launchEvent = TikTokAppEvent(eventName: "launch_app")
+        TikTokBusiness.getInstance().report(launchEvent)
         TikTokBusiness.explicitlyFlush()
 
-        print("TikTok test event submitted: view_content")
+        print("launch_app submitted")
+
     } else {
-        print("TikTok Business SDK init failed: \(String(describing: error))")
+
+        print("TikTok SDK init failed")
+        print(error ?? "unknown error")
+
     }
 }
 
-        return true
-    }
+    return true
+}
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         requestTrackingPermissionIfNeeded()
@@ -97,3 +114,4 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         )
     }
 }
+

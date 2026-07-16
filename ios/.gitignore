@@ -11,3 +11,8 @@ capacitor-cordova-ios-plugins
 # Generated Config files
 App/App/capacitor.config.json
 App/App/config.xml
+
+# Private iOS credentials
+ios/App/App/Secrets.xcconfig
+# Private iOS credentials
+App/App/Secrets.xcconfig

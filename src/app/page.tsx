@@ -434,41 +434,43 @@ const [signingProvider, setSigningProvider] =
   };
 }, [mounted]);
 
-  useEffect(() => {
+useEffect(() => {
   if (!mounted) return;
 
   const auth = getFirebaseAuth();
 
-const unsubscribe = auth.onAuthStateChanged(async (user) => {
-  if (!user || user.isAnonymous) {
-    setUserId("signed_out");
+  const unsubscribe = auth.onAuthStateChanged(async (user) => {
+    if (!user || user.isAnonymous) {
+      setUserId("signed_out");
+      setCheckingAuth(false);
+      setAuthReady(true);
+      return;
+    }
+
+    setUserId(user.uid);
+
+    // Firebase has confirmed the returning user.
+    // Allow the chat screen to open immediately.
     setCheckingAuth(false);
     setAuthReady(true);
-    return;
-  }
 
-  setUserId(user.uid);
+    if (startupServicesUidRef.current !== user.uid) {
+      startupServicesUidRef.current = user.uid;
 
-if (startupServicesUidRef.current !== user.uid) {
-  startupServicesUidRef.current = user.uid;
+      try {
+        await syncTalkioProfile();
 
-  try {
-  await syncTalkioProfile();
+        await Promise.all([
+          registerTalkioPushToken(),
+          configureRevenueCat(user.uid),
+        ]);
+      } catch (error) {
+        console.error("Startup auth services failed:", error);
+      }
+    }
+  });
 
-  await Promise.all([
-    registerTalkioPushToken(),
-    configureRevenueCat(user.uid),
-  ]);
-} catch (error) {
-  console.error("Startup auth services failed:", error);
-}
-}
-
-setCheckingAuth(false);
-setAuthReady(true);
-});
-
-return unsubscribe;
+  return unsubscribe;
 }, [mounted]);
 
   useEffect(() => {

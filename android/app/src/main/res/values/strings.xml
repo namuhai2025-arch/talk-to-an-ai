@@ -1,7 +1,14 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Talkio</string>
-    <string name="title_activity_main">Talkio</string>
+
+    <!-- Talkio -->
+    <string name="app_name">Talkio Reflect</string>
+    <string name="title_activity_main">Talkio Reflect</string>
     <string name="package_name">com.talkio.app</string>
     <string name="custom_url_scheme">com.talkio.app</string>
+
+    <!-- Meta / Facebook SDK -->
+    <string name="facebook_app_id">1063034170011483</string>
+    <string name="facebook_client_token">16590885f771168675e5f6cb22c5d3c4</string>
+
 </resources>

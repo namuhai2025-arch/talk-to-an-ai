@@ -17,6 +17,7 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		98698A212FCFFD3400B295E8 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 98698A202FCFFC9B00B295E8 /* GoogleService-Info.plist */; };
 		986FCC463008788D0092E5AD /* release.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 986FCC453008788D0092E5AD /* release.xcconfig */; };
+		987F1C773009F90A00C6BC4F /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = 987F1C763009F90A00C6BC4F /* FacebookCore */; };
 		9885F9412FFA020400AE5F4B /* TikTokBusinessSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 9885F9402FFA020400AE5F4B /* TikTokBusinessSDK */; };
 /* End PBXBuildFile section */
 
@@ -42,6 +43,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				987F1C773009F90A00C6BC4F /* FacebookCore in Frameworks */,
 				9885F9412FFA020400AE5F4B /* TikTokBusinessSDK in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -103,6 +105,7 @@
 			packageProductDependencies = (
 				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
 				9885F9402FFA020400AE5F4B /* TikTokBusinessSDK */,
+				987F1C763009F90A00C6BC4F /* FacebookCore */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
@@ -136,6 +139,7 @@
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
 				9885F93F2FFA020400AE5F4B /* XCRemoteSwiftPackageReference "tiktok-business-ios-sdk" */,
+				987F1C753009F90A00C6BC4F /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -312,7 +316,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 39GU79VXNY;
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkio Reflect";
@@ -321,7 +325,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.6;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.talkiochat.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -338,7 +342,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 39GU79VXNY;
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkio Reflect";
@@ -347,7 +351,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.talkiochat.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
@@ -387,6 +391,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		987F1C753009F90A00C6BC4F /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/facebook/facebook-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 18.1.0;
+			};
+		};
 		9885F93F2FFA020400AE5F4B /* XCRemoteSwiftPackageReference "tiktok-business-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/tiktok/tiktok-business-ios-sdk";
@@ -402,6 +414,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
 			productName = "CapApp-SPM";
+		};
+		987F1C763009F90A00C6BC4F /* FacebookCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 987F1C753009F90A00C6BC4F /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */;
+			productName = FacebookCore;
 		};
 		9885F9402FFA020400AE5F4B /* TikTokBusinessSDK */ = {
 			isa = XCSwiftPackageProductDependency;

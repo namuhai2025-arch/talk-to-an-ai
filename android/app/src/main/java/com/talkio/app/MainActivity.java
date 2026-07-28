@@ -1,158 +1,215 @@
-package com.talkio.app;
+    package com.talkio.app;
 
-import android.content.Intent;
-import android.net.Uri;
-import android.os.Bundle;
-import android.util.Log;
+    import android.content.Intent;
+    import android.net.Uri;
+    import android.os.Bundle;
+    import android.util.Log;
 
-import com.getcapacitor.BridgeActivity;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.FieldValue;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.messaging.FirebaseMessaging;
+    import com.getcapacitor.BridgeActivity;
+    import com.google.firebase.auth.FirebaseAuth;
+    import com.google.firebase.firestore.FieldValue;
+    import com.google.firebase.firestore.FirebaseFirestore;
+    import com.google.firebase.firestore.SetOptions;
+    import com.google.firebase.messaging.FirebaseMessaging;
+    import com.tiktok.TikTokBusinessSdk;
 
-import java.util.HashMap;
-import com.tiktok.TikTokBusinessSdk;
+    import java.util.HashMap;
+    import java.util.Map;
 
-public class MainActivity extends BridgeActivity {
+    public class MainActivity extends BridgeActivity {
 
-    private static final String TALKIO_PACKAGE_ID = "com.talkio.app";
-    private static final String TIKTOK_APP_ID = "7658585151747768327";
+        private static final String TALKIO_PACKAGE_ID = "com.talkio.app";
+        private static final String TIKTOK_APP_ID = "7658585151747768327";
 
-    private void initializeTikTokSdk() {
-        try {
-            if (TikTokBusinessSdk.isInitialized()) {
-                Log.d("TalkioTikTok", "TikTok SDK already initialized");
+        private FirebaseAuth firebaseAuth;
+        private FirebaseAuth.AuthStateListener authStateListener;
+
+        private void initializeTikTokSdk() {
+            try {
+                if (TikTokBusinessSdk.isInitialized()) {
+                    Log.d("TalkioTikTok", "TikTok SDK already initialized");
+                    return;
+                }
+
+                TikTokBusinessSdk.TTConfig config =
+                        new TikTokBusinessSdk.TTConfig(
+                                getApplication(),
+                                BuildConfig.TIKTOK_APP_SECRET
+                        )
+                                .setAppId(TALKIO_PACKAGE_ID)
+                                .setTTAppId(TIKTOK_APP_ID);
+
+                TikTokBusinessSdk.initializeSdk(config);
+
+                Log.d(
+                        "TalkioTikTok",
+                        "TikTok SDK initialized successfully for Talkio Android"
+                );
+            } catch (Throwable error) {
+                Log.e(
+                        "TalkioTikTok",
+                        "TikTok SDK initialization failed. Talkio will continue normally.",
+                        error
+                );
+            }
+        }  
+
+        @Override
+        public void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+
+            initializeTikTokSdk();
+
+            handleDeepLink(getIntent());
+
+            firebaseAuth = FirebaseAuth.getInstance();
+
+            authStateListener = auth -> {
+                if (auth.getCurrentUser() != null) {
+                    String uid = auth.getCurrentUser().getUid();
+
+                    Log.d(
+                            "TalkioFCM",
+                            "Authenticated UID: " + uid
+                    );
+
+                    requestAndSaveFcmToken();
+                } else {
+                    Log.d(
+                            "TalkioFCM",
+                            "No authenticated user. Waiting for sign-in."
+                    );
+                }
+            };
+
+            firebaseAuth.addAuthStateListener(authStateListener);
+        }
+
+        @Override
+        public void onDestroy() {
+            if (firebaseAuth != null && authStateListener != null) {
+                firebaseAuth.removeAuthStateListener(authStateListener);
+            }
+
+            super.onDestroy();
+        }
+
+        @Override
+        protected void onNewIntent(Intent intent) {
+            super.onNewIntent(intent);
+            setIntent(intent);
+            handleDeepLink(intent);
+        }
+
+        private void handleDeepLink(Intent intent) {
+            if (intent == null) {
                 return;
             }
 
-            TikTokBusinessSdk.TTConfig config =
-                    new TikTokBusinessSdk.TTConfig(
-                            getApplication(),
-                            BuildConfig.TIKTOK_APP_SECRET
-                    )
-                            .setAppId(TALKIO_PACKAGE_ID)
-                            .setTTAppId(TIKTOK_APP_ID);
+            Uri uri = intent.getData();
 
-            TikTokBusinessSdk.initializeSdk(config);
+            if (uri == null) {
+                return;
+            }
 
-            Log.d(
-                    "TalkioTikTok",
-                    "TikTok SDK initialized successfully for Talkio Android"
-            );
-        } catch (Throwable error) {
-            Log.e(
-                    "TalkioTikTok",
-                    "TikTok SDK initialization failed. Talkio will continue normally.",
-                    error
-            );
-        }
-    }
+            String source = uri.getQueryParameter("source");
+            String url = uri.toString();
 
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+            Log.d("TalkioDeepLink", "Opened URL: " + url);
 
-        initializeTikTokSdk();
+            if ("checkin".equals(source)) {
+                String safeUrl = url
+                        .replace("\\", "\\\\")
+                        .replace("\"", "\\\"");
 
-        handleDeepLink(getIntent());
-
-        FirebaseAuth auth = FirebaseAuth.getInstance();
-
-        if (auth.getCurrentUser() == null) {
-            auth.signInAnonymously()
-                    .addOnSuccessListener(authResult -> {
-                        Log.d("TalkioFCM", "Anonymous sign-in success");
-                        Log.d("TalkioFCM", "Current UID: " + auth.getCurrentUser().getUid());
-                        requestAndSaveFcmToken();
-                    })
-                    .addOnFailureListener(e -> {
-                        Log.e("TalkioFCM", "Anonymous sign-in failed", e);
-                    });
-        } else {
-            Log.d("TalkioFCM", "Current UID: " + auth.getCurrentUser().getUid());
-            requestAndSaveFcmToken();
-        }
-    }
-
-    @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        handleDeepLink(intent);
-    }
-
-    private void handleDeepLink(Intent intent) {
-        if (intent == null) return;
-
-        Uri uri = intent.getData();
-        if (uri == null) return;
-
-        String source = uri.getQueryParameter("source");
-        String url = uri.toString();
-
-        Log.d("TalkioDeepLink", "Opened URL: " + url);
-
-        if ("checkin".equals(source)) {
-            String safeUrl = url.replace("\\", "\\\\").replace("\"", "\\\"");
-
-            getBridge().triggerWindowJSEvent(
-                    "talkioCheckinOpened",
-                    "{ \"url\": \"" + safeUrl + "\" }"
-            );
-        }
-    }
-
-    private void requestAndSaveFcmToken() {
-        FirebaseMessaging.getInstance().getToken()
-                .addOnCompleteListener(task -> {
-                    if (!task.isSuccessful()) {
-                        Log.e("TalkioFCM", "User not logged in. Skipping token save.");
-                        return;
-                    }
-
-                    String token = task.getResult();
-                    Log.d("TalkioFCM", "FCM token retrieved successfully");
-
-                    saveTokenToFirestore(token);
-                });
-    }
-    private void saveTokenToFirestore(String token) {
-        FirebaseAuth auth = FirebaseAuth.getInstance();
-
-        String uid = (auth.getCurrentUser() != null)
-                ? auth.getCurrentUser().getUid()
-                : null;
-
-        if (uid == null) {
-            Log.e("FCM_SAVE", "User not logged in. Skipping token save.");
-            return;
-        }
-
-        FirebaseFirestore db = FirebaseFirestore.getInstance();
-
-        db.collection("users")
-                .document(uid)
-                .set(new HashMap<String, Object>() {{
-                    put("updatedAt", FieldValue.serverTimestamp());
-                    put("lastPlatform", "android");
-                }}, com.google.firebase.firestore.SetOptions.merge());
-
-        db.collection("users")
-                .document(uid)
-                .collection("device_tokens")
-                .document(token)
-                .set(new HashMap<String, Object>() {{
-                    put("token", token);
-                    put("platform", "android");
-                    put("createdAt", FieldValue.serverTimestamp());
-                    put("updatedAt", FieldValue.serverTimestamp());
-                }}, com.google.firebase.firestore.SetOptions.merge())
-                .addOnSuccessListener(unused ->
-                        Log.d("TalkioFCM", "Token saved successfully for UID: " + uid)
-                )
-                .addOnFailureListener(e ->
-                        Log.e("TalkioFCM", "Failed to save token", e)
+                getBridge().triggerWindowJSEvent(
+                        "talkioCheckinOpened",
+                        "{ \"url\": \"" + safeUrl + "\" }"
                 );
+            }
+        }
+
+        private void requestAndSaveFcmToken() {
+            FirebaseMessaging.getInstance()
+                    .getToken()
+                    .addOnCompleteListener(task -> {
+                        if (!task.isSuccessful()) {
+                            Log.e(
+                                    "TalkioFCM",
+                                    "Failed to retrieve FCM token",
+                                    task.getException()
+                            );
+                            return;
+                        }
+
+                        String token = task.getResult();
+
+                        if (token == null || token.trim().isEmpty()) {
+                            Log.e("TalkioFCM", "FCM returned an empty token");
+                            return;
+                        }
+
+                        Log.d(
+                                "TalkioFCM",
+                                "FCM token retrieved successfully"
+                        );
+
+                        saveTokenToFirestore(token);
+                    });
+        }
+
+        private void saveTokenToFirestore(String token) {
+            FirebaseAuth auth = FirebaseAuth.getInstance();
+
+            if (auth.getCurrentUser() == null) {
+                Log.d(
+                        "TalkioFCM",
+                        "User signed out before token save. Skipping."
+                );
+                return;
+            }
+
+            String uid = auth.getCurrentUser().getUid();
+            FirebaseFirestore db = FirebaseFirestore.getInstance();
+
+            Map<String, Object> userUpdate = new HashMap<>();
+            userUpdate.put("updatedAt", FieldValue.serverTimestamp());
+            userUpdate.put("lastPlatform", "android");
+
+            db.collection("users")
+                    .document(uid)
+                    .set(userUpdate, SetOptions.merge())
+                    .addOnFailureListener(error ->
+                            Log.e(
+                                    "TalkioFCM",
+                                    "Failed to update user platform information",
+                                    error
+                            )
+                    );
+
+            Map<String, Object> tokenData = new HashMap<>();
+            tokenData.put("token", token);
+            tokenData.put("platform", "android");
+            tokenData.put("createdAt", FieldValue.serverTimestamp());
+            tokenData.put("updatedAt", FieldValue.serverTimestamp());
+
+            db.collection("users")
+                    .document(uid)
+                    .collection("device_tokens")
+                    .document(token)
+                    .set(tokenData, SetOptions.merge())
+                    .addOnSuccessListener(unused ->
+                            Log.d(
+                                    "TalkioFCM",
+                                    "Token saved successfully for UID: " + uid
+                            )
+                    )
+                    .addOnFailureListener(error ->
+                            Log.e(
+                                    "TalkioFCM",
+                                    "Failed to save FCM token",
+                                    error
+                            )
+                    );
+        }
     }
-}

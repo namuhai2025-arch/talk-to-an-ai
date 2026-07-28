@@ -1,6 +1,7 @@
 import UIKit
 import Capacitor
 import FirebaseCore
+import FBSDKCoreKit
 import TikTokBusinessSDK
 import AppTrackingTransparency
 
@@ -11,102 +12,169 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private var didRequestATT = false
 
     func application(
-    _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-) -> Bool {
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [
+            UIApplication.LaunchOptionsKey: Any
+        ]?
+    ) -> Bool {
 
-    FirebaseApp.configure()
+        // Firebase
+        FirebaseApp.configure()
 
-    guard
-        let appSecret = Bundle.main.object(
-            forInfoDictionaryKey: "TikTokAppSecret"
-        ) as? String,
-        !appSecret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-        !appSecret.contains("$(")
-    else {
-        print("TikTok App Secret is missing or unresolved")
+        // Meta / Facebook SDK
+        ApplicationDelegate.shared.application(
+            application,
+            didFinishLaunchingWithOptions: launchOptions
+        )
+
+        print("Facebook SDK initialized")   
+
+        // TikTok SDK
+        initializeTikTokSDK()
+
         return true
     }
 
-    let config = TikTokConfig(
-        accessToken: appSecret,
-        appId: "7658586227125272594",
-        tiktokAppId: "6770395386"
-    )
+    func applicationDidBecomeActive(
+    _ application: UIApplication
+) {
+    requestTrackingPermissionIfNeeded()
 
-    TikTokBusiness.initializeSdk(config) { success, error in
-    if success {
-
-        print("TikTok Business SDK initialized")
-
-        let launchEvent = TikTokAppEvent(eventName: "launch_app")
-        TikTokBusiness.getInstance().report(launchEvent)
-        TikTokBusiness.explicitlyFlush()
-
-        print("launch_app submitted")
-
-    } else {
-
-        print("TikTok SDK init failed")
-        print(error ?? "unknown error")
-
-    }
+    AppEvents.shared.activateApp()    
 }
 
-    return true
-}
+    private func initializeTikTokSDK() {
+        guard
+            let appSecret = Bundle.main.object(
+                forInfoDictionaryKey: "TikTokAppSecret"
+            ) as? String,
+            !appSecret.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ).isEmpty,
+            !appSecret.contains("$(")
+        else {
+            print("TikTok App Secret is missing or unresolved")
+            return
+        }
 
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        requestTrackingPermissionIfNeeded()
-    }
+        let config = TikTokConfig(
+            accessToken: appSecret,
+            appId: "7658586227125272594",
+            tiktokAppId: "6770395386"
+        )
 
-    private func requestTrackingPermissionIfNeeded() {
-        guard !didRequestATT else { return }
-        didRequestATT = true
+        TikTokBusiness.initializeSdk(config) { success, error in
+            if success {
+                print("TikTok Business SDK initialized")
 
-        if #available(iOS 14, *) {
-            guard ATTrackingManager.trackingAuthorizationStatus == .notDetermined else {
-                print("ATT status: \(ATTrackingManager.trackingAuthorizationStatus.rawValue)")
-                return
-            }
+                let launchEvent = TikTokAppEvent(
+                    eventName: "launch_app"
+                )
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                ATTrackingManager.requestTrackingAuthorization { status in
-                    print("ATT status: \(status.rawValue)")
-                }
+                TikTokBusiness.getInstance().report(launchEvent)
+                TikTokBusiness.explicitlyFlush()
+
+                print("launch_app submitted")
+            } else {
+                print("TikTok SDK init failed")
+                print(error ?? "unknown error")
             }
         }
     }
 
-    func applicationWillResignActive(_ application: UIApplication) {
+    private func requestTrackingPermissionIfNeeded() {
+    guard !didRequestATT else {
+        return
     }
 
-    func applicationDidEnterBackground(_ application: UIApplication) {
+    didRequestATT = true
+
+    guard #available(iOS 14, *) else {
+        Settings.shared.isAdvertiserIDCollectionEnabled = true
+        return
     }
 
-    func applicationWillEnterForeground(_ application: UIApplication) {
+    let currentStatus = ATTrackingManager.trackingAuthorizationStatus
+
+    if currentStatus != .notDetermined {
+        applyTrackingStatus(currentStatus)
+        return
     }
 
-    func applicationWillTerminate(_ application: UIApplication) {
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        ATTrackingManager.requestTrackingAuthorization { status in
+            DispatchQueue.main.async {
+                self.applyTrackingStatus(status)
+            }
+        }
+    }
+}
+
+@available(iOS 14, *)
+private func applyTrackingStatus(
+    _ status: ATTrackingManager.AuthorizationStatus
+) {
+    let authorized = status == .authorized
+
+    Settings.shared.isAdvertiserIDCollectionEnabled = authorized
+
+    print("ATT status: \(status.rawValue)")
+    print("Facebook advertiser ID collection: \(authorized)")
+}
+
+    func applicationWillResignActive(
+        _ application: UIApplication
+    ) {
+    }
+
+    func applicationDidEnterBackground(
+        _ application: UIApplication
+    ) {
+    }
+
+    func applicationWillEnterForeground(
+        _ application: UIApplication
+    ) {
+    }
+
+    func applicationWillTerminate(
+        _ application: UIApplication
+    ) {
     }
 
     func application(
         _ app: UIApplication,
         open url: URL,
-        options: [UIApplication.OpenURLOptionsKey : Any] = [:]
+        options: [
+            UIApplication.OpenURLOptionsKey: Any
+        ] = [:]
     ) -> Bool {
-        return ApplicationDelegateProxy.shared.application(
-            app,
-            open: url,
-            options: options
-        )
+
+        let handledByFacebook =
+            ApplicationDelegate.shared.application(
+                app,
+                open: url,
+                options: options
+            )
+
+        let handledByCapacitor =
+            ApplicationDelegateProxy.shared.application(
+                app,
+                open: url,
+                options: options
+            )
+
+        return handledByFacebook || handledByCapacitor
     }
 
     func application(
         _ application: UIApplication,
         continue userActivity: NSUserActivity,
-        restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
+        restorationHandler: @escaping (
+            [UIUserActivityRestoring]?
+        ) -> Void
     ) -> Bool {
+
         return ApplicationDelegateProxy.shared.application(
             application,
             continue: userActivity,
@@ -114,4 +182,3 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         )
     }
 }
-

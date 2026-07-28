@@ -5,20 +5,26 @@ import { useEffect } from "react";
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.talkio.app";
 
-const APP_STORE_URL = "https://apps.apple.com/us/app/talkio-reflect-ai-companion/id6770395386";
+const APP_STORE_URL = "https://apps.apple.com/app/id6770395386";
 
 export default function DownloadClient() {
 
   useEffect(() => {
   const ua = navigator.userAgent;
 
-  if (/iPhone|iPad|iPod/i.test(ua)) {
-    window.location.href = APP_STORE_URL;
+  const isIOS =
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (navigator.platform === "MacIntel" &&
+      navigator.maxTouchPoints > 1);
+
+  if (isIOS) {
+    window.location.replace(APP_STORE_URL);
     return;
   }
 
   if (/Android/i.test(ua)) {
-    window.location.href = PLAY_STORE_URL;
+    window.location.replace(PLAY_STORE_URL);
+    return;
   }
 }, []);
 
@@ -26,11 +32,11 @@ export default function DownloadClient() {
     <main className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
       <div>
         <h1 className="text-2xl font-semibold text-stone-900">
-          Download Talkio
+          Download Talkio Reflect
         </h1>
 
         <p className="mt-3 text-sm text-stone-600">
-          Your calm AI companion for reflection and emotional clarity.
+          Your own thinking space to reflect, organize your thoughts, and find clarity.
         </p>
 
         <div className="mt-6 flex flex-col gap-3">

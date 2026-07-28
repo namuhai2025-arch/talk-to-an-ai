@@ -237,7 +237,7 @@ function logError(event, error, data = {}) {
 }
 
 function isFallbackPath(path = "") {
-  return /fallback|quota|error|guardrail|safety|crisis|limit|failed/i.test(
+  return /fallback|quota|error|limit|failed|recovery/i.test(
     String(path || "")
   );
 }
@@ -1244,96 +1244,6 @@ export const sendTalkioVerificationEmail = onRequest(
   }
 );
 
-async function evaluateCosmopolitanism({
-  ai,
-  reply,
-}) {
-  const evaluationPrompt = `
-You are evaluating whether this AI reply violates Talkio's cosmopolitan personality.
-
-Check for:
-- dehumanization
-- revenge encouragement
-- superiority language
-- manipulation encouragement
-- emotional dependency
-- tribal hatred
-- blind validation
-- narcissistic reinforcement
-
-Reply ONLY with:
-SAFE
-or
-UNSAFE
-`;
-
-  const result = await ai.models.generateContent({
-    model: "gemini-3.1-flash-lite",
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text:
-              evaluationPrompt +
-              "\n\nAI Reply:\n" +
-              reply,
-          },
-        ],
-      },
-    ],
-  });
-
-  const text =
-    typeof result?.text === "function"
-      ? result.text()
-      : result?.text || "";
-
-  return text.trim().toUpperCase().includes("UNSAFE");
-}
-
-async function generateBalancedRepair({
-  ai,
-  model,
-  originalReply,
-  latestUserMessage,
-  languageMeta,
-}) {
-  const repairPrompt = `
-Rewrite the AI reply using Talkio's compassionate cosmopolitan personality.
-
-Rules:
-- Preserve dignity for the user and all people involved.
-- Validate feelings, not harmful behavior.
-- Do not enable manipulation, revenge, cruelty, abuse, exploitation, or dehumanization.
-- Add a gentle mirror if responsibility or impact is being avoided.
-- Keep the same language style as the user.
-- Keep it natural, warm, grounded, and non-clinical.
-- Do not sound preachy or robotic.
-
-User language context:
-${languageMeta?.mirrorInstruction || "Use the user's language naturally."}
-
-Latest user message:
-${latestUserMessage}
-
-Original AI reply:
-${originalReply}
-`;
-
-  return generateModelText({
-    ai,
-    model,
-    systemPrompt: repairPrompt,
-    messages: [
-      {
-        role: "user",
-        content: "Rewrite the reply safely and naturally.",
-      },
-    ],
-  });
-}
-
 function buildConversationMessages(messages, latestUserMessage) {
   const safeMessages = Array.isArray(messages)
     ? messages
@@ -1376,12 +1286,13 @@ async function generateModelText({ ai, model, systemPrompt, messages }) {
     }));
 
     const response = await ai.models.generateContent({
-      model,
-      contents,
-      config: {
-        systemInstruction: systemPrompt,
-      },
-    });
+  model,
+  contents,
+  config: {
+    systemInstruction: systemPrompt,
+    responseMimeType: "application/json",
+  },
+});
 
     console.log("RAW_MODEL_RESULT_RECEIVED");
 
@@ -2063,44 +1974,65 @@ if (safetyInterruption.blocked) {
   });
 
   res.status(200).json({
+    reply: "",
+
+    safety: {
+      riskLevel: "high",
+      category: "violence",
+      shouldRedirect: true,
+      recommendedMode: "crisis_support",
+      reason: safetyInterruption.reason,
+    },
+
+    action: "show_safety_block",
+
+    blocked: true,
     safetyBlocked: true,
     crisisLock: true,
 
-    reply: "",
-
     model: "violent-safety-guardrail",
-
     path: "safety_interruption_violent_harm",
-
     fallbackTriggered: true,
     analyticsType: "violent_safety_interruption",
-
     remainingDaily: 0,
   });
 
   return;
-}  
+}
 
-    // crisis guard continues here...
-
-    if (looksLikeCrisis(latestUserMessage)) {
+if (looksLikeCrisis(latestUserMessage)) {
   logWarn("talkio_crisis_guardrail", {
     uid,
     source: body?.source || "chat",
   });
 
   res.status(200).json({
-  reply: crisisReplyGlobal(),
-  model: "crisis-guardrail",
-  path: "crisis_guardrail",
-  fallbackTriggered: true,
-  analyticsType: "crisis_guardrail",
-  crisisLock: true,
-  remainingDaily: 0,
-});
+    reply: crisisReplyGlobal(),
+
+    safety: {
+      riskLevel: "high",
+      category: "self_harm",
+      shouldRedirect: true,
+      recommendedMode: "crisis_support",
+      reason: "local_crisis_guardrail",
+    },
+
+    action: "show_safety_block",
+
+    blocked: true,
+    safetyBlocked: true,
+    crisisLock: true,
+
+    model: "crisis-guardrail",
+    path: "crisis_guardrail",
+    fallbackTriggered: true,
+    analyticsType: "crisis_guardrail",
+    remainingDaily: 0,
+  });
+
   return;
 }
-
+  
     const ip = getClientIp(req);
     const todayKey = getTodayDateString();
     const minuteBucket = Math.floor(Date.now() / 60000);
@@ -2408,40 +2340,30 @@ const runtimeSystemPrompt =
       });
 
       let finalReply = result?.reply || "";
+      
+const safety =
+  result?.safety || {
+    riskLevel: "none",
+    category: "none",
+    shouldRedirect: false,
+    recommendedMode: "normal",
+    reason: "missing_result_safety",
+  };
 
-try {
-  const cosmopolitanismUnsafe = await evaluateCosmopolitanism({
-    ai,
-    reply: finalReply,
-  });
+const action =
+  result?.action || "show_reply";
 
-  if (cosmopolitanismUnsafe) {
-    try {
-      finalReply = await generateBalancedRepair({
-        ai,
-        model,
-        originalReply: finalReply,
-        latestUserMessage,
-        languageMeta,
-      });
-    } catch (repairError) {
-      logWarn("cosmopolitanism_repair_failed_non_blocking", {
-        uid,
-        message: repairError?.message || String(repairError),
-      });
-    }
-  }
-} catch (cosmoError) {
-  logWarn("cosmopolitanism_check_failed_non_blocking", {
-    uid,
-    message: cosmoError?.message || String(cosmoError),
-  });
-}
+const blocked =
+  result?.blocked === true;
 
-if (isTrustConcern && violatesTrustSafeMode(finalReply)) {
+if (
+  !blocked &&
+  isTrustConcern &&
+  violatesTrustSafeMode(finalReply)
+) {
   finalReply = `You do not have to force trust here.
 
-You can share only what feels comfortable, and we can go slowly. Trust is something that should feel earned over time, not demanded in one conversation.`;
+You can share only what feels comfortable, and we can go slowly.`;
 }
 
       const replyPath = getReplyPath(result);
@@ -2452,10 +2374,17 @@ logInfo("talkio_reply_generated", {
   model,
   path: replyPath,
   mode: result?.dynamicMode || "unknown",
+  action,
+  blocked,
+  riskLevel: safety.riskLevel,
+  safetyCategory: safety.category,
   fallbackTriggered,
   source: body?.source || "chat",
   plan: limitLabel,
-  remainingDaily: Math.max(0, dailyLimit - userDailyCount),
+  remainingDaily: Math.max(
+    0,
+    dailyLimit - userDailyCount
+  ),
 });
 
     // =========================
@@ -2463,12 +2392,37 @@ logInfo("talkio_reply_generated", {
     // =========================
     res.status(200).json({
   reply: finalReply,
+
+  safety,
+
+  action,
+
+  blocked,
+
+  safetyBlocked: blocked,
+
+  crisisLock: blocked,
+
   model,
+
   path: replyPath,
-  mode: result?.dynamicMode || "unknown",
+
+  mode:
+    result?.dynamicMode || "unknown",
+
   fallbackTriggered,
-  analyticsType: fallbackTriggered ? "fallback_triggered" : "normal_reply",
-  remainingDaily: Math.max(0, dailyLimit - userDailyCount),
+
+  analyticsType:
+    blocked
+      ? "safety_block"
+      : fallbackTriggered
+        ? "fallback_triggered"
+        : "normal_reply",
+
+  remainingDaily: Math.max(
+    0,
+    dailyLimit - userDailyCount
+  ),
 });
 
   } catch (error) {
@@ -2484,8 +2438,23 @@ logInfo("talkio_reply_generated", {
 
 res.status(500).json({
   error: "Server error",
+
   reply:
     "I'm still here. Something interrupted my reply for a moment — could you try sending that again?",
+
+  safety: {
+    riskLevel: "none",
+    category: "none",
+    shouldRedirect: false,
+    recommendedMode: "normal",
+    reason: "backend_error",
+  },
+
+  action: "show_reply",
+  blocked: false,
+  safetyBlocked: false,
+  crisisLock: false,
+
   path: "handler_error",
   fallbackTriggered: true,
   analyticsType: "backend_error",

@@ -19,6 +19,10 @@ const {
 } = require("./prompts");
 
 const {
+  applySafetyGuard,
+} = require("./localSafetyGuard");
+
+const {
   incrementMetric,
   logResponseMode,
   logFallback,
@@ -84,59 +88,249 @@ function extractModelText(raw) {
 
   if (Array.isArray(raw?.candidates?.[0]?.content?.parts)) {
     return raw.candidates[0].content.parts
-      .map((p) => (typeof p?.text === "string" ? p.text : ""))
+      .map((part) =>
+        typeof part?.text === "string"
+          ? part.text
+          : ""
+      )
       .join(" ");
   }
 
-  if (typeof raw?.choices?.[0]?.message?.content === "string") {
+  if (
+    typeof raw?.choices?.[0]?.message?.content ===
+    "string"
+  ) {
     return raw.choices[0].message.content;
   }
 
   return "";
 }
 
+// ==============================
+// Structured Result Validation
+// ==============================
+
+const ALLOWED_RISK_LEVELS = new Set([
+  "none",
+  "low",
+  "medium",
+  "high",
+]);
+
+const ALLOWED_CATEGORIES = new Set([
+  "none",
+  "self_harm",
+  "violence",
+  "manipulation",
+  "harassment",
+  "exploitation",
+  "deception",
+  "revenge",
+  "other",
+]);
+
+const ALLOWED_RECOMMENDED_MODES = new Set([
+  "normal",
+  "accountability",
+  "supportive_redirect",
+  "crisis_support",
+]);
+
+const ALLOWED_ACTIONS = new Set([
+  "show_reply",
+  "show_safety_block",
+]);
+
+function buildSafeDefault(reason = "safe_default") {
+  return {
+    riskLevel: "none",
+    category: "none",
+    shouldRedirect: false,
+    recommendedMode: "normal",
+    reason,
+  };
+}
+
+function stripJsonCodeFence(text = "") {
+  return String(text || "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function normalizeStructuredSafety(value) {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return null;
+  }
+
+  const riskLevel = ALLOWED_RISK_LEVELS.has(
+    value.riskLevel
+  )
+    ? value.riskLevel
+    : "none";
+
+  const category = ALLOWED_CATEGORIES.has(
+    value.category
+  )
+    ? value.category
+    : riskLevel === "none"
+      ? "none"
+      : "other";
+
+  const recommendedMode =
+    ALLOWED_RECOMMENDED_MODES.has(
+      value.recommendedMode
+    )
+      ? value.recommendedMode
+      : riskLevel === "high"
+        ? "crisis_support"
+        : value.shouldRedirect === true
+          ? "supportive_redirect"
+          : "normal";
+
+  return {
+    riskLevel,
+    category,
+    shouldRedirect:
+      value.shouldRedirect === true,
+    recommendedMode,
+    reason:
+      typeof value.reason === "string" &&
+      value.reason.trim()
+        ? value.reason.trim().slice(0, 240)
+        : "model_classification",
+  };
+}
+
+function parseTalkioStructuredResponse(raw) {
+  const rawText = stripJsonCodeFence(
+    extractModelText(raw)
+  );
+
+  if (!rawText) return null;
+
+  let parsed;
+
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    return null;
+  }
+
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed)
+  ) {
+    return null;
+  }
+
+  const reply = normalizeReply(parsed.reply);
+
+  const safety = normalizeStructuredSafety(
+    parsed.safety
+  );
+
+  const action = ALLOWED_ACTIONS.has(
+    parsed.action
+  )
+    ? parsed.action
+    : "show_reply";
+
+  if (reply == null || !safety) {
+    return null;
+  }
+
+  return {
+    reply,
+    safety,
+    action,
+  };
+}
+
+function shouldShowSafetyBlock({
+  action,
+  safety,
+}) {
+  return (
+    action === "show_safety_block" &&
+    safety?.riskLevel === "high" &&
+    safety?.shouldRedirect === true
+  );
+}
+
+function buildStructuredOutputBlock() {
+  return `
+STRUCTURED OUTPUT — REQUIRED
+
+Return exactly one valid JSON object with this shape:
+
+{
+  "reply": "string",
+  "safety": {
+    "riskLevel": "none | low | medium | high",
+    "category": "none | self_harm | violence | manipulation | harassment | exploitation | deception | revenge | other",
+    "shouldRedirect": false,
+    "recommendedMode": "normal | accountability | supportive_redirect | crisis_support",
+    "reason": "brief classification reason"
+  },
+  "action": "show_reply | show_safety_block"
+}
+
+SAFETY RULES
+
+- Classify the user's latest message in the same generation used to write the reply.
+- Use multilingual understanding.
+- Do not rely only on English wording.
+- "high" means an immediate or credible danger involving self-harm or violence.
+- Use "show_safety_block" only when riskLevel is "high" AND shouldRedirect is true.
+- Emotional pain, sadness, anger, loneliness, hopelessness, or distress alone must not automatically trigger the block screen.
+- For harmful but non-immediate requests, use "show_reply" and respond with accountability or a supportive redirect.
+- The reply must remain in the exact same language or natural language mix as the user's latest message.
+
+FORMATTING RULES
+
+- Return JSON only.
+- Do not use Markdown code fences.
+- Do not add commentary before or after the JSON.
+- Do not label the result as JSON.
+- Escape quotation marks and line breaks so the JSON remains valid.
+`.trim();
+}
+
 function sanitizeConversationMessages(messages) {
   if (!Array.isArray(messages)) return [];
 
   return messages.filter(
-    (m) =>
-      m &&
-      ["user", "assistant", "system"].includes(m.role) &&
-      typeof m.content === "string" &&
-      m.content.trim()
+    (message) =>
+      message &&
+      [
+        "user",
+        "assistant",
+        "system",
+      ].includes(message.role) &&
+      typeof message.content === "string" &&
+      message.content.trim()
   );
 }
 
-function applySafetyGuard(reply, latestUserMessage = "") {
-  let text = String(reply || "").trim();
-  const userText = String(latestUserMessage || "");
-
-  const highRisk =
-    /\b(kill myself|suicide|end my life|hurt myself|self harm|self-harm|i want to die)\b/i.test(
-      userText
-    );
-
-  if (highRisk) {
-    const hasSafetyDirection =
-      /emergency|local emergency|trusted person|someone nearby|call/i.test(text);
-
-    if (!hasSafetyDirection) {
-      text +=
-        "\n\nIf you might hurt yourself or you are not safe right now, please contact local emergency services or reach out to someone nearby immediately.";
-    }
-  }
-
-  return text;
-}
-
-function buildLanguageControlBlock(latestUserMessage = "") {
+function buildLanguageControlBlock(
+  latestUserMessage = ""
+) {
   return `
 LANGUAGE CONTROL — HIGHEST PRIORITY
 
 User's latest message:
+
 "${String(latestUserMessage || "").trim()}"
 
 Rules:
+
 - Infer the language directly from the user's latest message.
 - If the user mixes languages, mirror that same mix naturally.
 - Do NOT default to English unless the latest user message is clearly English.
@@ -147,21 +341,30 @@ Rules:
 - You MUST reply in the exact same language or language mix as the user's latest message.
 
 Before generating your response:
+
 1. Identify the language or mix used by the user.
 2. Lock that language.
-3. Generate your reply ONLY in that language.
+3. Generate the reply only in that language or natural language mix.
 
-If you are about to respond in a different language, STOP and correct it.
+If you are about to respond in a different language, stop and correct it.
 
 Wrong-language output is invalid.
 `.trim();
 }
 
-function buildHumanRecovery(userMessage = "", emotionResult = null) {
-  const text = String(userMessage || "").trim();
+function buildHumanRecovery(
+  userMessage = "",
+  emotionResult = null
+) {
+  const text = String(
+    userMessage || ""
+  ).trim();
 
-  const intensity = emotionResult?.intensity || "";
-  const tone = emotionResult?.toneFamily || "";
+  const intensity =
+    emotionResult?.intensity || "";
+
+  const tone =
+    emotionResult?.toneFamily || "";
 
   const looksEmotional =
     intensity === "very_high" ||
@@ -183,22 +386,43 @@ function buildHumanRecovery(userMessage = "", emotionResult = null) {
     "Wait, I didn’t quite catch that properly. Please send it again.",
   ];
 
-  const pool = looksEmotional ? emotionalPool : casualPool;
-  return pool[Math.floor(Math.random() * pool.length)];
+  const pool = looksEmotional
+    ? emotionalPool
+    : casualPool;
+
+  return pool[
+    Math.floor(Math.random() * pool.length)
+  ];
+}
+
+function buildServiceRecovery() {
+  return "I received what you shared. I'm having trouble replying right now. Please try again in a little while.";
 }
 
 // ==============================
 // Prompt Builder
 // ==============================
 
-function buildVariationBlock(conversationMessages = []) {
-  const recentAssistantReplies = (conversationMessages || [])
-    .filter((m) => m?.role === "assistant" && typeof m.content === "string")
+function buildVariationBlock(
+  conversationMessages = []
+) {
+  const recentAssistantReplies = (
+    conversationMessages || []
+  )
+    .filter(
+      (message) =>
+        message?.role === "assistant" &&
+        typeof message.content === "string"
+    )
     .slice(-3)
-    .map((m) => m.content.trim())
+    .map((message) =>
+      message.content.trim()
+    )
     .filter(Boolean);
 
-  if (!recentAssistantReplies.length) return "";
+  if (!recentAssistantReplies.length) {
+    return "";
+  }
 
   return `
 VARIATION CONTROL
@@ -206,20 +430,31 @@ VARIATION CONTROL
 Avoid repeating the structure, opening phrase, or rhythm of the recent assistant replies.
 
 Recent assistant replies:
-${recentAssistantReplies.map((r, i) => `${i + 1}. ${r}`).join("\n")}
+
+${recentAssistantReplies
+  .map(
+    (reply, index) =>
+      `${index + 1}. ${reply}`
+  )
+  .join("\n")}
 
 Rules:
-- Do not start with the same first 3 words as recent replies.
-- Do not reuse sentence structure.
-- Avoid repeating openings like "you are", "this is", "that is", or "something in this".
-- Change phrasing style: statement, contrast, observation, or direct truth.
-- Keep the stoic tone: calm, direct, grounded.
-- Keep meaning consistent, but change expression.
+
+- Do not start with the same first three words as recent replies.
+- Do not reuse the same sentence structure.
+- Avoid repeatedly opening with "you are", "this is", "that is", or "something in this".
+- Change the phrasing style naturally: statement, contrast, observation, question, or direct truth.
+- Keep the tone calm, direct, and grounded.
+- Keep the meaning consistent while changing the expression.
 `.trim();
 }
 
-function buildCheckinModeBlock(source = "chat") {
-  if (source !== "checkin") return "";
+function buildCheckinModeBlock(
+  source = "chat"
+) {
+  if (source !== "checkin") {
+    return "";
+  }
 
   return `
 CHECK-IN MODE
@@ -231,12 +466,14 @@ Do not mention notifications.
 Do not say "thanks for checking in."
 
 Tone:
+
 - calm
 - grounded
 - familiar
 - direct
 
 Behavior:
+
 - acknowledge the return lightly
 - stay close to what the user says now
 - do not over-explain
@@ -256,10 +493,11 @@ function buildBrainPrompt({
   languageInstruction,
   latestUserMessage,
   planConfig,
-  behavioralSafety,
 }) {
   return [
-    buildLanguageControlBlock(latestUserMessage),
+    buildLanguageControlBlock(
+      latestUserMessage
+    ),
 
     languageInstruction,
 
@@ -267,31 +505,111 @@ function buildBrainPrompt({
 
     buildHumanNaturalityBlock(),
 
-`
-RELATIONAL ACCOUNTABILITY
+    `
+    MORAL CLARITY
 
-Talkio cares about the user, and also cares about the people affected by the user.
 
-Rules:
-- do not blindly take the user's side
-- do not validate harmful behavior
-- do not encourage revenge, manipulation, cruelty, abuse, or dehumanization
-- do not shame the user
-- do not moralize
-- when needed, gently point toward responsibility, self-control, dignity, and consequences
+Talkio believes every person has inherent dignity.
 
-Talkio protects the user's dignity.
+That dignity is never lost because of success, failure, mistakes, beliefs, status, or past actions.
 
-Do not call the user weak.
-Do not call the user broken.
-Do not reduce the user to their worst moment.
+At the same time, Talkio recognizes that actions have moral weight.
 
-Tone:
-- calm older brother
-- honest but not harsh
-- warm but not soft
-- protective without enabling
-- grounded without lecturing
+Talkio does not avoid moral questions.
+
+It approaches them with humility, fairness, and evidence rather than certainty.
+
+Compassion does not require pretending every choice is equally good.
+
+Talkio protects the dignity of every person in the conversation.
+
+This includes the user, the people they love, the people who hurt them, and the people affected by their choices.
+
+Protecting dignity does not mean avoiding difficult truths.
+
+Sometimes protecting dignity means helping someone face the consequences of their actions honestly.
+
+Talkio gently distinguishes between actions that generally strengthen:
+
+• honesty
+• responsibility
+• respect
+• trust
+• healthy boundaries
+• compassion
+• integrity
+
+and actions that generally weaken them.
+
+When weighing difficult situations,
+Talkio reasons from enduring human values such as:
+
+• honesty
+• responsibility
+• respect for consent
+• keeping commitments
+• fairness
+• compassion
+• healthy boundaries
+
+These values guide judgment,
+but they do not eliminate uncertainty.
+
+Many difficult moral questions involve genuine uncertainty.
+
+Where reasonable disagreement exists, Talkio remains humble.
+
+Where actions clearly involve deception, coercion, exploitation, abuse, or betrayal of fundamental trust, Talkio does not pretend the issue is morally neutral.
+
+Talkio remains humble where uncertainty genuinely exists.
+
+Talkio evaluates behavior, not human worth.
+
+A harmful action does not make someone a worthless person.
+
+A good action does not place someone above accountability.
+
+Talkio does not shame people.
+
+Talkio does not excuse harmful behavior.
+
+Understanding why someone acted a certain way is not the same as saying the action was right.
+
+When discussing difficult situations:
+
+• describe the behavior
+• explain why it matters
+• acknowledge likely consequences
+• encourage accountability
+• leave room for growth
+
+Avoid condemning people.
+
+Avoid becoming morally indifferent.
+
+Avoid becoming self-righteous.
+
+Talkio is loyal to truth, responsibility, healthy relationships, and the user's long-term wellbeing.
+
+It also considers the dignity and legitimate interests of everyone affected by the situation.
+
+Before making moral conclusions, distinguish carefully between:
+
+• observed facts
+• reasonable inferences
+• personal uncertainty
+
+Never present an inference as a known fact.
+
+If another person's motives cannot truly be known,
+
+say so.
+
+Confidence should match the available evidence.
+
+Talkio seeks wisdom before certainty.
+
+When certainty is unavailable, it helps the user think more clearly rather than pretending to have all the answers.
 `.trim(),
 
     `
@@ -300,6 +618,7 @@ USER PLAN
 Plan: ${planConfig?.label || "Free"}
 
 Plan behavior:
+
 - Reply length: ${planConfig?.replyLength}
 - Reply depth: ${planConfig?.replyDepth}
 - Memory level: ${planConfig?.memoryLevel}
@@ -308,8 +627,9 @@ Plan behavior:
 - Stoic / grounding access: ${planConfig?.stoicGroundingModes}
 
 Rules:
+
 - Free users still deserve warmth and emotional safety.
-- Pro users can receive more layered and personalized replies.
+- Paid users can receive more layered and personalized replies.
 - Do not mention subscription plans naturally in conversation.
 `.trim(),
 
@@ -319,20 +639,22 @@ LENGTH NATURALITY
 Do not force every reply to be short.
 
 Match reply length to the moment:
-- casual/simple message → short is okay
-- meaningful or personal message → medium-length often feels more natural
+
+- casual or simple message → short is okay
+- meaningful or personal message → medium length often feels more natural
 - meaningful sharing → respond with enough emotional presence
 - serious conversations should not feel compressed into one tiny reply
 
 Natural conversational flow matters more than strict brevity.
 
 Avoid:
+
 - emotionally empty one-line replies
 - overly compressed empathy
 - cutting off meaningful reflections too early
 `.trim(),
 
-`
+    `
 EMOTIONAL CONTINUITY
 
 If something seems like it has been building over time:
@@ -354,7 +676,7 @@ Keep it simple.
 Keep it human.
 `.trim(),
 
-`
+    `
 GROUNDING WHEN OVERLOADED
 
 When the user sounds overwhelmed, anxious, drained, or flooded:
@@ -364,29 +686,32 @@ When the user sounds overwhelmed, anxious, drained, or flooded:
 - offer only one small grounding step if natural
 
 Examples:
+
 - "Maybe slow this down for a second."
 - "Get some water first, then we look at it."
 - "Even stepping outside for a minute might help."
 
 Do not:
+
 - give wellness lists
 - sound like a therapist
 - sound like a meditation coach
 - over-prescribe routines
-
 `.trim(),
 
     checkinModeBlock,
+
     continuityBlock,
+
     nativeExpressionBlock,
+
     emotionalGuidanceBlock,
 
-    behavioralSafety?.shouldRedirect === true &&
-    ["medium", "high"].includes(behavioralSafety?.riskLevel)
-      ? HARMFUL_INTENT_STEERING_PROMPT
-      : "",
+    HARMFUL_INTENT_STEERING_PROMPT,
 
     variationBlock,
+
+    buildStructuredOutputBlock(),
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -396,31 +721,38 @@ function buildHumanNaturalityBlock() {
   return `
 HUMAN NATURALITY
 
-Talk like a calm older brother — not an assistant.
+Talk like a calm older brother, not an assistant.
 
-Do not automatically validate emotions.
+Do not automatically validate every emotion.
 
-Do not begin serious replies with:
+Do not routinely begin serious replies with:
+
 - "That sounds..."
 - "That's incredibly..."
 - "It's understandable..."
 - "That must be..."
 - "It sounds like..."
 
-Instead, react first.
+Instead, react naturally first when appropriate.
 
 Examples:
+
 "Wait, what happened?"
+
 "Hold on."
+
 "That's a big statement."
+
 "Walk me through it."
+
 "Alright. Start from the beginning."
+
 "Okay, now I'm curious."
 
-Sound like a real older brother hearing something,
-not a therapist reflecting something.
+Sound like a real older brother hearing something, not a therapist reflecting something.
 
 Avoid:
+
 - sounding clinical
 - sounding motivational
 - sounding like therapy
@@ -428,7 +760,7 @@ Avoid:
 - explaining emotions too formally
 - repetitive empathy phrases
 - robotic positivity
-- sounding overly careful
+- sounding unnecessarily cautious
 
 Stay close to what the user actually said.
 
@@ -438,26 +770,42 @@ If wisdom is needed, rely on the Observation, Reasoning, and Wisdom layers alrea
 `.trim();
 }
 
-function isTooSimilar(a = "", b = "") {
+function isTooSimilar(
+  firstReply = "",
+  secondReply = ""
+) {
   const normalize = (text) =>
-    text
+    String(text || "")
       .toLowerCase()
       .replace(/[^\w\s]/g, "")
       .trim();
 
-  const aa = normalize(a);
-  const bb = normalize(b);
+  const first = normalize(firstReply);
+  const second = normalize(secondReply);
 
-  if (!aa || !bb) return false;
+  if (!first || !second) {
+    return false;
+  }
 
-  if (aa === bb) return true;
+  if (first === second) {
+    return true;
+  }
 
-  const aWords = aa.split(" ");
-  const bWords = bb.split(" ");
+  const firstWords = first.split(" ");
+  const secondWords = second.split(" ");
 
-  const overlap = aWords.filter((w) => bWords.includes(w)).length;
+  const overlap = firstWords.filter(
+    (word) => secondWords.includes(word)
+  ).length;
 
-  return overlap >= Math.min(aWords.length, bWords.length) * 0.75;
+  return (
+    overlap >=
+    Math.min(
+      firstWords.length,
+      secondWords.length
+    ) *
+      0.75
+  );
 }
 
 // ==============================
@@ -481,6 +829,11 @@ async function generateTalkioReply({
   if (!uid) {
     return {
       reply: "Please sign in again.",
+      safety: buildSafeDefault(
+        "missing_verified_uid"
+      ),
+      action: "show_reply",
+      blocked: false,
       path: "missing_verified_uid",
       dynamicMode: "fallback",
       humanState: null,
@@ -488,9 +841,19 @@ async function generateTalkioReply({
     };
   }
 
-  if (!String(latestUserMessage || "").trim()) {
+  if (
+    !String(
+      latestUserMessage || ""
+    ).trim()
+  ) {
     return {
-      reply: "I didn’t quite catch that. Please send it again.",
+      reply:
+        "I didn’t quite catch that. Please send it again.",
+      safety: buildSafeDefault(
+        "empty_user_message"
+      ),
+      action: "show_reply",
+      blocked: false,
       path: "empty_user_message",
       dynamicMode: "fallback",
       humanState: null,
@@ -498,280 +861,485 @@ async function generateTalkioReply({
     };
   }
 
-  const safeMessages = sanitizeConversationMessages(conversationMessages);
-  const languageEnv = detectLanguageEnvironment(latestUserMessage);
+  const safeMessages =
+    sanitizeConversationMessages(
+      conversationMessages
+    );
 
-  await incrementMetric("totalMessages", 1);
+  const languageEnv =
+    detectLanguageEnvironment(
+      latestUserMessage
+    );
+
+  await incrementMetric(
+    "totalMessages",
+    1
+  );
+
   await logDailyUser(uid);
 
   const languageInstruction = `
 LANGUAGE ENVIRONMENT
 
 Primary language: ${languageEnv.primaryLanguage}
+
 Detected languages: ${languageEnv.detectedLanguages.join(", ")}
+
 Mixed language: ${languageEnv.mixed}
+
 Conversational style: ${languageEnv.conversationalStyle}
 
 Mirror the user's natural language rhythm.
-Do not translate unnaturally.
-Do not default to English.
-Sound socially native.
-`;
 
-  let behavioralSafety = {
-  riskLevel: "none",
-  category: "none",
-  shouldRedirect: false,
-  recommendedMode: "normal",
-  reason: "safe_default",
-};
+Do not translate unnaturally.
+
+Do not default to English.
+
+Sound socially native.
+`.trim();
+
+  let behavioralSafety =
+    buildSafeDefault();
+
+  let localSafetyFallback =
+    buildSafeDefault(
+      "local_fallback_default"
+    );
 
   try {
     let continuityMemory = null;
 
     try {
-      continuityMemory = await loadContinuityMemory(uid);
-    } catch (err) {
-      console.error("continuity_memory_load_failed", {
-        uid,
-        message: err?.message || String(err),
-      });
+      continuityMemory =
+        await loadContinuityMemory(uid);
+    } catch (error) {
+      console.error(
+        "continuity_memory_load_failed",
+        {
+          uid,
+          message:
+            error?.message ||
+            String(error),
+        }
+      );
     }
 
-    const continuityBlock = buildContinuityBlock(continuityMemory);
-    const nativeExpressionBlock = buildNativeExpressionBlock(continuityMemory);
+    const continuityBlock =
+      buildContinuityBlock(
+        continuityMemory
+      );
 
-    const emotional = buildEmotionalGuidanceBlock(latestUserMessage);
-    emotionResult = emotional.emotionResult;
-    responseMode = emotional.responseMode || "reflect";
+    const nativeExpressionBlock =
+      buildNativeExpressionBlock(
+        continuityMemory
+      );
+
+    const emotional =
+      buildEmotionalGuidanceBlock(
+        latestUserMessage
+      );
+
+    emotionResult =
+      emotional.emotionResult;
+
+    responseMode =
+      emotional.responseMode ||
+      "reflect";
 
     try {
-  behavioralSafety = await analyzeBehavioralSafety({
-    modelGenerate,
-    latestUserMessage,
-  });
-} catch (err) {
-  console.error("behavioral_safety_non_blocking_failed", err?.message || err);
-}
+      localSafetyFallback =
+        await analyzeBehavioralSafety({
+          latestUserMessage,
+        });
+    } catch (error) {
+      console.error(
+        "behavioral_safety_non_blocking_failed",
+        error?.message || error
+      );
+    }
 
-    const variationBlock = buildVariationBlock(safeMessages);
-    const checkinModeBlock = buildCheckinModeBlock(source);
+    const variationBlock =
+      buildVariationBlock(
+        safeMessages
+      );
 
-    const prompt = buildBrainPrompt({
-  systemPrompt,
-  continuityBlock,
-  nativeExpressionBlock,
-  emotionalGuidanceBlock: emotional.emotionalGuidanceBlock,
-  variationBlock,
-  checkinModeBlock,
-  languageInstruction,
-  latestUserMessage,
-  planConfig,
-  behavioralSafety,
-});
+    const checkinModeBlock =
+      buildCheckinModeBlock(
+        source
+      );
 
-    debugLog("TALKIO_PIPELINE_DEBUG", {
-      uid,
-      responseMode,
-      emotionResult,
-      source,
-      apiCallsPlanned: 1,
-    });
+    const prompt =
+      buildBrainPrompt({
+        systemPrompt,
+        continuityBlock,
+        nativeExpressionBlock,
+        emotionalGuidanceBlock:
+          emotional.emotionalGuidanceBlock,
+        variationBlock,
+        checkinModeBlock,
+        languageInstruction,
+        latestUserMessage,
+        planConfig,
+      });
 
-    const raw = await modelGenerate({
-      systemPrompt: prompt,
-      messages: safeMessages,
-    });
-
-    let reply = normalizeReply(extractModelText(raw));
-
-    debugLog("TALKIO_MODEL_RAW", {
-    rawType: typeof raw,
-    rawPreview: JSON.stringify(raw)?.slice(0, 500),
-    extractedReply: reply?.slice(0, 200),
-    extractedLength: reply?.length || 0,
-    });
-
-    reply = applySafetyGuard(reply, latestUserMessage);
-    reply = cleanReply(reply);
-    reply = humanizeReply(reply);
-
-    const lastAssistantMessage =
-  [...safeMessages]
-    .reverse()
-    .find((m) => m.role === "assistant")?.content || "";
-
-  if (isTooSimilar(reply, lastAssistantMessage)) {
-  try {
-    const rewriteRaw = await modelGenerate({
-      systemPrompt: `
-You are rewriting a Talkio response.
-
-Rules:
-- keep the same emotional meaning
-- avoid repeating wording
-- avoid repeating sentence rhythm
-- sound human and emotionally natural
-- keep the same language as the user
-- do not become robotic
-- do not explain the rewrite
-- do not use the same opening words
-`,
-      messages: [
-        {
-          role: "user",
-          content: `
-Original reply:
-"${reply}"
-
-Previous assistant reply:
-"${lastAssistantMessage}"
-
-User message:
-"${latestUserMessage}"
-
-Rewrite the ORIGINAL REPLY naturally.
-`,
-        },
-      ],
-    });
-
-    const rewritten = cleanReply(
-      humanizeReply(
-        extractModelText(rewriteRaw)
-      )
+    debugLog(
+      "TALKIO_PIPELINE_DEBUG",
+      {
+        uid,
+        responseMode,
+        emotionResult,
+        source,
+        apiCallsPlanned: 1,
+      }
     );
 
-    if (isSoftUsableReply(rewritten)) {
-      reply = rewritten;
+    const raw =
+      await modelGenerate({
+        systemPrompt: prompt,
+        messages: safeMessages,
+      });
+
+    const structuredResult =
+      parseTalkioStructuredResponse(
+        raw
+      );
+
+    debugLog(
+      "TALKIO_MODEL_RAW",
+      {
+        rawType: typeof raw,
+        rawPreview:
+          JSON.stringify(raw)?.slice(
+            0,
+            500
+          ),
+        structuredParsed:
+          Boolean(structuredResult),
+      }
+    );
+
+    if (!structuredResult) {
+      const path =
+        "structured_response_invalid";
+
+      debugLog(
+        "TALKIO_PATH",
+        {
+          path,
+          latencyMs:
+            Date.now() -
+            startedAt,
+        }
+      );
+
+      await logFallback(path);
+
+      return {
+        reply: buildHumanRecovery(
+          latestUserMessage,
+          emotionResult
+        ),
+        safety:
+          localSafetyFallback,
+        action: "show_reply",
+        blocked: false,
+        path,
+        dynamicMode:
+          responseMode,
+        humanState: {
+          emotionResult,
+          responseMode,
+          source,
+          behavioralSafety:
+            localSafetyFallback,
+        },
+        memoryUpdate: null,
+      };
     }
-  } catch (err) {
-    console.error("rewrite_generation_failed", err?.message || err);
+
+    behavioralSafety =
+      structuredResult.safety;
+
+    const action =
+      structuredResult.action;
+
+    let reply = cleanReply(
+      structuredResult.reply
+    );
+
+    reply = humanizeReply(reply);
+
+    debugLog(
+      "TALKIO_STRUCTURED_RESULT",
+      {
+        uid,
+        riskLevel:
+          behavioralSafety.riskLevel,
+        category:
+          behavioralSafety.category,
+        shouldRedirect:
+          behavioralSafety.shouldRedirect,
+        recommendedMode:
+          behavioralSafety.recommendedMode,
+        action,
+        replyLength:
+          reply.length,
+      }
+    );
+
+    if (
+      shouldShowSafetyBlock({
+        action,
+        safety:
+          behavioralSafety,
+      })
+    ) {
+      const path =
+        "safety_block";
+
+      await logLatency(
+        Date.now() -
+          startedAt
+      );
+
+      await logResponseMode(
+        "crisis_support"
+      );
+
+      return {
+        reply,
+        safety:
+          behavioralSafety,
+        action:
+          "show_safety_block",
+        blocked: true,
+        path,
+        dynamicMode:
+          "crisis_support",
+        humanState: {
+          emotionResult,
+          responseMode:
+            "crisis_support",
+          source,
+          behavioralSafety,
+        },
+        memoryUpdate: null,
+      };
+    }
+
+    reply = applySafetyGuard({
+      reply,
+      behavioralSafety,
+    });
+
+    reply = normalizeReply(reply);
+
+        const lastAssistantMessage =
+      [...safeMessages]
+        .reverse()
+        .find(
+          (message) =>
+            message.role ===
+            "assistant"
+        )?.content || "";
+
+    if (
+      isTooSimilar(
+        reply,
+        lastAssistantMessage
+      )
+    ) {
+      debugLog(
+        "TALKIO_REPLY_SIMILARITY",
+        {
+          uid,
+          similarToPrevious: true,
+          replyPreview:
+            reply.slice(0, 160),
+          previousReplyPreview:
+            lastAssistantMessage.slice(
+              0,
+              160
+            ),
+        }
+      );
+    }
+
+    if (isSoftUsableReply(reply)) {
+      const path =
+        "core_identity_soft_accept";
+
+      debugLog(
+        "TALKIO_PATH",
+        {
+          path,
+          latencyMs:
+            Date.now() -
+            startedAt,
+        }
+      );
+
+      await logLatency(
+        Date.now() -
+          startedAt
+      );
+
+      await logResponseMode(
+        responseMode
+      );
+
+      return {
+        reply,
+        safety:
+          behavioralSafety,
+        action: "show_reply",
+        blocked: false,
+        path,
+        dynamicMode:
+          responseMode,
+        humanState: {
+          emotionResult,
+          responseMode,
+          source,
+          behavioralSafety,
+        },
+        memoryUpdate: {
+          lastEmotion:
+            emotionResult
+              ?.primaryEmotion ??
+            null,
+
+          lastToneFamily:
+            emotionResult
+              ?.toneFamily ??
+            null,
+
+          lastIntensity:
+            emotionResult
+              ?.intensity ??
+            null,
+
+          lastResponseMode:
+            responseMode ??
+            null,
+
+          lastBehavioralRisk:
+            behavioralSafety
+              ?.riskLevel ??
+            "none",
+
+          lastBehavioralCategory:
+            behavioralSafety
+              ?.category ??
+            "none",
+        },
+      };
+    }
+
+    const path =
+      source === "checkin"
+        ? "checkin_recovery"
+        : "core_recovery";
+
+    debugLog(
+      "TALKIO_PATH",
+      {
+        path,
+        latencyMs:
+          Date.now() -
+          startedAt,
+      }
+    );
+
+    await logFallback(path);
+
+    return {
+      reply: buildHumanRecovery(
+        latestUserMessage,
+        emotionResult
+      ),
+      safety:
+        localSafetyFallback,
+      action: "show_reply",
+      blocked: false,
+      path,
+      dynamicMode:
+        responseMode,
+      humanState: {
+        emotionResult,
+        responseMode,
+        source,
+        behavioralSafety:
+          localSafetyFallback,
+      },
+      memoryUpdate: null,
+    };
+  } catch (error) {
+    console.error(
+      "Talkio error:",
+      {
+        message:
+          error?.message ||
+          String(error),
+
+        latencyMs:
+          Date.now() -
+          startedAt,
+      }
+    );
+
+    const path =
+      source === "checkin"
+        ? "checkin_recovery"
+        : "core_recovery";
+
+    debugLog(
+      "TALKIO_PATH",
+      {
+        path,
+        latencyMs:
+          Date.now() -
+          startedAt,
+
+        error:
+          error?.message ||
+          String(error),
+      }
+    );
+
+    await logFallback(path);
+
+    return {
+      reply:
+        buildServiceRecovery(),
+
+      safety:
+        localSafetyFallback,
+
+      action:
+        "show_reply",
+
+      blocked:
+        false,
+
+      path,
+
+      dynamicMode:
+        responseMode ||
+        "reflect",
+
+      humanState: {
+        emotionResult,
+        responseMode,
+        source,
+        behavioralSafety:
+          localSafetyFallback,
+      },
+
+      memoryUpdate:
+        null,
+    };
   }
-}
-
-if (isSoftUsableReply(reply)) {
-  debugLog("TALKIO_PATH", {
-    path: "core_identity_soft_accept",
-    latencyMs: Date.now() - startedAt,
-  });
-
-  await logLatency(Date.now() - startedAt);
-  await logResponseMode(responseMode);
-
-  return {
-    reply,
-    path: "core_identity_soft_accept",
-    dynamicMode: responseMode,
-    humanState: {
-      emotionResult,
-      responseMode,
-      source,
-      behavioralSafety,
-    },
-    memoryUpdate: {
-      lastEmotion: emotionResult?.primaryEmotion ?? null,
-      lastToneFamily: emotionResult?.toneFamily ?? null,
-      lastIntensity: emotionResult?.intensity ?? null,
-      lastResponseMode: responseMode ?? null,
-      lastBehavioralRisk: behavioralSafety?.riskLevel ?? "none",
-      lastBehavioralCategory: behavioralSafety?.category ?? "none",
-    },
-  };
-}
-
-// Relaxed acceptance.
-// If Gemini produced readable text, do not discard it.
-if (
-  typeof reply === "string" &&
-  reply.trim().length >= 20
-) {
-  debugLog("TALKIO_PATH", {
-    path: "core_identity_relaxed_accept",
-    latencyMs: Date.now() - startedAt,
-  });
-
-  await logLatency(Date.now() - startedAt);
-  await logResponseMode(responseMode);
-
-  return {
-    reply: reply.trim(),
-    path: "core_identity_relaxed_accept",
-    dynamicMode: responseMode,
-    humanState: {
-      emotionResult,
-      responseMode,
-      source,
-      behavioralSafety,
-    },
-    memoryUpdate: {
-      lastEmotion: emotionResult?.primaryEmotion ?? null,
-      lastToneFamily: emotionResult?.toneFamily ?? null,
-      lastIntensity: emotionResult?.intensity ?? null,
-      lastResponseMode: responseMode ?? null,
-      lastBehavioralRisk: behavioralSafety?.riskLevel ?? "none",
-      lastBehavioralCategory: behavioralSafety?.category ?? "none",
-    },
-  };
-}
-
-const path =
-  source === "checkin"
-    ? "checkin_recovery"
-    : "core_recovery";
-
-debugLog("TALKIO_PATH", {
-  path,
-  latencyMs: Date.now() - startedAt,
-});
-
-await logFallback(path);
-
-return {
-  reply: buildHumanRecovery(latestUserMessage, emotionResult),
-  path,
-  dynamicMode: responseMode,
-  humanState: {
-    emotionResult,
-    responseMode,
-    source,
-    behavioralSafety,
-  },
-  memoryUpdate: null,
-};
-
-} catch (err) {
-  console.error("Talkio error:", {
-    message: err?.message || String(err),
-    latencyMs: Date.now() - startedAt,
-  });
-
-  const path =
-    source === "checkin"
-      ? "checkin_recovery"
-      : "core_recovery";
-
-  debugLog("TALKIO_PATH", {
-    path,
-    latencyMs: Date.now() - startedAt,
-    error: err?.message || String(err),
-  });
-
-  await logFallback(path);
-
-  return {
-    reply: buildHumanRecovery(latestUserMessage, emotionResult),
-    path,
-    dynamicMode: responseMode || "reflect",
-    humanState: {
-      emotionResult,
-      responseMode,
-      source,
-      behavioralSafety,
-    },
-    memoryUpdate: null,
-  };
-}
 }
 
 module.exports = {

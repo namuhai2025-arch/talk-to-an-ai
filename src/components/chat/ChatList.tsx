@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 
@@ -20,6 +20,8 @@ type ChatListProps = {
   bottomRef: React.RefObject<HTMLDivElement | null>;
 };
 
+const AUTO_SCROLL_THRESHOLD_PX = 140;
+
 function ChatList({
   messages,
   isLimitReached,
@@ -27,31 +29,88 @@ function ChatList({
   bottomRef,
 }: ChatListProps) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const initialScrollDoneRef = useRef(false);
+  const timeoutRef = useRef<number | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const shouldAutoScrollRef = useRef(true);
+
+  const visibleMessages = useMemo(() => {
+    return messages.filter((message) => {
+      return !(
+        isLimitReached &&
+        message.role === "assistant" &&
+        typeof message.content === "string" &&
+        message.content.includes("free limit")
+      );
+    });
+  }, [messages, isLimitReached]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
 
-    if (!container || messages.length === 0) return;
+    if (!container) return;
 
-    let secondFrame = 0;
+    const handleScroll = () => {
+      const distanceFromBottom =
+        container.scrollHeight -
+        container.scrollTop -
+        container.clientHeight;
 
-    const firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        container.scrollTop = container.scrollHeight;
+      shouldAutoScrollRef.current =
+        distanceFromBottom <= AUTO_SCROLL_THRESHOLD_PX;
+    };
 
-        window.setTimeout(() => {
-          container.scrollTop = container.scrollHeight;
-          initialScrollDoneRef.current = true;
-        }, 150);
-      });
+    container.addEventListener("scroll", handleScroll, {
+      passive: true,
     });
 
+    handleScroll();
+
     return () => {
-      window.cancelAnimationFrame(firstFrame);
-      window.cancelAnimationFrame(secondFrame);
+      container.removeEventListener("scroll", handleScroll);
     };
-  }, [messages.length, showTyping]);
+  }, []);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+
+    if (!container || visibleMessages.length === 0) return;
+
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+    }
+
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+    }
+
+    frameRef.current = window.requestAnimationFrame(() => {
+      if (shouldAutoScrollRef.current) {
+        container.scrollTop = container.scrollHeight;
+      }
+
+      frameRef.current = null;
+    });
+
+    timeoutRef.current = window.setTimeout(() => {
+      if (shouldAutoScrollRef.current) {
+        container.scrollTop = container.scrollHeight;
+      }
+
+      timeoutRef.current = null;
+    }, 100);
+
+    return () => {
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, [visibleMessages.length, showTyping]);
 
   return (
     <div
@@ -59,27 +118,18 @@ function ChatList({
       className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-2 md:px-10"
     >
       <div className="flex flex-col gap-2">
-        {messages.map((m, i) => {
-          const prev = messages[i - 1];
-          const next = messages[i + 1];
+        {visibleMessages.map((message, index) => {
+          const previous = visibleMessages[index - 1];
+          const next = visibleMessages[index + 1];
 
-          const sameAsPrev = prev?.role === m.role;
-          const sameAsNext = next?.role === m.role;
-          const showTimestamp = !next || next.role !== m.role;
-
-          if (
-            isLimitReached &&
-            m.role === "assistant" &&
-            typeof m.content === "string" &&
-            m.content.includes("free limit")
-          ) {
-            return null;
-          }
+          const sameAsPrev = previous?.role === message.role;
+          const sameAsNext = next?.role === message.role;
+          const showTimestamp = !next || next.role !== message.role;
 
           return (
             <MessageBubble
-              key={`${m.timestamp}-${i}`}
-              message={m}
+              key={`${message.timestamp}-${index}`}
+              message={message}
               sameAsPrev={sameAsPrev}
               sameAsNext={sameAsNext}
               showTimestamp={showTimestamp}

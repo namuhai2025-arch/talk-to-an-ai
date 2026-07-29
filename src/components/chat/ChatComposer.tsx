@@ -1,6 +1,10 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
 
 type ChatComposerProps = {
   value: string;
@@ -10,7 +14,7 @@ type ChatComposerProps = {
   placeholder?: string;
 };
 
-export default function ChatComposer({
+function ChatComposer({
   value,
   onChange,
   onSend,
@@ -18,46 +22,99 @@ export default function ChatComposer({
   placeholder = "Type your message...",
 }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const resizeFrameRef = useRef<number | null>(null);
+  const maxHeightRef = useRef(320);
 
-  useLayoutEffect(() => {
+  const updateMaximumHeight = useCallback(() => {
+    /*
+     * Use the layout viewport rather than visualViewport.
+     * visualViewport shrinks whenever the iOS keyboard opens.
+     */
+    const layoutHeight = window.innerHeight;
+
+    maxHeightRef.current = Math.max(
+      144,
+      Math.min(layoutHeight * 0.48, 320),
+    );
+  }, []);
+
+  const resizeTextarea = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
-    /*
-     * Use screen height instead of visualViewport height.
-     * The visual viewport shrinks when the iPhone keyboard opens,
-     * which was making the composer shrink while typing.
-     */
-    const availableHeight =
-  window.visualViewport?.height ?? window.innerHeight;
-
-const maxHeight = Math.max(
-  144,
-  Math.min(availableHeight * 0.48, 320)
-);
-
-    textarea.style.height = "0px";
-
-    const contentHeight = textarea.scrollHeight;
-    const nextHeight = Math.min(contentHeight, maxHeight);
-
-    textarea.style.height = `${Math.max(nextHeight, 32)}px`;
-    textarea.style.overflowY =
-      contentHeight > maxHeight ? "auto" : "hidden";
-
-    /*
-     * While the entire draft still fits, keep the textarea positioned
-     * at the beginning rather than retaining an old internal scroll.
-     */
-    if (contentHeight <= maxHeight) {
-      textarea.scrollTop = 0;
+    if (resizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(resizeFrameRef.current);
     }
-  }, [value]);
 
-  const submitMessage = () => {
-    if (disabled || !value.trim()) return;
+    resizeFrameRef.current = window.requestAnimationFrame(() => {
+      const currentTextarea = textareaRef.current;
+      if (!currentTextarea) return;
+
+      const maxHeight = maxHeightRef.current;
+
+      /*
+       * "auto" allows the textarea to contract after text is deleted
+       * without briefly collapsing it to zero.
+       */
+      currentTextarea.style.height = "auto";
+
+      const contentHeight = currentTextarea.scrollHeight;
+      const nextHeight = Math.max(
+        32,
+        Math.min(contentHeight, maxHeight),
+      );
+
+      currentTextarea.style.height = `${nextHeight}px`;
+      currentTextarea.style.overflowY =
+        contentHeight > maxHeight ? "auto" : "hidden";
+
+      if (contentHeight <= maxHeight) {
+        currentTextarea.scrollTop = 0;
+      }
+
+      resizeFrameRef.current = null;
+    });
+  }, []);
+
+  useEffect(() => {
+    updateMaximumHeight();
+    resizeTextarea();
+
+    const handleWindowResize = () => {
+      updateMaximumHeight();
+      resizeTextarea();
+    };
+
+    window.addEventListener("resize", handleWindowResize, {
+      passive: true,
+    });
+
+    return () => {
+      window.removeEventListener("resize", handleWindowResize);
+
+      if (resizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeFrameRef.current);
+        resizeFrameRef.current = null;
+      }
+    };
+  }, [resizeTextarea, updateMaximumHeight]);
+
+  /*
+   * Resize when text changes, including when the draft is cleared
+   * after sending. requestAnimationFrame prevents synchronous layout
+   * work from blocking every individual keystroke.
+   */
+  useEffect(() => {
+    resizeTextarea();
+  }, [value, resizeTextarea]);
+
+  const trimmedValue = value.trim();
+  const canSend = !disabled && trimmedValue.length > 0;
+
+  const submitMessage = useCallback(() => {
+    if (!canSend) return;
     onSend();
-  };
+  }, [canSend, onSend]);
 
   return (
     <form
@@ -82,7 +139,11 @@ const maxHeight = Math.max(
             onChange(event.currentTarget.value);
           }}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
+            if (
+              event.key === "Enter" &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing
+            ) {
               event.preventDefault();
               submitMessage();
             }
@@ -92,13 +153,14 @@ const maxHeight = Math.max(
             borderRadius: "0px",
             WebkitAppearance: "none",
             appearance: "none",
+            overflowY: "hidden",
           }}
         />
       </div>
 
       <button
         type="submit"
-        disabled={disabled || !value.trim()}
+        disabled={!canSend}
         className="h-[48px] min-w-[64px] rounded-md bg-[#78906f] px-4 text-sm font-medium text-white transition active:scale-95 disabled:opacity-50"
       >
         Send
@@ -106,3 +168,5 @@ const maxHeight = Math.max(
     </form>
   );
 }
+
+export default React.memo(ChatComposer);

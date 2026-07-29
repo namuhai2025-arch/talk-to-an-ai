@@ -54,6 +54,10 @@ type ChatMessage = {
 
 const MAX_MESSAGES = 30;
 
+const CHAT_REQUEST_TIMEOUT_MS = 30_000;
+const CHAT_RETRY_DELAY_MS = 800;
+const MAX_CHAT_ATTEMPTS = 2;
+
 type SafetyInterruption = {
   blocked: boolean;
   reason?: "violent_admission" | "violent_threat" | "coverup_request";
@@ -149,6 +153,49 @@ function sleep(ms: number) {
   });
 }
 
+type ChatApiResponse = {
+  reply?: string;
+  error?: string;
+  code?: string;
+  retryable?: boolean;
+  retryAfterSeconds?: number;
+  requestId?: string;
+
+  paywallRequired?: boolean;
+  safetyBlocked?: boolean;
+  crisisLock?: boolean;
+  remainingDaily?: number;
+
+  dynamicMode?: string;
+  path?: string;
+};
+
+type ChatRequestPayload = {
+  message: string;
+  messages: ChatMessage[];
+  userTier: string;
+  source: "chat" | "checkin";
+};
+
+type ChatAttemptResult = {
+  res: Response;
+  data: ChatApiResponse;
+  rawResponseBody: string;
+};
+
+class ChatTransportError extends Error {
+  code: "CHAT_TIMEOUT" | "CHAT_NETWORK_ERROR";
+
+  constructor(
+    code: "CHAT_TIMEOUT" | "CHAT_NETWORK_ERROR",
+    message: string
+  ) {
+    super(message);
+    this.name = "ChatTransportError";
+    this.code = code;
+  }
+}
+
 export default function Page() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -224,6 +271,175 @@ const [signingProvider, setSigningProvider] =
   showTyping,
   mounted,
 });
+
+  async function performChatAttempt(
+  payload: ChatRequestPayload,
+  token: string
+): Promise<ChatAttemptResult> {
+  const controller = new AbortController();
+
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, CHAT_REQUEST_TIMEOUT_MS);
+
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    const rawResponseBody = await res.text();
+
+    let data: ChatApiResponse = {};
+
+    if (rawResponseBody.trim()) {
+      try {
+        data = JSON.parse(rawResponseBody) as ChatApiResponse;
+      } catch (jsonError) {
+        console.error("Chat JSON parse failed:", {
+          error: jsonError,
+          status: res.status,
+          statusText: res.statusText,
+          contentType: res.headers.get("content-type"),
+          rawBodyPreview: rawResponseBody.slice(0, 500),
+        });
+      }
+    }
+
+    return {
+      res,
+      data,
+      rawResponseBody,
+    };
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ChatTransportError(
+        "CHAT_TIMEOUT",
+        "The chat request took too long."
+      );
+    }
+
+    if (error instanceof TypeError) {
+      throw new ChatTransportError(
+        "CHAT_NETWORK_ERROR",
+        "The chat service could not be reached."
+      );
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+  function shouldRetryChatResult(
+  res: Response,
+  data: ChatApiResponse
+): boolean {
+  /*
+   * Never retry account limits or paywall responses.
+   */
+  const isAccountLimit =
+    data.paywallRequired === true ||
+    data.code === "DAILY_LIMIT_REACHED" ||
+    data.code === "MESSAGE_LIMIT_REACHED" ||
+    data.code === "PAYWALL_REQUIRED";
+
+  if (isAccountLimit) {
+    return false;
+  }
+
+  /*
+   * Retry temporary gateway and service failures.
+   */
+  if (
+    res.status === 408 ||
+    res.status === 502 ||
+    res.status === 503 ||
+    res.status === 504
+  ) {
+    return true;
+  }
+
+  /*
+   * Only retry a 429 when the backend explicitly identifies it
+   * as temporary and retryable.
+   */
+  if (res.status === 429) {
+    return (
+      data.retryable === true ||
+      data.code === "AI_RATE_LIMITED" ||
+      data.code === "UPSTREAM_RATE_LIMITED"
+    );
+  }
+
+  return false;
+}
+  async function requestChatWithRetry(
+  payload: ChatRequestPayload,
+  token: string
+): Promise<ChatAttemptResult> {
+  let lastTransportError: unknown;
+
+  for (let attempt = 1; attempt <= MAX_CHAT_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await performChatAttempt(payload, token);
+
+      const hasAnotherAttempt = attempt < MAX_CHAT_ATTEMPTS;
+      const shouldRetry =
+        hasAnotherAttempt &&
+        shouldRetryChatResult(result.res, result.data);
+
+      if (!shouldRetry) {
+        return result;
+      }
+
+      console.warn("Retrying temporary chat response:", {
+        attempt,
+        nextAttempt: attempt + 1,
+        status: result.res.status,
+        statusText: result.res.statusText,
+        code: result.data.code,
+        retryable: result.data.retryable,
+        requestId:
+          result.data.requestId ||
+          result.res.headers.get("x-request-id") ||
+          undefined,
+      });
+    } catch (error: unknown) {
+      lastTransportError = error;
+
+      const hasAnotherAttempt = attempt < MAX_CHAT_ATTEMPTS;
+
+      const isRetryableTransportError =
+        error instanceof ChatTransportError &&
+        (error.code === "CHAT_TIMEOUT" ||
+          error.code === "CHAT_NETWORK_ERROR");
+
+      if (!hasAnotherAttempt || !isRetryableTransportError) {
+        throw error;
+      }
+
+      console.warn("Retrying failed chat connection:", {
+        attempt,
+        nextAttempt: attempt + 1,
+        code: error.code,
+        message: error.message,
+      });
+    }
+
+    await sleep(CHAT_RETRY_DELAY_MS);
+  }
+
+  throw (
+    lastTransportError ||
+    new Error("Chat request failed after the retry.")
+  );
+}
   
   useKeyboard();
 
@@ -833,43 +1049,120 @@ try {
   userTier = "free";
 }
 
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
+const chatPayload: ChatRequestPayload = {
   message: text,
   messages: nextMessages,
-
   userTier,
-
   source:
     typeof window !== "undefined" &&
     sessionStorage.getItem("talkio_checkin_reply_context") === "true"
       ? "checkin"
       : "chat",
-}),
-      });
+};
 
-const data = await res.json().catch((jsonError) => {
-  console.error("Chat JSON parse failed:", jsonError);
-  return {};
-});
+const {
+  res,
+  data,
+  rawResponseBody,
+} = await requestChatWithRetry(chatPayload, token);
 
-if (!res.ok) {
-  throw new Error(data?.error || `Chat request failed with status ${res.status}`);
+/*
+ * Handle account limits and paywall responses before the generic
+ * !res.ok check. Otherwise, a 429 response throws immediately and
+ * never reaches the intended limit/paywall handling.
+ */
+if (data.paywallRequired === true) {
+  console.warn("Chat paywall required:", {
+    status: res.status,
+    statusText: res.statusText,
+    code: data.code,
+    error: data.error,
+    requestId:
+      data.requestId ||
+      res.headers.get("x-request-id") ||
+      undefined,
+    remainingDaily: data.remainingDaily,
+  });
+
+  setIsLimitReached(true);
+  setShowTyping(false);
+
+  window.location.href = "/paywall";
+  return;
 }
 
-      if (data?.safetyBlocked === true) {
+/*
+ * Distinguish an account message limit from a temporary service rate limit.
+ */
+if (res.status === 429) {
+  console.warn("Chat request returned 429:", {
+    status: res.status,
+    statusText: res.statusText,
+    code: data.code,
+    error: data.error,
+    retryable: data.retryable,
+    retryAfterSeconds: data.retryAfterSeconds,
+    requestId:
+      data.requestId ||
+      res.headers.get("x-request-id") ||
+      undefined,
+    remainingDaily: data.remainingDaily,
+    rawBodyPreview:
+      rawResponseBody && !data.error
+        ? rawResponseBody.slice(0, 500)
+        : undefined,
+  });
+
+  const isAccountLimit =
+  data.code === "DAILY_LIMIT_REACHED" ||
+  data.code === "MESSAGE_LIMIT_REACHED" ||
+  data.code === "PAYWALL_REQUIRED";
+
+  if (isAccountLimit) {
+    setIsLimitReached(true);
+    setShowTyping(false);
+    return;
+  }
+
+  throw new Error(
+    data.error ||
+      "Talkio is receiving too many requests right now. Please try again."
+  );
+}
+
+/*
+ * Other unsuccessful responses should still reach the catch block.
+ */
+if (!res.ok) {
+  console.error("Chat API request failed:", {
+    status: res.status,
+    statusText: res.statusText,
+    code: data.code,
+    error: data.error,
+    retryable: data.retryable,
+    retryAfterSeconds: data.retryAfterSeconds,
+    requestId:
+      data.requestId ||
+      res.headers.get("x-request-id") ||
+      undefined,
+    contentType: res.headers.get("content-type"),
+    rawBodyPreview: rawResponseBody.slice(0, 500),
+  });
+
+  throw new Error(
+    data.error ||
+      `Chat request failed with status ${res.status} ${res.statusText}`.trim()
+  );
+}
+
+if (data?.safetyBlocked === true) {
   setCrisisLock(true);
   setShowTyping(false);
   setLoading(false);
   return;
 }
-      
-      const analytics = await getFirebaseAnalytics();
+
+const analytics = await getFirebaseAnalytics();
 
 if (analytics) {
   logEvent(analytics, "chat_message_sent", {
@@ -877,35 +1170,24 @@ if (analytics) {
   });
 }
 
-      if (typeof window !== "undefined") {
-      sessionStorage.removeItem("talkio_checkin_reply_context");
-      }
+if (typeof window !== "undefined") {
+  sessionStorage.removeItem("talkio_checkin_reply_context");
+}
 
-      if (data?.crisisLock === true) {
-      setCrisisLock(true);
-      }
+if (data?.crisisLock === true) {
+  setCrisisLock(true);
+}
 
-      if (data?.remainingDaily > 0) {
-      setIsLimitReached(false);
-      }
-
-      if (res.status === 429 || data?.paywallRequired) {
-      setIsLimitReached(true);
-      }
-      
-      if (data?.paywallRequired) {
-      window.location.href = "/paywall";
-      return;
-      }
+if (typeof data?.remainingDaily === "number") {
+  setIsLimitReached(data.remainingDaily <= 0);
+}
 
       let assistantReply =
   typeof data?.reply === "string" && data.reply.trim()
     ? data.reply
     : "I lost your message while I was thinking. Could you send it again?";
     
-      if (res.status === 429) {
-        setIsLimitReached(true);
-      }
+      
 
       const replyDelay = 700 + Math.min(assistantReply.length * 5, 700);
       await sleep(replyDelay);

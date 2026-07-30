@@ -1534,7 +1534,7 @@ Possibilities include:
 • healthy boundaries
 • peace of mind
 • trust
-• an important relationship (like father, mother, sibling, close friend, bestfriend)
+• an important and meaningful relationship (like father, mother, sibling, close friend, bestfriend)
 • the user's future
 
 Do not assume every conflict requires distance.

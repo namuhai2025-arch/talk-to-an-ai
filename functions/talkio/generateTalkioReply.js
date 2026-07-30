@@ -322,36 +322,18 @@ function sanitizeConversationMessages(messages) {
   );
 }
 
-function buildLanguageControlBlock(
-  latestUserMessage = ""
-) {
+function buildLanguageControlBlock() {
   return `
-LANGUAGE CONTROL — HIGHEST PRIORITY
+LANGUAGE
 
-User's latest message:
+Reply in the same language or natural language mix
+used in the user's latest message.
 
-"${String(latestUserMessage || "").trim()}"
+Do not translate unless the user asks.
 
-Rules:
+Mirror the user's natural conversational style.
 
-- Infer the language directly from the user's latest message.
-- If the user mixes languages, mirror that same mix naturally.
-- Do NOT default to English unless the latest user message is clearly English.
-- Do NOT translate the user's message into English before replying.
-- Do NOT explain what language the user used.
-- The response must feel originally thought in the user's language, not translated.
-- If language control conflicts with any style rule, language control wins.
-- You MUST reply in the exact same language or language mix as the user's latest message.
-
-Before generating your response:
-
-1. Identify the language or mix used by the user.
-2. Lock that language.
-3. Generate the reply only in that language or natural language mix.
-
-If you are about to respond in a different language, stop and correct it.
-
-Wrong-language output is invalid.
+Do not default to English when the user is clearly using another language.
 `.trim();
 }
 
@@ -488,66 +470,56 @@ Behavior:
 
 function buildBrainPrompt({
   systemPrompt,
+  timeContextBlock,
+  nicknameBlock,
+  memoryPromptBlock,
   continuityBlock,
   nativeExpressionBlock,
   emotionalGuidanceBlock,
+  harmfulIntentBlock,
   variationBlock,
   checkinModeBlock,
   languageInstruction,
-  latestUserMessage,
   planConfig,
 }) {
+
   return [
-    buildLanguageControlBlock(
-      latestUserMessage
-    ),
+    buildLanguageControlBlock(),
 
     languageInstruction,
 
     systemPrompt,
 
+    timeContextBlock,
+
+    nicknameBlock,
+
+    memoryPromptBlock,
+
     buildHumanNaturalityBlock(),
 
-    `
-USER PLAN
+`
+PLAN
 
-Plan: ${planConfig?.label || "Free"}
+Tier: ${planConfig?.label || "Free"}
+Reply: ${planConfig?.replyLength || "natural"}
+Depth: ${planConfig?.replyDepth || "natural"}
+Memory: ${planConfig?.memoryLevel || "standard"}
 
-Plan behavior:
-
-- Reply length: ${planConfig?.replyLength}
-- Reply depth: ${planConfig?.replyDepth}
-- Memory level: ${planConfig?.memoryLevel}
-- Context retention: ${planConfig?.contextRetention}
-- Mood awareness: ${planConfig?.moodAwareness}
-- Stoic / grounding access: ${planConfig?.stoicGroundingModes}
-
-Rules:
-
-- Free users still deserve warmth and emotional safety.
-- Paid users can receive more layered and personalized replies.
-- Do not mention subscription plans naturally in conversation.
+Never mention the user's plan in conversation.
 `.trim(),
 
-    `
-LENGTH NATURALITY
+`
+LENGTH
 
-Do not force every reply to be short.
+Match reply length to the moment.
 
-Match reply length to the moment:
+Simple messages can be short.
 
-- casual or simple message → short is okay
-- meaningful or personal message → medium length often feels more natural
-- meaningful sharing → respond with enough emotional presence
-- serious conversations should not feel compressed into one tiny reply
+Meaningful or emotional messages should be long enough
+to feel present, clear, and complete.
 
-Natural conversational flow matters more than strict brevity.
-
-Avoid:
-
-- emotionally empty one-line replies
-- overly compressed empathy
-- cutting off meaningful reflections too early
+Do not pad replies or compress important moments.
 `.trim(),
 
     checkinModeBlock,
@@ -558,7 +530,7 @@ Avoid:
 
     emotionalGuidanceBlock,
 
-    HARMFUL_INTENT_STEERING_PROMPT,
+    harmfulIntentBlock,
 
     variationBlock,
 
@@ -666,7 +638,19 @@ function isTooSimilar(
 async function generateTalkioReply({
   uid,
   modelGenerate,
+
+  /*
+   * Legacy emergency fallback prompt.
+   */
   systemPrompt,
+
+  /*
+   * Small runtime context blocks.
+   */
+  timeContextBlock = "",
+  nicknameBlock = "",
+  memoryPromptBlock = "",
+
   conversationMessages,
   latestUserMessage,
   source = "chat",
@@ -732,21 +716,11 @@ async function generateTalkioReply({
   const languageInstruction = `
 LANGUAGE ENVIRONMENT
 
-Primary language: ${languageEnv.primaryLanguage}
+Primary: ${languageEnv.primaryLanguage}
+Mixed: ${languageEnv.mixed}
+Style: ${languageEnv.conversationalStyle}
 
-Detected languages: ${languageEnv.detectedLanguages.join(", ")}
-
-Mixed language: ${languageEnv.mixed}
-
-Conversational style: ${languageEnv.conversationalStyle}
-
-Mirror the user's natural language rhythm.
-
-Do not translate unnaturally.
-
-Do not default to English.
-
-Sound socially native.
+Reply naturally in that language or language mix.
 `.trim();
 
   let behavioralSafety =
@@ -808,6 +782,11 @@ Sound socially native.
         error?.message || error
       );
     }
+    const harmfulIntentBlock =
+  localSafetyFallback.shouldRedirect &&
+  ["medium","high"].includes(localSafetyFallback.riskLevel)
+    ? HARMFUL_INTENT_STEERING_PROMPT
+    : "";
 
     const variationBlock =
       buildVariationBlock(
@@ -862,14 +841,22 @@ try {
 
 const prompt = buildBrainPrompt({
   systemPrompt: activeSystemPrompt,
+
+  timeContextBlock,
+  nicknameBlock,
+  memoryPromptBlock,
+
   continuityBlock,
   nativeExpressionBlock,
+
   emotionalGuidanceBlock:
     emotional.emotionalGuidanceBlock,
+
+  harmfulIntentBlock,
+
   variationBlock,
   checkinModeBlock,
   languageInstruction,
-  latestUserMessage,
   planConfig,
 });
 

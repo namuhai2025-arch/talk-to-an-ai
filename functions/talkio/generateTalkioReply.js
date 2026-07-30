@@ -32,6 +32,9 @@ const {
 
 const { debugLog } = require("./debugMonitor");
 
+const { detectCapabilities } = require("./router");
+const { buildPrompt } = require("./builder");
+
 // ==============================
 // Helpers
 // ==============================
@@ -694,29 +697,6 @@ Keep it simple.
 Keep it human.
 `.trim(),
 
-    `
-GROUNDING WHEN OVERLOADED
-
-When the user sounds overwhelmed, anxious, drained, or flooded:
-
-- stay present first
-- simplify the moment
-- offer only one small grounding step if natural
-
-Examples:
-
-- "Maybe slow this down for a second."
-- "Get some water first, then we look at it."
-- "Even stepping outside for a minute might help."
-
-Do not:
-
-- give wellness lists
-- sound like a therapist
-- sound like a meditation coach
-- over-prescribe routines
-`.trim(),
-
     checkinModeBlock,
 
     continuityBlock,
@@ -986,30 +966,75 @@ Sound socially native.
         source
       );
 
-    const prompt =
-      buildBrainPrompt({
-        systemPrompt,
-        continuityBlock,
-        nativeExpressionBlock,
-        emotionalGuidanceBlock:
-          emotional.emotionalGuidanceBlock,
-        variationBlock,
-        checkinModeBlock,
-        languageInstruction,
-        latestUserMessage,
-        planConfig,
-      });
+    let capabilities;
+let activeSystemPrompt;
+let promptRoutingMode = "dynamic";
+
+try {
+  capabilities = detectCapabilities({
+    userMessage: latestUserMessage,
+    conversation: safeMessages,
+    memory: continuityMemory,
+  });
+
+  activeSystemPrompt = buildPrompt(capabilities);
+
+  if (!activeSystemPrompt) {
+    throw new Error(
+      "Dynamic prompt builder returned an empty prompt"
+    );
+  }
+} catch (error) {
+  promptRoutingMode = "legacy_fallback";
+
+  console.error("dynamic_prompt_routing_failed", {
+    uid,
+    message: error?.message || String(error),
+  });
+
+  /*
+   * Keep the previous system prompt only as an emergency fallback.
+   * It is no longer appended during normal routed requests.
+   */
+  activeSystemPrompt = String(systemPrompt || "").trim();
+
+  if (!activeSystemPrompt) {
+    throw new Error(
+      "Both dynamic and legacy system prompts are unavailable"
+    );
+  }
+
+  capabilities = ["legacyFallback"];
+}
+
+const prompt = buildBrainPrompt({
+  systemPrompt: activeSystemPrompt,
+  continuityBlock,
+  nativeExpressionBlock,
+  emotionalGuidanceBlock:
+    emotional.emotionalGuidanceBlock,
+  variationBlock,
+  checkinModeBlock,
+  languageInstruction,
+  latestUserMessage,
+  planConfig,
+});
 
     debugLog(
-      "TALKIO_PIPELINE_DEBUG",
-      {
-        uid,
-        responseMode,
-        emotionResult,
-        source,
-        apiCallsPlanned: 1,
-      }
-    );
+  "TALKIO_PIPELINE_DEBUG",
+  {
+    uid,
+    responseMode,
+    emotionResult,
+    source,
+    apiCallsPlanned: 1,
+    promptRoutingMode,
+    capabilities,
+    routedCapabilityCount: capabilities.length,
+    routedPromptCharacters: activeSystemPrompt.length,
+    finalPromptCharacters: prompt.length,
+  }
+);
 
     const raw =
       await modelGenerate({

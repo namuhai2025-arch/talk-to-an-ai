@@ -15,40 +15,92 @@ function detectCapabilities({
 } = {}) {
   const text =
     typeof userMessage === "string"
-      ? userMessage.trim().toLowerCase()
+      ? userMessage
+          .trim()
+          .toLowerCase()
       : "";
 
-  const recentConversation = Array.isArray(conversation)
-    ? conversation
-    : [];
+  const recentConversation =
+    Array.isArray(conversation)
+      ? conversation
+      : [];
 
   const capabilities = [
-    "coreIdentity",
-    "talkioSoul",
-    "humanRealism",
-  ];
+  "coreIdentity",
+  "talkioSoul",
+  "humanRealism",
+];
 
-  if (needsReasoning(text)) {
-    capabilities.push("reasoning");
-  }
+const trustSafeMode =
+  needsTrustSafeMode(text);
 
-  if (needsObservation(text, recentConversation, memory)) {
-    capabilities.push("observation");
-  }
+if (
+  needsReasoning(text) &&
+  !trustSafeMode
+) {
+  capabilities.push("reasoning");
+}
 
-  if (needsJudgment(text)) {
-    capabilities.push("judgment");
-  }
+if (
+  needsObservation(
+    text,
+    recentConversation,
+    memory
+  )
+) {
+  capabilities.push("observation");
+}
 
-  if (needsWisdom(text, recentConversation)) {
-    capabilities.push("wisdom");
-  }
+if (
+  needsRelationalIntelligence(
+    recentConversation,
+    memory
+  )
+) {
+  capabilities.push(
+    "relationalIntelligence"
+  );
+}
 
-  if (needsNervousSystem(text)) {
-    capabilities.push("nervousSystem");
-  }
+if (
+  needsJudgment(text) &&
+  !trustSafeMode
+) {
+  capabilities.push("judgment");
+}
+
+if (
+  needsWisdom(
+    text,
+    recentConversation
+  )
+) {
+  capabilities.push("wisdom");
+}
+
+if (needsNervousSystem(text)) {
+  capabilities.push("nervousSystem");
+}
+
+if (trustSafeMode) {
+  capabilities.push("trustSafe");
+}
 
   return [...new Set(capabilities)];
+}
+
+function needsTrustSafeMode(text) {
+  return (
+    /\bwhy should i trust you\b/.test(text) ||
+    /\bcan i trust you\b/.test(text) ||
+    /\bis this private\b/.test(text) ||
+    /\bis this confidential\b/.test(text) ||
+    /\bwho can see this\b/.test(text) ||
+    /\bdo you store\b/.test(text) ||
+    /\bdo you collect\b/.test(text) ||
+    /\buse this against me\b/.test(text) ||
+    /\bare you safe\b/.test(text)
+  );
 }
 
 function needsReasoning(text) {
@@ -73,6 +125,25 @@ function needsJudgment(text) {
     /\bwhich (one|option|choice|path)\b/.test(text) ||
     /\bis this a mistake\b/.test(text) ||
     /\bam i thinking about this correctly\b/.test(text)
+  );
+}
+
+function needsRelationalIntelligence(
+  conversation,
+  memory
+) {
+  const hasConversationHistory =
+    Array.isArray(conversation) &&
+    conversation.length > 0;
+
+  const hasContinuityMemory =
+    memory &&
+    typeof memory === "object" &&
+    Object.keys(memory).length > 0;
+
+  return (
+    hasConversationHistory ||
+    hasContinuityMemory
   );
 }
 

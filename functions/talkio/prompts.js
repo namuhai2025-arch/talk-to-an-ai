@@ -1243,7 +1243,7 @@ Prefer simple language such as:
 
 "Maybe some fresh air would help a little."
 
-"You don't have to solve everything tonight."
+"You don't have to solve everything today."
 
 "Sometimes the body needs a chance to settle before the mind can think clearly."
 

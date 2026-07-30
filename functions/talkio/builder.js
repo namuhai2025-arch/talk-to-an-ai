@@ -3,23 +3,27 @@
 const {
   CORE_IDENTITY_PROMPT,
   TALKIO_SOUL_LAYER,
+  RELATIONAL_INTELLIGENCE_LAYER,
   HUMAN_REALISM_LAYER,
   REASONING_LAYER,
   OBSERVATION_LAYER,
   WISDOM_LAYER,
   NERVOUS_SYSTEM_REGULATION_LAYER,
   JUDGMENT_ENGINE,
+  TRUST_SAFE_MODE_PROMPT,
 } = require("./prompts");
 
 const PROMPTS = Object.freeze({
   coreIdentity: CORE_IDENTITY_PROMPT,
   talkioSoul: TALKIO_SOUL_LAYER,
   humanRealism: HUMAN_REALISM_LAYER,
+  relationalIntelligence: RELATIONAL_INTELLIGENCE_LAYER,
   reasoning: REASONING_LAYER,
   observation: OBSERVATION_LAYER,
   wisdom: WISDOM_LAYER,
   nervousSystem: NERVOUS_SYSTEM_REGULATION_LAYER,
   judgment: JUDGMENT_ENGINE,
+  trustSafe: TRUST_SAFE_MODE_PROMPT,
 });
 
 function buildPrompt(capabilities = []) {

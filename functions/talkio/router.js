@@ -68,6 +68,16 @@ if (
 ) {
   capabilities.push("judgment");
 }
+/*
+ * V3 English routing.
+ *
+ * Capability detection currently uses English intent signals.
+ * Multilingual routing will be implemented as a dedicated
+ * language-independent signal layer before public expansion.
+ */
+if (needsMoralReflection(text)) {
+  capabilities.push("moralReflection");
+}
 
 if (
   needsWisdom(
@@ -87,6 +97,28 @@ if (trustSafeMode) {
 }
 
   return [...new Set(capabilities)];
+}
+
+function needsMoralReflection(text) {
+  return (
+    /\bcheat(?:ed|ing)?\b/.test(text) ||
+    /\baffair\b/.test(text) ||
+    /\blied\b/.test(text) ||
+    /\blying\b/.test(text) ||
+    /\bbetray(?:ed|al|ing)?\b/.test(text) ||
+    /\bmanipulat(?:e|ed|ing|ion)\b/.test(text) ||
+    /\babuse(?:d|ive)?\b/.test(text) ||
+    /\bstole\b/.test(text) ||
+    /\bsteal(?:ing)?\b/.test(text) ||
+    /\bhurt someone\b/.test(text) ||
+    /\bdid something wrong\b/.test(text) ||
+    /\bam i a bad person\b/.test(text) ||
+    /\bwas i wrong\b/.test(text) ||
+    /\bis this wrong\b/.test(text) ||
+    /\bis it wrong\b/.test(text) ||
+    /\bshould i feel guilty\b/.test(text) ||
+    /\bdo i deserve\b/.test(text)
+  );
 }
 
 function needsTrustSafeMode(text) {

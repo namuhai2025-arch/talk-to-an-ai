@@ -52,6 +52,69 @@ const tests = [
   },
 
   {
+  name: "Moral reflection",
+  input: {
+    userMessage:
+      "I cheated on my partner and I know it was wrong. What should I do?",
+    conversation: [],
+    memory: {},
+  },
+  expected: [
+    "coreIdentity",
+    "talkioSoul",
+    "humanRealism",
+    "reasoning",
+    "judgment",
+    "moralReflection",
+  ],
+},
+
+{
+  name: "Ordinary relationship conflict",
+  input: {
+    userMessage:
+      "My partner and I argued about money last night.",
+    conversation: [],
+    memory: {},
+  },
+  expected: [
+    "coreIdentity",
+    "talkioSoul",
+    "humanRealism",
+  ],
+}, 
+  {
+  name: "Moral statement without decision",
+  input: {
+    userMessage:
+      "I lied to my wife and I feel guilty.",
+    conversation: [],
+    memory: {},
+  },
+  expected: [
+    "coreIdentity",
+    "talkioSoul",
+    "humanRealism",
+    "moralReflection",
+  ],
+},
+
+{
+  name: "Not every mistake is moral reflection",
+  input: {
+    userMessage:
+      "I made a mistake in my spreadsheet.",
+    conversation: [],
+    memory: {},
+  },
+  expected: [
+    "coreIdentity",
+    "talkioSoul",
+    "humanRealism",
+  ],
+},
+
+  {
     name: "Ongoing relational conversation",
     input: {
       userMessage:

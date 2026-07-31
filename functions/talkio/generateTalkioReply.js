@@ -35,6 +35,14 @@ const { debugLog } = require("./debugMonitor");
 const { detectCapabilities } = require("./router");
 const { buildPrompt } = require("./builder");
 
+const {
+  createSemanticClassifier,
+} = require("./semanticClassifier");
+
+const {
+  runSemanticShadow,
+} = require("./semanticShadowRunner");
+
 // ==============================
 // Helpers
 // ==============================
@@ -864,6 +872,80 @@ try {
 
   capabilities = ["legacyFallback"];
 }
+  /*
+|--------------------------------------------------------------------------
+| V4 Semantic Assistant — Shadow Mode
+|--------------------------------------------------------------------------
+|
+| V3 remains the production router.
+|
+| The semantic result is comparison data only.
+| It must never change capabilities, activeSystemPrompt,
+| the final prompt, or the user-facing reply.
+|
+*/
+
+let semanticShadowPromise =
+  Promise.resolve({
+    mode: "shadow",
+    consulted: false,
+    reason:
+      promptRoutingMode ===
+      "legacy_fallback"
+        ? "legacy_fallback_active"
+        : "not_started",
+  });
+
+if (
+  promptRoutingMode === "dynamic"
+) {
+  try {
+    const classify =
+      createSemanticClassifier({
+        modelGenerate,
+      });
+
+    semanticShadowPromise =
+      runSemanticShadow({
+        userMessage:
+          latestUserMessage,
+
+        v3Capabilities:
+          capabilities,
+
+        languageMeta: languageEnv,
+
+        classify,
+      }).catch((error) => ({
+        mode: "shadow",
+        consulted: true,
+        parsed: false,
+        semanticSignals: null,
+        semanticCapabilities: [],
+        comparison: null,
+        reason:
+          "shadow_runner_error",
+        error:
+          error?.message ||
+          String(error),
+      }));
+  } catch (error) {
+    semanticShadowPromise =
+      Promise.resolve({
+        mode: "shadow",
+        consulted: false,
+        parsed: false,
+        semanticSignals: null,
+        semanticCapabilities: [],
+        comparison: null,
+        reason:
+          "shadow_initialization_error",
+        error:
+          error?.message ||
+          String(error),
+      });
+  }
+}
 
 const prompt = buildBrainPrompt({
   systemPrompt: activeSystemPrompt,
@@ -893,7 +975,10 @@ const prompt = buildBrainPrompt({
     responseMode,
     emotionResult,
     source,
-    apiCallsPlanned: 1,
+    apiCallsPlanned:
+    promptRoutingMode === "dynamic"
+    ? "1_or_2"
+    : 1,
     promptRoutingMode,
     capabilities,
     routedCapabilityCount: capabilities.length,
@@ -902,11 +987,103 @@ const prompt = buildBrainPrompt({
   }
 );
 
-    const raw =
-      await modelGenerate({
-        systemPrompt: prompt,
-        messages: safeMessages,
-      });
+    /*
+ * Best-effort semantic shadow logging.
+ *
+ * Do not await this promise.
+ * V4 must never delay or interrupt the production reply.
+ */
+semanticShadowPromise
+  .then((semanticShadowResult) => {
+    debugLog(
+      "TALKIO_SEMANTIC_SHADOW",
+      {
+        uid,
+
+        consulted:
+          semanticShadowResult
+            ?.consulted === true,
+
+        gateReason:
+          semanticShadowResult
+            ?.gate?.reason ||
+          null,
+
+        resultReason:
+          semanticShadowResult
+            ?.reason ||
+          null,
+
+        parsed:
+          semanticShadowResult
+            ?.parsed === true,
+
+        detectedLanguage:
+          semanticShadowResult
+            ?.semanticSignals
+            ?.detectedLanguage ||
+          null,
+
+        isMixedLanguage:
+          semanticShadowResult
+            ?.semanticSignals
+            ?.isMixedLanguage ??
+          null,
+
+        semanticConfidence:
+          semanticShadowResult
+            ?.semanticSignals
+            ?.confidence ??
+          null,
+
+        v3Capabilities:
+          capabilities,
+
+        semanticCapabilities:
+          semanticShadowResult
+            ?.semanticCapabilities ||
+          [],
+
+        agrees:
+          semanticShadowResult
+            ?.comparison?.agrees ??
+          null,
+
+        addedBySemantic:
+          semanticShadowResult
+            ?.comparison
+            ?.addedBySemantic ||
+          [],
+
+        missingFromSemantic:
+          semanticShadowResult
+            ?.comparison
+            ?.missingFromSemantic ||
+          [],
+      }
+    );
+  })
+  .catch((error) => {
+    debugLog(
+      "TALKIO_SEMANTIC_SHADOW",
+      {
+        uid,
+        consulted: true,
+        parsed: false,
+        resultReason:
+          "shadow_logging_error",
+        error:
+          error?.message ||
+          String(error),
+      }
+    );
+  });
+
+const raw =
+  await modelGenerate({
+    systemPrompt: prompt,
+    messages: safeMessages,
+  });
 
     const structuredResult =
       parseTalkioStructuredResponse(

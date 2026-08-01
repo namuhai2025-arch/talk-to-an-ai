@@ -44,6 +44,10 @@
   } = require("./semanticShadowRunner");
 
   const {
+  mergeSemanticCapabilities,
+} = require("./semanticCapabilityMerger");
+
+  const {
     recordSemanticShadowMetrics,
   } = require("../logging/semanticMetrics");
 
@@ -836,25 +840,37 @@
           source
         );
 
-      let capabilities;
-  let activeSystemPrompt;
-  let promptRoutingMode = "dynamic";
+      let v3Capabilities;
+      let finalCapabilities;
+      let activeSystemPrompt;
+      let promptRoutingMode = "dynamic";
 
-  try {
-    capabilities = detectCapabilities({
-      userMessage: latestUserMessage,
-      conversation: safeMessages,
-      memory: continuityMemory,
+    try {
+  v3Capabilities = detectCapabilities({
+    userMessage: latestUserMessage,
+    conversation: safeMessages,
+    memory: continuityMemory,
+  });
+
+  const capabilityMerge =
+    mergeSemanticCapabilities({
+      v3Capabilities,
+      semanticResult: null,
     });
 
-    activeSystemPrompt = buildPrompt(capabilities);
+  finalCapabilities =
+    capabilityMerge.finalCapabilities;
 
-    if (!activeSystemPrompt) {
-      throw new Error(
-        "Dynamic prompt builder returned an empty prompt"
-      );
-    }
-  } catch (error) {
+  activeSystemPrompt =
+    buildPrompt(finalCapabilities);
+
+  if (!activeSystemPrompt) {
+    throw new Error(
+      "Dynamic prompt builder returned an empty prompt"
+    );
+  }
+} catch (error) {
+
     promptRoutingMode = "legacy_fallback";
 
     console.error("dynamic_prompt_routing_failed", {
@@ -874,7 +890,8 @@
       );
     }
 
-    capabilities = ["legacyFallback"];
+    v3Capabilities = ["legacyFallback"];
+    finalCapabilities = ["legacyFallback"];
   }
     /*
   |--------------------------------------------------------------------------
@@ -914,8 +931,7 @@
           userMessage:
             latestUserMessage,
 
-          v3Capabilities:
-            capabilities,
+          v3Capabilities,
 
           languageMeta: languageEnv,
 
@@ -984,8 +1000,10 @@
       ? "1_or_2"
       : 1,
       promptRoutingMode,
-      capabilities,
-      routedCapabilityCount: capabilities.length,
+      v3Capabilities,
+      finalCapabilities,
+      routedCapabilityCount:
+      finalCapabilities.length,
       routedPromptCharacters: activeSystemPrompt.length,
       finalPromptCharacters: prompt.length,
     }
@@ -1040,8 +1058,7 @@
             ?.confidence ??
           null,
 
-        v3Capabilities:
-          capabilities,
+        v3Capabilities,
 
         semanticCapabilities:
           semanticShadowResult

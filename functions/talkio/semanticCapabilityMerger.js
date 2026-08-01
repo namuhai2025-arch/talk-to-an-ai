@@ -1,14 +1,40 @@
 "use strict";
 
 /*
- * Step 11.1
+|--------------------------------------------------------------------------
+| V4 Semantic Capability Merger
+|--------------------------------------------------------------------------
+|
+| V3 remains the foundation and authority.
+|
+| V4 may only add approved capabilities when:
+| - it was consulted
+| - its output parsed successfully
+| - its semantic confidence is at least 0.95
+|
+| V4 can never remove or replace a V3 capability.
+|
+*/
+
+const SEMANTIC_PROMOTION_THRESHOLD = 0.95;
+
+/*
+ * Begin with capabilities that enrich reflection
+ * without changing safety or moral authority.
  *
- * Central decision boundary between the existing V3 router
- * and future V4 semantic recommendations.
- *
- * In this first version, V3 remains fully authoritative.
- * Semantic capabilities are inspected but never promoted.
+ * Deliberately excluded for the first rollout:
+ * - judgment
+ * - moralReflection
+ * - nervousSystem
+ * - trustSafe
  */
+const APPROVED_SEMANTIC_CAPABILITIES =
+  Object.freeze([
+    "reasoning",
+    "observation",
+    "relationalIntelligence",
+    "wisdom",
+  ]);
 
 function normalizeCapabilities(value) {
   if (!Array.isArray(value)) {
@@ -17,13 +43,31 @@ function normalizeCapabilities(value) {
 
   return [
     ...new Set(
-      value.filter(
-        (capability) =>
-          typeof capability === "string" &&
+      value
+        .filter(
+          (capability) =>
+            typeof capability ===
+              "string" &&
+            capability.trim()
+        )
+        .map((capability) =>
           capability.trim()
-      )
+        )
     ),
   ];
+}
+
+function getSemanticConfidence(
+  semanticResult
+) {
+  const confidence =
+    semanticResult
+      ?.semanticSignals
+      ?.confidence;
+
+  return Number.isFinite(confidence)
+    ? confidence
+    : null;
 }
 
 function mergeSemanticCapabilities({
@@ -41,10 +85,12 @@ function mergeSemanticCapabilities({
         ?.semanticCapabilities
     );
 
-  return {
-    /*
-     * Step 11.1 deliberately preserves V3 behavior.
-     */
+  const semanticConfidence =
+    getSemanticConfidence(
+      semanticResult
+    );
+
+  const baseResult = {
     finalCapabilities: [
       ...normalizedV3,
     ],
@@ -56,15 +102,97 @@ function mergeSemanticCapabilities({
 
     addedCapabilities: [],
 
+    semanticConfidence,
+
+    promotionThreshold:
+      SEMANTIC_PROMOTION_THRESHOLD,
+
     promoted: false,
+  };
+
+  if (
+    semanticResult?.consulted !== true
+  ) {
+    return {
+      ...baseResult,
+      reason:
+        "semantic_not_consulted",
+    };
+  }
+
+  if (
+    semanticResult?.parsed !== true
+  ) {
+    return {
+      ...baseResult,
+      reason:
+        "semantic_not_parsed",
+    };
+  }
+
+  if (
+    semanticConfidence === null
+  ) {
+    return {
+      ...baseResult,
+      reason:
+        "semantic_confidence_missing",
+    };
+  }
+
+  if (
+    semanticConfidence <
+    SEMANTIC_PROMOTION_THRESHOLD
+  ) {
+    return {
+      ...baseResult,
+      reason:
+        "semantic_confidence_below_threshold",
+    };
+  }
+
+  const approvedAdditions =
+    semanticCapabilities.filter(
+      (capability) =>
+        APPROVED_SEMANTIC_CAPABILITIES
+          .includes(capability) &&
+        !normalizedV3.includes(
+          capability
+        )
+    );
+
+  if (
+    approvedAdditions.length === 0
+  ) {
+    return {
+      ...baseResult,
+      reason:
+        "no_approved_semantic_additions",
+    };
+  }
+
+  return {
+    ...baseResult,
+
+    finalCapabilities: [
+      ...normalizedV3,
+      ...approvedAdditions,
+    ],
+
+    addedCapabilities:
+      approvedAdditions,
+
+    promoted: true,
 
     reason:
-      semanticResult?.consulted === true
-        ? "semantic_observed_only"
-        : "semantic_not_consulted",
+      "approved_semantic_capabilities_promoted",
   };
 }
 
 module.exports = {
+  SEMANTIC_PROMOTION_THRESHOLD,
+  APPROVED_SEMANTIC_CAPABILITIES,
+  normalizeCapabilities,
+  getSemanticConfidence,
   mergeSemanticCapabilities,
 };

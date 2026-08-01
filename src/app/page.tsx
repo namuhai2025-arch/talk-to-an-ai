@@ -20,6 +20,7 @@ import { App } from "@capacitor/app";
 
 import ChatList from "@/components/chat/ChatList";
 import ChatComposer from "@/components/chat/ChatComposer";
+import ReflectionsPanel from "@/components/reflections/ReflectionsPanel";
 
 import {
   GoogleAuthProvider,
@@ -252,6 +253,9 @@ const [signingProvider, setSigningProvider] =
 
   const [feedbackAsked, setFeedbackAsked] = useState(false);
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
+
+  const [activeTab, setActiveTab] =
+  useState<"chat" | "reflections">("chat");
 
   const startupServicesUidRef = useRef<string | null>(null);
 
@@ -1604,7 +1608,10 @@ if (
         type="button"
         onClick={() => {
   localStorage.setItem("talkio_review_prompt_completed", "true");
-  window.open("https://apps.apple.com/", "_blank");
+  window.open(
+  "https://apps.apple.com/us/app/talkio-reflect-ai-companion/id6770395386/",
+  "_blank"
+);
   setShowReviewPrompt(false);
 }}
         className="flex w-full items-center justify-between rounded-none border border-stone-200 bg-white px-4 py-3 text-left shadow-sm active:scale-[0.99]"
@@ -1636,77 +1643,122 @@ if (
 
   <div className="relative z-20 flex items-start justify-between gap-3 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+64px)]">
   <div>
-    <h1 className="text-[2.15rem] font-semibold tracking-[-0.04em]">Talkio</h1>
+    <h1 className="text-[2.15rem] font-semibold tracking-[-0.04em]">
+      Talkio
+    </h1>
+
     <p className="mt-1 text-sm text-stone-500">
-  Reflect. Find Clarity. Grow. 
-</p>
+      You don&apos;t have to carry it all. Let it out.
+    </p>
   </div>
 
   <div className="relative z-30 flex shrink-0 items-center gap-2 pt-1">
-  <button
-    type="button"
-    className="rounded-none border border-stone-200 bg-white/60  px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
-    onClick={() => (window.location.href = "/settings")}
-  >
-    ⚙️
-  </button>
+    <button
+      type="button"
+      aria-label="Open settings"
+      className="rounded-none border border-stone-200 bg-white/60 px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
+      onClick={() => {
+        window.location.href = "/settings";
+      }}
+    >
+      ⚙️
+    </button>
 
-  <button
-    type="button"
-    className="rounded-none border border-stone-200 bg-white/60 px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
-    disabled={loading || messages.length <= 1}
-    onClick={clearChat}
-  >
-    Clear 
-  </button>
-</div>
-</div>
-<ChatList
-  messages={messages}
-  isLimitReached={isLimitReached}
-  showTyping={showTyping}
-  bottomRef={bottomRef}
-/>     
-      {!isLimitReached && (
-  <>
-    {crisisLock && (
-      <div className="mx-3 mb-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
-        <p>
-          Talkio paused this conversation because it mentioned serious violence
-          or immediate harm. If anyone may be in danger, contact local emergency
-          services now.
-        </p>
-
-        <button
-          type="button"
-          onClick={clearChat}
-          className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm"
-        >
-          Start new conversation
-        </button>
-      </div>
+    {activeTab === "chat" && (
+      <button
+        type="button"
+        className="rounded-none border border-stone-200 bg-white/60 px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
+        disabled={loading || messages.length <= 1}
+        onClick={clearChat}
+      >
+        Clear
+      </button>
     )}
+  </div>
+</div>
 
-    <ChatComposer
-      value={input}
-      onChange={setInput}
-      onSend={() => sendMessage()}
-      disabled={
-        loading ||
-        showSafety ||
-        crisisLock ||
-        isLimitReached
-      }
-      placeholder={
-        crisisLock
-          ? "Chat paused for safety"
-          : isLimitReached
-            ? "Daily free limit reached."
-            : "Type your message..."
-      }
+<div className="mx-4 mb-3 grid shrink-0 grid-cols-2 rounded-2xl border border-stone-200 bg-white/60 p-1 shadow-sm">
+  <button
+    type="button"
+    onClick={() => setActiveTab("chat")}
+    aria-pressed={activeTab === "chat"}
+    className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+      activeTab === "chat"
+        ? "bg-stone-900 text-white shadow-sm"
+        : "text-stone-500 hover:text-stone-800"
+    }`}
+  >
+    💬 Chat
+  </button>
+
+  <button
+    type="button"
+    onClick={() => setActiveTab("reflections")}
+    aria-pressed={activeTab === "reflections"}
+    className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+      activeTab === "reflections"
+        ? "bg-stone-900 text-white shadow-sm"
+        : "text-stone-500 hover:text-stone-800"
+    }`}
+  >
+    ✦ Reflections
+  </button>
+</div>
+ 
+ {activeTab === "chat" ? (
+  <>
+    <ChatList
+      messages={messages}
+      isLimitReached={isLimitReached}
+      showTyping={showTyping}
+      bottomRef={bottomRef}
     />
+
+    {!isLimitReached && (
+      <>
+        {crisisLock && (
+          <div className="mx-3 mb-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
+            <p>
+              Talkio paused this conversation because it mentioned serious
+              violence or immediate harm. If anyone may be in danger, contact
+              local emergency services now.
+            </p>
+
+            <button
+              type="button"
+              onClick={clearChat}
+              className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm"
+            >
+              Start new conversation
+            </button>
+          </div>
+        )}
+
+        <ChatComposer
+          value={input}
+          onChange={setInput}
+          onSend={() => sendMessage()}
+          disabled={
+            loading ||
+            showSafety ||
+            crisisLock ||
+            isLimitReached
+          }
+          placeholder={
+            crisisLock
+              ? "Chat paused for safety"
+              : isLimitReached
+                ? "Daily free limit reached."
+                : "Type your message..."
+          }
+        />
+      </>
+    )}
   </>
+) : (
+  <ReflectionsPanel />
 )}
+
  </main>
   );
 }

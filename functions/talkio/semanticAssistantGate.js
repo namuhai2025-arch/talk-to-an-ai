@@ -33,6 +33,9 @@ const SPECIALIZED_CAPABILITIES = Object.freeze([
   "wisdom",
 ]);
 
+const MIN_NON_ENGLISH_WORDS = 3;
+const MIN_BASE_ONLY_WORDS = 6;
+
 function normalizeCapabilities(capabilities) {
   if (!Array.isArray(capabilities)) {
     return [];
@@ -102,6 +105,10 @@ function shouldConsultSemanticAssistant({
       v3Capabilities
     );
 
+  const wordCount =
+    text.split(/\s+/).filter(Boolean)
+      .length;
+
   if (!text) {
     return {
       consult: false,
@@ -110,9 +117,38 @@ function shouldConsultSemanticAssistant({
     };
   }
 
+  const mixedLanguage =
+    looksMixedLanguage({
+      userMessage: text,
+      languageMeta,
+    });
+
+  if (
+    mixedLanguage &&
+    wordCount >= MIN_NON_ENGLISH_WORDS
+  ) {
+    return {
+      consult: true,
+      reason: "mixed_language",
+      confidence: 0.9,
+    };
+  }
+
+  if (
+    containsNonAsciiText(text) &&
+    wordCount >= MIN_NON_ENGLISH_WORDS
+  ) {
+    return {
+      consult: true,
+      reason:
+        "non_english_or_unicode_text",
+      confidence: 0.8,
+    };
+  }
+
   /*
-   * V3 already found a clear specialist route.
-   * Do not spend another model call.
+   * A clear V3 specialist route is sufficient
+   * for ordinary-language messages.
    */
   if (
     hasSpecializedCapability(
@@ -123,14 +159,10 @@ function shouldConsultSemanticAssistant({
       consult: false,
       reason:
         "v3_specialized_route_found",
-      confidence: 0.95,
+      confidence: 0.9,
     };
   }
 
-  /*
-   * Clear structural continuity is already handled
-   * by V3 relational intelligence.
-   */
   if (
     capabilities.includes(
       "relationalIntelligence"
@@ -140,35 +172,7 @@ function shouldConsultSemanticAssistant({
       consult: false,
       reason:
         "v3_relational_route_found",
-      confidence: 0.9,
-    };
-  }
-
-  const mixedLanguage =
-    looksMixedLanguage({
-      userMessage: text,
-      languageMeta,
-    });
-
-  if (mixedLanguage) {
-    return {
-      consult: true,
-      reason: "mixed_language",
-      confidence: 0.9,
-    };
-  }
-
-  /*
-   * Non-ASCII text is not automatically a problem.
-   * It is only a signal that English regex routing
-   * may not fully understand the message.
-   */
-  if (containsNonAsciiText(text)) {
-    return {
-      consult: true,
-      reason:
-        "non_english_or_unicode_text",
-      confidence: 0.75,
+      confidence: 0.85,
     };
   }
 
@@ -185,16 +189,15 @@ function shouldConsultSemanticAssistant({
         capabilities.includes(capability)
     );
 
-  const wordCount =
-    text.split(/\s+/).filter(Boolean)
-      .length;
-
-  if (baseOnly && wordCount >= 8) {
+  if (
+    baseOnly &&
+    wordCount >= MIN_BASE_ONLY_WORDS
+  ) {
     return {
       consult: true,
       reason:
         "substantial_message_base_route_only",
-      confidence: 0.7,
+      confidence: 0.75,
     };
   }
 
@@ -208,6 +211,8 @@ function shouldConsultSemanticAssistant({
 module.exports = {
   BASE_CAPABILITIES,
   SPECIALIZED_CAPABILITIES,
+  MIN_NON_ENGLISH_WORDS,
+  MIN_BASE_ONLY_WORDS,
   normalizeCapabilities,
   containsNonAsciiText,
   looksMixedLanguage,

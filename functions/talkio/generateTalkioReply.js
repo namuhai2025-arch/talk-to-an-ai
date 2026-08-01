@@ -841,28 +841,132 @@
         );
 
       let v3Capabilities;
-      let finalCapabilities;
-      let activeSystemPrompt;
-      let promptRoutingMode = "dynamic";
+let finalCapabilities;
+let activeSystemPrompt;
+let capabilityMerge;
 
-    try {
-  v3Capabilities = detectCapabilities({
-    userMessage: latestUserMessage,
-    conversation: safeMessages,
-    memory: continuityMemory,
-  });
+let promptRoutingMode =
+  "dynamic";
 
-  const capabilityMerge =
+let semanticShadowResult = {
+  mode: "shadow",
+  consulted: false,
+  parsed: false,
+  semanticSignals: null,
+  semanticCapabilities: [],
+  comparison: null,
+  reason: "not_started",
+};
+
+let semanticShadowPromise =
+  Promise.resolve(
+    semanticShadowResult
+  );
+
+try {
+  /*
+   * V3 remains the primary router.
+   */
+  v3Capabilities =
+    detectCapabilities({
+      userMessage:
+        latestUserMessage,
+      conversation:
+        safeMessages,
+      memory:
+        continuityMemory,
+    });
+
+  /*
+  |--------------------------------------------------------------------------
+  | V4 Semantic Assistant — Live Advisory Mode
+  |--------------------------------------------------------------------------
+  |
+  | The semantic gate decides whether consultation is useful.
+  |
+  | When consulted, V4 may recommend approved capabilities.
+  | The capability merger remains authoritative:
+  |
+  | - confidence must be at least 0.95
+  | - only approved capabilities may be added
+  | - no V3 capability may be removed
+  | - invalid or uncertain results preserve V3 unchanged
+  |
+  */
+
+  try {
+    const classify =
+      createSemanticClassifier({
+        modelGenerate,
+      });
+
+    semanticShadowPromise =
+      runSemanticShadow({
+        userMessage:
+          latestUserMessage,
+
+        v3Capabilities,
+
+        languageMeta:
+          languageEnv,
+
+        classify,
+      }).catch((error) => ({
+        mode: "shadow",
+        consulted: true,
+        parsed: false,
+        semanticSignals: null,
+        semanticCapabilities: [],
+        comparison: null,
+        reason:
+          "shadow_runner_error",
+        error:
+          error?.message ||
+          String(error),
+      }));
+  } catch (error) {
+    semanticShadowPromise =
+      Promise.resolve({
+        mode: "shadow",
+        consulted: false,
+        parsed: false,
+        semanticSignals: null,
+        semanticCapabilities: [],
+        comparison: null,
+        reason:
+          "shadow_initialization_error",
+        error:
+          error?.message ||
+          String(error),
+      });
+  }
+
+  /*
+   * This await is intentional.
+   *
+   * Skipped messages resolve locally without a
+   * semantic model call. Consulted messages wait
+   * for V4 so an approved recommendation can affect
+   * the production prompt.
+   */
+  semanticShadowResult =
+    await semanticShadowPromise;
+
+  capabilityMerge =
     mergeSemanticCapabilities({
       v3Capabilities,
-      semanticResult: null,
+      semanticResult:
+        semanticShadowResult,
     });
 
   finalCapabilities =
-    capabilityMerge.finalCapabilities;
+    capabilityMerge
+      .finalCapabilities;
 
   activeSystemPrompt =
-    buildPrompt(finalCapabilities);
+    buildPrompt(
+      finalCapabilities
+    );
 
   if (!activeSystemPrompt) {
     throw new Error(
@@ -870,102 +974,68 @@
     );
   }
 } catch (error) {
+  promptRoutingMode =
+    "legacy_fallback";
 
-    promptRoutingMode = "legacy_fallback";
-
-    console.error("dynamic_prompt_routing_failed", {
+  console.error(
+    "dynamic_prompt_routing_failed",
+    {
       uid,
-      message: error?.message || String(error),
-    });
-
-    /*
-    * Keep the previous system prompt only as an emergency fallback.
-    * It is no longer appended during normal routed requests.
-    */
-    activeSystemPrompt = String(systemPrompt || "").trim();
-
-    if (!activeSystemPrompt) {
-      throw new Error(
-        "Both dynamic and legacy system prompts are unavailable"
-      );
+      message:
+        error?.message ||
+        String(error),
     }
+  );
 
-    v3Capabilities = ["legacyFallback"];
-    finalCapabilities = ["legacyFallback"];
+  /*
+   * Keep the previous system prompt only as an
+   * emergency fallback.
+   */
+  activeSystemPrompt =
+    String(
+      systemPrompt || ""
+    ).trim();
+
+  if (!activeSystemPrompt) {
+    throw new Error(
+      "Both dynamic and legacy system prompts are unavailable"
+    );
   }
-    /*
-  |--------------------------------------------------------------------------
-  | V4 Semantic Assistant — Shadow Mode
-  |--------------------------------------------------------------------------
-  |
-  | V3 remains the production router.
-  |
-  | The semantic result is comparison data only.
-  | It must never change capabilities, activeSystemPrompt,
-  | the final prompt, or the user-facing reply.
-  |
-  */
 
-  let semanticShadowPromise =
-    Promise.resolve({
-      mode: "shadow",
-      consulted: false,
-      reason:
-        promptRoutingMode ===
-        "legacy_fallback"
-          ? "legacy_fallback_active"
-          : "not_started",
-    });
+  v3Capabilities = [
+    "legacyFallback",
+  ];
 
-  if (
-    promptRoutingMode === "dynamic"
-  ) {
-    try {
-      const classify =
-        createSemanticClassifier({
-          modelGenerate,
-        });
+  finalCapabilities = [
+    "legacyFallback",
+  ];
 
-      semanticShadowPromise =
-        runSemanticShadow({
-          userMessage:
-            latestUserMessage,
+  capabilityMerge = {
+    finalCapabilities,
+    v3Capabilities,
+    semanticCapabilities: [],
+    addedCapabilities: [],
+    promoted: false,
+    reason:
+      "legacy_fallback_active",
+  };
 
-          v3Capabilities,
+  semanticShadowResult = {
+    mode: "shadow",
+    consulted: false,
+    parsed: false,
+    semanticSignals: null,
+    semanticCapabilities: [],
+    comparison: null,
+    reason:
+      "legacy_fallback_active",
+  };
 
-          languageMeta: languageEnv,
-
-          classify,
-        }).catch((error) => ({
-          mode: "shadow",
-          consulted: true,
-          parsed: false,
-          semanticSignals: null,
-          semanticCapabilities: [],
-          comparison: null,
-          reason:
-            "shadow_runner_error",
-          error:
-            error?.message ||
-            String(error),
-        }));
-    } catch (error) {
-      semanticShadowPromise =
-        Promise.resolve({
-          mode: "shadow",
-          consulted: false,
-          parsed: false,
-          semanticSignals: null,
-          semanticCapabilities: [],
-          comparison: null,
-          reason:
-            "shadow_initialization_error",
-          error:
-            error?.message ||
-            String(error),
-        });
-    }
-  }
+  semanticShadowPromise =
+    Promise.resolve(
+      semanticShadowResult
+    );
+}
 
   const prompt = buildBrainPrompt({
     systemPrompt: activeSystemPrompt,
@@ -995,26 +1065,50 @@
       responseMode,
       emotionResult,
       source,
+
       apiCallsPlanned:
-      promptRoutingMode === "dynamic"
-      ? "1_or_2"
-      : 1,
+  semanticShadowResult
+    ?.consulted === true
+    ? 2
+    : 1,
+
       promptRoutingMode,
       v3Capabilities,
       finalCapabilities,
+
+      semanticPromoted:
+      capabilityMerge
+      ?.promoted === true,
+
+      semanticPromotionReason:
+      capabilityMerge
+      ?.reason ||
+      null,
+
+      semanticAddedCapabilities:
+      capabilityMerge
+      ?.addedCapabilities ||
+  [],
+
       routedCapabilityCount:
       finalCapabilities.length,
-      routedPromptCharacters: activeSystemPrompt.length,
-      finalPromptCharacters: prompt.length,
-    }
-  );
+
+    routedPromptCharacters:
+      activeSystemPrompt.length,
+
+    finalPromptCharacters:
+      prompt.length,
+  }
+);
 
       /*
-  * Best-effort semantic shadow logging.
-  *
-  * Do not await this promise.
-  * V4 must never delay or interrupt the production reply.
-  */
+ * Semantic advisory logging.
+ *
+ * The semantic result has already resolved above.
+ * This block records the result without changing
+ * the completed routing decision.
+ */
+
   semanticShadowPromise
   .then((semanticShadowResult) => {
     debugLog(

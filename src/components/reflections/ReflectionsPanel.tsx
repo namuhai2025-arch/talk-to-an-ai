@@ -313,10 +313,7 @@ export default function ReflectionsPanel() {
           </h2>
 
           <p className="mt-3 text-sm leading-6 text-stone-600">
-            Talkio looks at the conversations from your
-            previous week and gently reflects what seemed
-            meaningful—without judging you or turning your
-            honesty into a score.
+            Talkio gently reflects on your conversations from the past week to help you understand yourself a little better, notice meaningful patterns, and move forward with greater clarity—without judgment or turning your honesty into a score.
           </p>
         </div>
 
@@ -347,15 +344,54 @@ export default function ReflectionsPanel() {
             </p>
 
             <button
-              type="button"
-              onClick={generateReflection}
-              disabled={generating}
-              className="mt-5 w-full rounded-2xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {generating
-                ? "Preparing your reflection…"
-                : "Generate my weekly reflection"}
-            </button>
+  type="button"
+  onClick={generateReflection}
+  disabled={generating}
+  className="
+    mt-5
+    flex
+    w-full
+    items-center
+    justify-center
+    gap-2
+    rounded-2xl
+    bg-gradient-to-br
+    from-[#D9B96E]
+    to-[#C59A43]
+    px-5
+    py-3.5
+    text-sm
+    font-semibold
+    text-[#342A18]
+    shadow-[0_8px_24px_rgba(197,154,67,0.28)]
+    transition-all
+    duration-200
+    hover:from-[#E0C47E]
+    hover:to-[#B98C37]
+    hover:shadow-[0_10px_28px_rgba(197,154,67,0.36)]
+    active:scale-[0.98]
+    disabled:cursor-not-allowed
+    disabled:from-[#DDD0AA]
+    disabled:to-[#CDBE96]
+    disabled:text-[#756646]
+    disabled:shadow-none
+  "
+>
+  <span
+    aria-hidden="true"
+    className={`text-lg text-emerald-700 ${
+      generating ? "animate-pulse" : ""
+    }`}
+  >
+    ✦
+  </span>
+
+  <span>
+    {generating
+      ? "Preparing your reflection…"
+      : "Generate my weekly reflection"}
+  </span>
+</button>
           </div>
         ) : (
           <>

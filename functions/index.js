@@ -2,10 +2,12 @@
 
 import admin from "firebase-admin";
 import { onRequest } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { createRequire } from "module";
 
 import { defineSecret } from "firebase-functions/params";
 import { Resend } from "resend";
+import { GoogleGenAI } from "@google/genai";
 
 import {
   getApps,
@@ -15,7 +17,7 @@ import {
 const require = createRequire(import.meta.url);
 const { getTalkioPlan } = require("./talkio/planConfig");
 const logger = require("firebase-functions/logger");
-const { GoogleGenAI } = require("@google/genai");
+
 const crypto = require("crypto");
 const { Redis } = require("@upstash/redis");
 
@@ -31,6 +33,16 @@ const {
   defaultTalkioProfile,
   getTodayDateString,
 } = require("./lib/talkioMemory");
+
+const {
+  saveConversationTurn,
+  listWeeklyReflections,
+} = require("./talkio/reflections/reflectionStorage");
+
+const {
+  shouldGenerateInCurrentHour,
+  generateWeeklyReflectionForUser,
+} = require("./talkio/reflections/generateWeeklyReflection");
 
 const {
   extractPeopleFromMessage,
@@ -1671,6 +1683,8 @@ export const deleteMyAccount = onRequest({ cors: true }, async (req, res) => {
       deleteCollection(`users/${uid}/memory_meta`),
       deleteCollection(`users/${uid}/presence`),
       deleteCollection(`users/${uid}/device_tokens`),
+      deleteCollection(`users/${uid}/conversation_messages`),
+      deleteCollection(`users/${uid}/weekly_reflections`),
     ]);
 
     // Delete known top-level user-owned docs
@@ -2181,6 +2195,32 @@ logInfo("talkio_reply_generated", {
   ),
 });
 
+  // ==============================
+// WEEKLY REFLECTION MESSAGE STORAGE
+// ==============================
+if (!blocked && finalReply) {
+  try {
+    await saveConversationTurn({
+      uid,
+      userMessage: latestUserMessage,
+      assistantMessage: finalReply,
+      source: body?.source || "chat",
+      language: languageMeta?.language || "",
+      safety,
+    });
+  } catch (storageError) {
+    /*
+     * Reflection storage must never prevent the user
+     * from receiving a successful Talkio reply.
+     */
+    logError("conversation_turn_storage_failed", storageError, {
+      uid,
+      source: body?.source || "chat",
+      path: replyPath,
+    });
+  }
+}
+
     // =========================
     // 📤 10. RESPONSE
     // =========================
@@ -2255,3 +2295,134 @@ res.status(500).json({
 });
   }
 });
+// ==============================
+// WEEKLY REFLECTION HTTP ENDPOINTS
+// ==============================
+
+export const generateMyWeeklyReflection = onRequest(
+  {
+    cors: true,
+    timeoutSeconds: 180,
+    memory: "512MiB",
+  },
+  async (req, res) => {
+    let uid = "unknown";
+
+    try {
+      if (req.method === "OPTIONS") {
+        res.status(204).send("");
+        return;
+      }
+
+      if (req.method !== "POST") {
+        res.status(405).json({
+          ok: false,
+          error: "Method not allowed",
+        });
+        return;
+      }
+
+      const auth = await requireVerifiedUser(req);
+      uid = auth.uid;
+
+      const userSnapshot = await db
+        .collection("users")
+        .doc(uid)
+        .get();
+
+      const user = userSnapshot.exists
+        ? userSnapshot.data() || {}
+        : {};
+
+      const result = await generateWeeklyReflectionForUser({
+        uid,
+        timezone:
+          typeof user.timezone === "string" && user.timezone.trim()
+            ? user.timezone.trim()
+            : "UTC",
+        nickname:
+          typeof user.nickname === "string"
+            ? user.nickname.trim()
+            : "",
+        force: req.body?.force === true,
+      });
+
+      res.status(200).json({
+        ok: true,
+        ...result,
+      });
+    } catch (error) {
+      logError("manual_weekly_reflection_failed", error, {
+        uid,
+      });
+
+      res.status(error?.statusCode || 500).json({
+        ok: false,
+        error:
+          error?.message ||
+          "Weekly reflection generation failed",
+      });
+    }
+  }
+);
+
+export const getMyWeeklyReflections = onRequest(
+  {
+    cors: true,
+  },
+  async (req, res) => {
+    let uid = "unknown";
+
+    try {
+      if (req.method === "OPTIONS") {
+        res.status(204).send("");
+        return;
+      }
+
+      if (
+        req.method !== "GET" &&
+        req.method !== "POST"
+      ) {
+        res.status(405).json({
+          ok: false,
+          error: "Method not allowed",
+        });
+        return;
+      }
+
+      const auth = await requireVerifiedUser(req);
+      uid = auth.uid;
+
+      const requestedLimit = Number(
+        req.query?.limit ||
+        req.body?.limit ||
+        12
+      );
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(requestedLimit, 52)
+          : 12;
+
+      const reflections =
+        await listWeeklyReflections(uid, limit);
+
+      res.status(200).json({
+        ok: true,
+        reflections,
+      });
+    } catch (error) {
+      logError("weekly_reflection_list_failed", error, {
+        uid,
+      });
+
+      res.status(error?.statusCode || 500).json({
+        ok: false,
+        error:
+          error?.message ||
+          "Could not load reflections",
+      });
+    }
+  }
+);

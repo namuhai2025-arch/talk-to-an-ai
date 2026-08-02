@@ -511,7 +511,7 @@ return false;
           </h1>
 
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-stone-700">
-            Start free. Vent, reflect, and feel lighter.
+            Start free. Reflect, Find Clarity, and Grow.
             Upgrade only when you want deeper access.
           </p>
         </section>

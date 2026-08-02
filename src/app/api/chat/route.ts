@@ -5,12 +5,14 @@ import { corsEmpty, corsJson } from "./_cors";
 const FIREBASE_FUNCTION_URL =
   "https://generatetalkioreply-ndury54xsq-uc.a.run.app";
 
+const FIREBASE_TIMEOUT_MS = 45_000;
+
 export async function OPTIONS(req: Request) {
   return corsEmpty(204, req);
 }
 
 export async function POST(req: Request) {
-  const reply = (data: any, status = 200) => {
+  const reply = (data: unknown, status = 200) => {
     return corsJson(data, { status, req });
   };
 
@@ -28,16 +30,24 @@ export async function POST(req: Request) {
     }
 
     const rawBody = await req.text();
-    let body: any = {};
+    let body: Record<string, unknown> = {};
 
     try {
-      body = rawBody ? JSON.parse(rawBody) : {};
+      body = rawBody
+        ? (JSON.parse(rawBody) as Record<string, unknown>)
+        : {};
     } catch {
-      body = {};
+      return reply(
+        {
+          error: "Invalid JSON body",
+          reply: "",
+        },
+        400
+      );
     }
 
     const message =
-      typeof body?.message === "string" ? body.message.trim() : "";
+      typeof body.message === "string" ? body.message.trim() : "";
 
     if (!message) {
       return reply(
@@ -51,33 +61,50 @@ export async function POST(req: Request) {
 
     const payload = {
       message,
-      messages: Array.isArray(body?.messages) ? body.messages : [],
+      messages: Array.isArray(body.messages) ? body.messages : [],
       userTier:
-        typeof body?.userTier === "string" && body.userTier.trim()
-          ? body.userTier
+        typeof body.userTier === "string" && body.userTier.trim()
+          ? body.userTier.trim()
           : "free",
     };
 
-    const firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-        "x-talkio-app-key": process.env.INTERNAL_APP_KEY || "",
-      },
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    }); 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      FIREBASE_TIMEOUT_MS
+    );
 
-        const rawText = await firebaseRes.text();
+    let firebaseRes: Response;
 
-    let data: any = {};
     try {
-      data = rawText ? JSON.parse(rawText) : {};
+      firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+          "x-talkio-app-key": process.env.INTERNAL_APP_KEY || "",
+        },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    const rawText = await firebaseRes.text();
+
+    let data: Record<string, any> = {};
+
+    try {
+      data = rawText
+        ? (JSON.parse(rawText) as Record<string, any>)
+        : {};
     } catch {
       console.error("Firebase returned non-JSON:", {
         status: firebaseRes.status,
-        rawText,
+        statusText: firebaseRes.statusText,
+        rawText: rawText.slice(0, 1000),
       });
 
       return reply(
@@ -91,34 +118,89 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!data?.reply || typeof data.reply !== "string") {
-      console.error("Empty Firebase reply:", {
+    if (!firebaseRes.ok) {
+      console.error("Firebase function returned an error:", {
         status: firebaseRes.status,
-        data,
-        rawText: rawText.slice(0, 500),
+        statusText: firebaseRes.statusText,
+        error: data.error || null,
+        details: data.details || null,
+        reason: data.reason || null,
+        path: data.path || null,
+        model: data.model || null,
+        analyticsType: data.analyticsType || null,
+        fallbackTriggered: data.fallbackTriggered === true,
+        rawText: rawText.slice(0, 1000),
+      });
+    }
+
+    if (typeof data.reply !== "string" || !data.reply.trim()) {
+      console.error("Firebase function returned no usable reply:", {
+        status: firebaseRes.status,
+        statusText: firebaseRes.statusText,
+        error: data.error || null,
+        details: data.details || null,
+        reason: data.reason || null,
+        path: data.path || null,
+        model: data.model || null,
+        analyticsType: data.analyticsType || null,
+        fallbackTriggered: data.fallbackTriggered === true,
+        rawText: rawText.slice(0, 1000),
       });
     }
 
     return reply(
       {
-        reply: typeof data?.reply === "string" ? data.reply : "",
-        error: data?.error || null,
-        model: data?.model || null,
-        path: data?.path || null,
-        crisisLock: data?.crisisLock === true,
-        remainingDaily: data?.remainingDaily ?? null,
+        reply:
+          typeof data.reply === "string"
+            ? data.reply
+            : "",
+        error: data.error || null,
+        details: data.details || null,
+        reason: data.reason || null,
+        model: data.model || null,
+        path: data.path || null,
+        analyticsType: data.analyticsType || null,
+        fallbackTriggered: data.fallbackTriggered === true,
+        crisisLock: data.crisisLock === true,
+        remainingDaily: data.remainingDaily ?? null,
         upstreamStatus: firebaseRes.status,
       },
       firebaseRes.status
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const details =
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          }
+        : {
+            name: "UnknownError",
+            message: String(error),
+            stack: null,
+          };
+
+    const timedOut =
+      error instanceof Error && error.name === "AbortError";
+
+    console.error("Talkio /api/chat request failed:", {
+      ...details,
+      timedOut,
+    });
+
     return reply(
       {
-        error: "Server error",
+        error: timedOut
+          ? "Upstream request timed out"
+          : "Server error",
         reply: "",
-        details: error?.message || String(error),
+        details: details.message,
+        path: timedOut
+          ? "api_chat_timeout"
+          : "api_chat_exception",
       },
-      500
+      timedOut ? 504 : 500
     );
   }
 }

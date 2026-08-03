@@ -7,33 +7,35 @@ import { Capacitor } from "@capacitor/core";
 export default function TalkioOnboarding() {
   const screens = [
   {
-    image: "/onboarding-ios/screen1-heavy-thoughts.jpg",
-    buttonColor: "bg-[#90A88B]",
-    finalButtonColor: "bg-[#0F8A5F]",
-    dotColor: "bg-[#90A88B]",
-  },
-  {
-    image: "/onboarding-ios/screen2-no-advice.jpg",
-    buttonColor: "bg-[#89A17E]",
-    finalButtonColor: "bg-[#0F8A5F]",
-    dotColor: "bg-[#89A17E]",
-  },
-  {
-    image: "/onboarding-ios/screen3-no-judgment.jpg",
-    buttonColor: "bg-[#6F8A4A]",
-    finalButtonColor: "bg-[#0F8A5F]",
+    image: "/onboarding-webp/screen1-welcome-safe-space.webp",
     dotColor: "bg-[#6F8A4A]",
   },
   {
-    image: "/onboarding-ios/screen4-clarity.jpg",
-    buttonColor: "bg-[#D08A4E]",
-    finalButtonColor: "bg-[#B9743C]",
+    image: "/onboarding-webp/screen5-how-it-works.webp",
+    dotColor: "bg-[#6F8A4A]",
+  },
+  {
+    image: "/onboarding-webp/screen6-reflection-journey.webp",
+    dotColor: "bg-[#B8893D]",
+  },
+  {
+    image: "/onboarding-webp/screen2-heavy-thoughts.webp",
+    dotColor: "bg-[#90A88B]",
+  },
+  {
+    image: "/onboarding-webp/screen3-no-advice.webp",
+    dotColor: "bg-[#89A17E]",
+  },
+  {
+    image: "/onboarding-webp/screen4-no-judgment.webp",
+    dotColor: "bg-[#6F8A4A]",
+  },
+  {
+    image: "/onboarding-webp/screen7-clarity.webp",
     dotColor: "bg-[#D08A4E]",
   },
   {
-    image: "/onboarding-ios/screen5-feel-lighter.jpg",
-    buttonColor: "bg-[#7F8F58]",
-    finalButtonColor: "bg-[#687A42]",
+    image: "/onboarding-webp/screen8-feel-lighter.webp",
     dotColor: "bg-[#7F8F58]",
   },
 ];
@@ -84,7 +86,7 @@ export default function TalkioOnboarding() {
             <button
               type="button"
               onClick={skip}
-              className="text-sm font-medium text-stone-500"
+              className="text-[15px] font-medium text-stone-500"
             >
               Skip
             </button>
@@ -92,54 +94,93 @@ export default function TalkioOnboarding() {
         </div>
 
         <div className="relative flex-1 overflow-hidden rounded-[34px] bg-[#f7f1e8]">
-          <Image
-            key={current.image}
-            src={current.image}
-            alt="Talkio onboarding"
-            fill
-            priority={index === 0}
-            loading={index === 0 ? "eager" : "lazy"}
-            quality={75}
-            sizes="100vw"
-            className="object-contain"
-          />
+  <Image
+    key={current.image}
+    src={current.image}
+    alt="Talkio onboarding"
+    fill
+    priority={index === 0}
+    loading={index === 0 ? "eager" : "lazy"}
+    quality={75}
+    sizes="100vw"
+    className="object-contain"
+  />
 
-          <div className="absolute bottom-5 left-7 right-7">
-            {isFirst ? (
-              <button
-                type="button"
-                onClick={next}
-                className={`mx-auto block min-h-[42px] w-[82%] rounded-full ${current.buttonColor} px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99]`}
-              >
-                Continue
-              </button>
-            ) : (
-              <div className="mx-auto flex w-[88%] gap-3">
-                <button
-                  type="button"
-                  onClick={back}
-                  className="min-h-[42px] w-[34%] rounded-full border border-stone-200 bg-white/90 px-4 py-2.5 text-sm font-medium text-stone-700 shadow-sm backdrop-blur transition active:scale-[0.99]"
-                >
-                  Back
-                </button>
+  <div className="absolute inset-x-0 bottom-4 bg-gradient-to-t from-black/0 via-transparent to-transparent px-12 pb-4 pt-14">
+    {isFirst ? (
+      <button
+        type="button"
+        onClick={next}
+        className="
+          mx-auto block min-h-[40px] w-[66%] rounded-full
+          border border-white/30 bg-white/5
+          px-5 py-2 text-[15px] font-semibold text-white
+          shadow-none backdrop-blur-[2px]
+          transition hover:bg-white/10
+          active:scale-[0.99]
+          focus-visible:outline-none
+          focus-visible:ring-2
+          focus-visible:ring-white/80
+        "
+      >
+        Continue
+      </button>
+    ) : (
+      <div className="mx-auto flex w-[72%] gap-2">
+  <button
+    type="button"
+    onClick={back}
+    className="
+h-10 w-[32%] rounded-full
+border border-white/30
+bg-white/5
+px-3 py-2
+text-[15px] font-medium text-white
+shadow-none
+backdrop-blur-[2px]
+transition
+hover:bg-white/10
+active:scale-[0.99]
+focus-visible:outline-none
+focus-visible:ring-2
+focus-visible:ring-white/40
+"
+  >
+    Back
+  </button>
 
-                <button
-                  type="button"
-                  onClick={next}
-                  className={`min-h-[42px] w-[66%] rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99] ${
-                    isLast ? current.finalButtonColor : current.buttonColor
-                  }`}
-                >
-                  {isLast ? "Start Talking" : "Continue"}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+  <button
+    type="button"
+    onClick={next}
+    className={`
+h-10 w-[68%] rounded-full
+border border-white/30
+px-4 py-2
+text-[15px] font-semibold text-white
+shadow-none
+backdrop-blur-[2px]
+transition
+active:scale-[0.99]
+focus-visible:outline-none
+focus-visible:ring-2
+focus-visible:ring-white/40
+${
+  isLast
+    ? "bg-[#173F2B]/25 hover:bg-[#173F2B]/35"
+    : "bg-white/5 hover:bg-white/15"
+}
+`}
+  >
+    {isLast ? "Start Talking" : "Continue"}
+  </button>
+</div>
+    )}
+  </div>
+</div>
 
-        <p className="mt-3 text-center text-sm text-stone-400">
-          Talkio • Vent. Reflect. Move Forward.
-        </p>
+<p className="mt-3 text-center text-sm text-stone-400">
+  Talkio • Vent. Reflect. Move Forward.
+</p>
       </div>
     </main>
   );

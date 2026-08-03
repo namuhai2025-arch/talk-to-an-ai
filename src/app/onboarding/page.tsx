@@ -131,7 +131,7 @@ export default function TalkioOnboarding() {
     type="button"
     onClick={back}
     className="
-h-10 w-[32%] rounded-full
+min-h-[42px] w-[32%] rounded-full
 border border-white/30
 bg-white/5
 px-3 py-2
@@ -153,7 +153,7 @@ focus-visible:ring-white/40
     type="button"
     onClick={next}
     className={`
-h-10 w-[68%] rounded-full
+min-h-[42px] w-[68%] rounded-full
 border border-white/30
 px-4 py-2
 text-[15px] font-semibold text-white

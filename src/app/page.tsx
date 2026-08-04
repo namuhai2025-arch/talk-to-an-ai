@@ -1647,10 +1647,8 @@
         Talkio
       </h1>
 
-      <p className="mt-1 text-sm text-stone-500 transition-colors duration-200">
-  {activeTab === "chat"
-    ? "You don't have to carry it all. Let it out."
-    : "Reflect. Find Clarity. Grow."}
+      <p className="mt-1 text-sm text-stone-500">
+  You don&apos;t have to carry it all. Let it out.
 </p>
     </div>
 
@@ -1678,35 +1676,6 @@
       )}
     </div>
   </div>
-
-  <div className="mx-4 mb-3 grid shrink-0 grid-cols-2 rounded-2xl border border-stone-200 bg-white/70 p-1 shadow-sm">
-  <button
-    type="button"
-    onClick={() => setActiveTab("chat")}
-    aria-pressed={activeTab === "chat"}
-    className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
-      activeTab === "chat"
-        ? "bg-gradient-to-r from-[#5F7148] to-[#708955] text-white shadow-[0_5px_16px_rgba(95,113,72,0.25)]"
-        : "text-stone-500 hover:bg-white/70 hover:text-stone-800"
-    }`}
-  >
-    💬 Chat
-  </button>
-
-  <button
-    type="button"
-    onClick={() => setActiveTab("reflections")}
-    aria-pressed={activeTab === "reflections"}
-    className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
-      activeTab === "reflections"
-        ? "bg-gradient-to-r from-[#5F7148] to-[#708955] text-white shadow-[0_5px_16px_rgba(95,113,72,0.25)]"
-        : "text-stone-500 hover:bg-white/70 hover:text-stone-800"
-    }`}
-  >
-    <span className="mr-1 text-[#D9B96E]">✦</span>
-    Reflections
-  </button>
-</div>
   
   {activeTab === "chat" ? (
     <>
@@ -1738,30 +1707,32 @@
           )}
 
           <ChatComposer
-            value={input}
-            onChange={setInput}
-            onSend={() => sendMessage()}
-            disabled={
-              loading ||
-              showSafety ||
-              crisisLock ||
-              isLimitReached
-            }
-            placeholder={
-              crisisLock
-                ? "Chat paused for safety"
-                : isLimitReached
-                  ? "Daily free limit reached."
-                  : "Type your message..."
-            }
-          />
+  value={input}
+  onChange={setInput}
+  onSend={() => sendMessage()}
+  onOpenReflections={() => setActiveTab("reflections")}
+  disabled={
+    loading ||
+    showSafety ||
+    crisisLock ||
+    isLimitReached
+  }
+  placeholder={
+    crisisLock
+      ? "Chat paused for safety"
+      : isLimitReached
+        ? "Daily free limit reached."
+        : "Type your message..."
+  }
+/>
         </>
       )}
     </>
   ) : (
-    <ReflectionsPanel />
-  )}
-
-  </main>
-    );
-  }
+    <ReflectionsPanel
+  onBack={() => setActiveTab("chat")}
+/>
+)}
+</main>
+);
+}

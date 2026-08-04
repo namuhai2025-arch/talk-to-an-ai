@@ -4,12 +4,14 @@ import React, {
   useCallback,
   useEffect,
   useRef,
+  useState,
 } from "react";
 
 type ChatComposerProps = {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
+  onOpenReflections: () => void;
   disabled?: boolean;
   placeholder?: string;
 };
@@ -18,6 +20,7 @@ function ChatComposer({
   value,
   onChange,
   onSend,
+  onOpenReflections,
   disabled = false,
   placeholder = "Type your message...",
 }: ChatComposerProps) {
@@ -25,11 +28,9 @@ function ChatComposer({
   const resizeFrameRef = useRef<number | null>(null);
   const maxHeightRef = useRef(320);
 
+  const [isFocused, setIsFocused] = useState(false);
+
   const updateMaximumHeight = useCallback(() => {
-    /*
-     * Use the layout viewport rather than visualViewport.
-     * visualViewport shrinks whenever the iOS keyboard opens.
-     */
     const layoutHeight = window.innerHeight;
 
     maxHeightRef.current = Math.max(
@@ -52,19 +53,17 @@ function ChatComposer({
 
       const maxHeight = maxHeightRef.current;
 
-      /*
-       * "auto" allows the textarea to contract after text is deleted
-       * without briefly collapsing it to zero.
-       */
       currentTextarea.style.height = "auto";
 
       const contentHeight = currentTextarea.scrollHeight;
+
       const nextHeight = Math.max(
         32,
         Math.min(contentHeight, maxHeight),
       );
 
       currentTextarea.style.height = `${nextHeight}px`;
+
       currentTextarea.style.overflowY =
         contentHeight > maxHeight ? "auto" : "hidden";
 
@@ -99,17 +98,19 @@ function ChatComposer({
     };
   }, [resizeTextarea, updateMaximumHeight]);
 
-  /*
-   * Resize when text changes, including when the draft is cleared
-   * after sending. requestAnimationFrame prevents synchronous layout
-   * work from blocking every individual keystroke.
-   */
   useEffect(() => {
     resizeTextarea();
   }, [value, resizeTextarea]);
 
   const trimmedValue = value.trim();
   const canSend = !disabled && trimmedValue.length > 0;
+
+  /*
+   * The message field expands left when focused or when text exists.
+   * Otherwise, space is reserved for the reflections icon.
+   */
+  const isComposerExpanded =
+    isFocused || value.length > 0;
 
   const submitMessage = useCallback(() => {
     if (!canSend) return;
@@ -118,50 +119,133 @@ function ChatComposer({
 
   return (
     <form
-      className="relative z-40 flex shrink-0 items-end gap-2 border-t border-stone-200 bg-[#f7f1e8]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2"
+      className="
+        relative z-40 flex shrink-0 items-end gap-2
+        border-t border-stone-200
+        bg-[#f7f1e8]/95
+        px-3
+        pb-[calc(env(safe-area-inset-bottom)+8px)]
+        pt-2
+      "
       onSubmit={(event) => {
         event.preventDefault();
         submitMessage();
       }}
     >
-      <div className="talkio-input flex min-h-[48px] flex-1 items-end overflow-hidden rounded-md border border-stone-300 bg-white px-3 py-2">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          rows={1}
-          disabled={disabled}
-          placeholder={placeholder}
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(event) => {
-            onChange(event.currentTarget.value);
-          }}
-          onKeyDown={(event) => {
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              !event.nativeEvent.isComposing
-            ) {
-              event.preventDefault();
-              submitMessage();
+      <div className="relative min-w-0 flex-1">
+        <div
+          className="
+            absolute bottom-0 left-0 z-10
+            flex h-[48px] w-[48px]
+            items-center justify-center
+          "
+          aria-hidden={isComposerExpanded}
+        >
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onOpenReflections}
+            aria-label="Open reflections"
+            title="Reflections"
+            className="
+              flex h-[48px] w-[48px]
+              items-center justify-center
+              rounded-full
+              text-[26px]
+              text-[#c7a84d]
+              transition
+              active:scale-90
+              disabled:opacity-50
+            "
+          >
+            <span aria-hidden="true">✨</span>
+          </button>
+        </div>
+
+        <div
+          className={`
+            talkio-input
+            relative z-20
+            flex min-h-[48px] items-end
+            overflow-hidden
+            rounded-md
+            border border-stone-300
+            bg-white
+            px-3 py-2
+            transition-[margin] duration-200 ease-out
+            ${
+              isComposerExpanded
+                ? "ml-0"
+                : "ml-[52px]"
             }
-          }}
-          className="h-[32px] w-full resize-none border-0 bg-transparent p-0 text-[16px] leading-6 outline-none placeholder:text-stone-400 disabled:opacity-60"
-          style={{
-            borderRadius: "0px",
-            WebkitAppearance: "none",
-            appearance: "none",
-            overflowY: "hidden",
-          }}
-        />
+          `}
+        >
+          <textarea
+            ref={textareaRef}
+            value={value}
+            rows={1}
+            disabled={disabled}
+            placeholder={placeholder}
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            autoComplete="off"
+            onFocus={() => {
+              setIsFocused(true);
+            }}
+            onBlur={() => {
+              setIsFocused(false);
+            }}
+            onChange={(event) => {
+              onChange(event.currentTarget.value);
+            }}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                submitMessage();
+              }
+            }}
+            className="
+              h-[32px] w-full
+              resize-none
+              border-0
+              bg-transparent
+              p-0
+              text-[16px]
+              leading-6
+              outline-none
+              placeholder:text-stone-400
+              disabled:opacity-60
+            "
+            style={{
+              borderRadius: "0px",
+              WebkitAppearance: "none",
+              appearance: "none",
+              overflowY: "hidden",
+            }}
+          />
+        </div>
       </div>
 
       <button
         type="submit"
         disabled={!canSend}
-        className="h-[48px] min-w-[64px] rounded-md bg-[#78906f] px-4 text-sm font-medium text-white transition active:scale-95 disabled:opacity-50"
+        className="
+          h-[48px] min-w-[64px]
+          shrink-0
+          rounded-md
+          bg-[#78906f]
+          px-4
+          text-sm font-medium
+          text-white
+          transition
+          active:scale-95
+          disabled:opacity-50
+        "
       >
         Send
       </button>

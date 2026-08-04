@@ -4,6 +4,8 @@
   import { onAuthStateChanged, type User } from "firebase/auth";
   import { getFirebaseAuth } from "@/lib/firebase";
 
+  import ReflectionDetail from "@/components/reflections/ReflectionDetail";
+
   import {
   resolveTalkioTier,
   type TalkioTier,
@@ -156,6 +158,7 @@
   tierLoading,
   onBack,
   onOpenWeekly,
+  onOpenMonthly,
   onOpenLocked,
   onOpenComingSoon,
 }: {
@@ -163,21 +166,31 @@
   tierLoading: boolean;
   onBack: () => void;
   onOpenWeekly: () => void;
-  onOpenLocked: (title: string, requiredTier: string) => void;
+  onOpenMonthly: () => void;
+  onOpenLocked: (
+    title: string,
+    requiredTier: string
+  ) => void;
   onOpenComingSoon: (title: string) => void;
 }) {
+
   const weeklyUnlocked =
-    !tierLoading && tier !== "free";
+  !tierLoading && tier !== "free";
 
-  const advancedUnlocked =
-    !tierLoading &&
-    (tier === "presence" ||
-      tier === "professional" ||
-      tier === "elite");
-
-  const portraitUnlocked =
+const showAdvancedReflections =
   !tierLoading &&
-  (tier === "professional" || tier === "elite");  
+  (
+    tier === "presence" ||
+    tier === "professional" ||
+    tier === "elite"
+  );
+
+const showMemoryPortrait =
+  !tierLoading &&
+  (
+    tier === "professional" ||
+    tier === "elite"
+  );  
 
   return (
       <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-10">
@@ -201,91 +214,65 @@
       : () => onOpenLocked("Weekly Reflection", "Companion")
   }
 />
+{showAdvancedReflections ? (
+  <>
+    <ReflectionHomeCard
+      icon="monthly"
+      title="Monthly Reflection"
+      description="Notice the emotions and themes that keep returning."
+      locked={false}
+      onClick={onOpenMonthly}
+    />
 
-<ReflectionHomeCard
-  icon="monthly"
-  title="Monthly Reflection"
-  description="Notice the emotions and themes that keep returning."
-  locked={!advancedUnlocked}
-  onClick={
-    advancedUnlocked
-      ? () => onOpenComingSoon("Monthly Reflection")
-      : () =>
-          onOpenLocked(
-            "Monthly Reflection",
-            "Presence, Professional, or Elite"
-          )
-  }
-/>
+    <ReflectionHomeCard
+      icon="quarterly"
+      title="Quarterly Reflection"
+      description="See how your choices and patterns are evolving."
+      locked={false}
+      onClick={() => onOpenComingSoon("Quarterly Reflection")}
+    />
 
-<ReflectionHomeCard
-  icon="quarterly"
-  title="Quarterly Reflection"
-  description="See how your choices and patterns are evolving."
-  locked={!advancedUnlocked}
-  onClick={
-    advancedUnlocked
-      ? () => onOpenComingSoon("Quarterly Reflection")
-      : () =>
-          onOpenLocked(
-            "Quarterly Reflection",
-            "Presence, Professional, or Elite"
-          )
-  }
-/>
+    <ReflectionHomeCard
+      icon="yearly"
+      title="Yearly Reflection"
+      description="Understand the larger story your year has been telling."
+      locked={false}
+      onClick={() => onOpenComingSoon("Yearly Reflection")}
+    />
+  </>
+) : null}
 
-<ReflectionHomeCard
-  icon="yearly"
-  title="Yearly Reflection"
-  description="Understand the larger story your year has been telling."
-  locked={!advancedUnlocked}
-  onClick={
-    advancedUnlocked
-      ? () => onOpenComingSoon("Yearly Reflection")
-      : () =>
-          onOpenLocked(
-            "Yearly Reflection",
-            "Presence, Professional, or Elite"
-          )
-  }
-/>
+{showMemoryPortrait ? (
+  <ReflectionHomeCard
+    icon="portrait"
+    title="Memory Portrait"
+    description="A meaningful portrait of who you became this year."
+    locked={false}
+    onClick={() => onOpenComingSoon("Memory Portrait")}
+  />
+) : null}
 
-<ReflectionHomeCard
-  icon="portrait"
-  title="Memory Portrait"
-  description="A meaningful portrait of who you became this year."
-  locked={!portraitUnlocked}
-  onClick={
-    portraitUnlocked
-      ? () => onOpenComingSoon("Memory Portrait")
-      : () =>
-          onOpenLocked(
-            "Memory Portrait",
-            "Professional or Elite"
-          )
-  }
-/>
-            </div>
-          </div>
-
-          <div className="mx-auto mt-6 max-w-md text-center">
-            <div className="mb-2 flex items-center justify-center gap-2 text-[#7a8c69]">
-              <LockIcon className="h-3.5 w-3.5" />
-
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">
-                Private to you
-              </span>
-            </div>
-
-            <p className="text-xs leading-5 text-stone-500">
-              Your reflections are created from your private conversations with
-              Talkio and are never presented as scores or judgments.
-            </p>
-          </div>
+               </div>
         </div>
-      </section>
-    );
-  }
+
+        <div className="mx-auto mt-6 max-w-md text-center">
+          <div className="mb-2 flex items-center justify-center gap-2 text-[#7a8c69]">
+            <LockIcon className="h-3.5 w-3.5" />
+
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">
+              Private to you
+            </span>
+          </div>
+
+          <p className="text-xs leading-5 text-stone-500">
+            Your reflections are created from your private conversations with
+            Talkio and are never presented as scores or judgments.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
 
   function ReflectionHomeCard({
   icon,
@@ -663,7 +650,14 @@
   }: ReflectionsPanelProps) {
 
     const [reflectionView, setReflectionView] =
-    useState<"home" | "weekly">("home");
+    useState<
+  "home" |
+  "weekly" |
+  "monthly" |
+  "quarterly" |
+  "yearly" |
+  "portrait"
+>("home");
 
     const [user, setUser] = useState<User | null>(null);
     const [authChecked, setAuthChecked] = useState(false);
@@ -861,9 +855,17 @@
         tier={tier}
         tierLoading={tierLoading}
         onBack={onBack}
-        onOpenWeekly={() => setReflectionView("weekly")}
+        onOpenWeekly={() =>
+          setReflectionView("weekly")
+        }
+        onOpenMonthly={() =>
+          setReflectionView("monthly")
+        }
         onOpenLocked={(title, requiredTier) => {
-          setLockedFeature({ title, requiredTier });
+          setLockedFeature({
+            title,
+            requiredTier,
+          });
         }}
         onOpenComingSoon={(title) => {
           setComingSoonFeature(title);
@@ -878,7 +880,9 @@
           onPrimary={() => {
             window.location.href = "/paywall";
           }}
-          onClose={() => setLockedFeature(null)}
+          onClose={() =>
+            setLockedFeature(null)
+          }
         />
       ) : null}
 
@@ -887,14 +891,40 @@
           title={comingSoonFeature}
           message={`${comingSoonFeature} is included with your plan and is coming soon.`}
           primaryLabel="Okay"
-          onPrimary={() => setComingSoonFeature(null)}
-          onClose={() => setComingSoonFeature(null)}
+          onPrimary={() =>
+            setComingSoonFeature(null)
+          }
+          onClose={() =>
+            setComingSoonFeature(null)
+          }
         />
       ) : null}
     </>
   );
 }
-    if (!authChecked || loading) {
+
+if (reflectionView === "monthly") {
+  return (
+    <ReflectionDetail
+      title="Monthly Reflection"
+      subtitle="Notice the emotions and themes that keep returning."
+      description="Your monthly reflection is quietly taking shape."
+      status="preparing"
+      currentDays={18}
+      totalDays={30}
+      expectedDate="At the end of this month"
+      discoveries={[
+        "Recurring emotions and concerns",
+        "Relationship patterns that stood out",
+        "Wins and progress you may have overlooked",
+        "Themes that kept returning",
+      ]}
+      onBack={() => setReflectionView("home")}
+    />
+  );
+}
+
+if (!authChecked || loading) {
     return (
       <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
         <div className="mx-auto w-full max-w-2xl">

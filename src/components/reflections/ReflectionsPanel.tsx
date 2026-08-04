@@ -176,7 +176,8 @@
       tier === "elite");
 
   const portraitUnlocked =
-    !tierLoading && tier === "elite";
+  !tierLoading &&
+  (tier === "professional" || tier === "elite");  
 
   return (
       <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-10">
@@ -206,12 +207,19 @@
   icon="monthly"
   title="Monthly Reflection"
   description="Notice the emotions and themes that keep returning."
-  tierLabel={!advancedUnlocked ? "Presence" : undefined}
+  tierLabel={
+  !advancedUnlocked
+    ? "Presence • Professional • Elite"
+    : undefined
+}
   locked={!advancedUnlocked}
   onClick={
     advancedUnlocked
       ? () => onOpenComingSoon("Monthly Reflection")
-      : () => onOpenLocked("Monthly Reflection", "Presence")
+      : () => onOpenLocked(
+  "Monthly Reflection",
+  "Presence, Professional, or Elite"
+)
   }
 />  
 
@@ -219,12 +227,19 @@
   icon="quarterly"
   title="Quarterly Reflection"
   description="See how your choices and patterns are evolving."
-  tierLabel={!advancedUnlocked ? "Presence" : undefined}
+  tierLabel={
+  !advancedUnlocked
+    ? "Presence • Professional • Elite"
+    : undefined
+}
   locked={!advancedUnlocked}
   onClick={
     advancedUnlocked
       ? () => onOpenComingSoon("Quarterly Reflection")
-      : () => onOpenLocked("Quarterly Reflection", "Presence")
+      : () => onOpenLocked(
+  "Quarterly Reflection",
+  "Presence, Professional, or Elite"
+)
   }
 />
 
@@ -232,12 +247,19 @@
   icon="yearly"
   title="Yearly Reflection"
   description="Understand the larger story your year has been telling."
-  tierLabel={!advancedUnlocked ? "Presence" : undefined}
+  tierLabel={
+  !advancedUnlocked
+    ? "Presence • Professional • Elite"
+    : undefined
+}
   locked={!advancedUnlocked}
   onClick={
     advancedUnlocked
       ? () => onOpenComingSoon("Yearly Reflection")
-      : () => onOpenLocked("Yearly Reflection", "Presence")
+      : () => onOpenLocked(
+  "Yearly Reflection",
+  "Presence, Professional, or Elite"
+)
   }
 />
 
@@ -245,12 +267,20 @@
   icon="portrait"
   title="Memory Portrait"
   description="A meaningful portrait of who you became this year."
-  tierLabel={!portraitUnlocked ? "Elite" : undefined}
+  tierLabel={
+    !portraitUnlocked
+      ? "Professional • Elite"
+      : undefined
+  }
   locked={!portraitUnlocked}
   onClick={
     portraitUnlocked
       ? () => onOpenComingSoon("Memory Portrait")
-      : () => onOpenLocked("Memory Portrait", "Elite")
+      : () =>
+          onOpenLocked(
+            "Memory Portrait",
+            "Professional or Elite"
+          )
   }
 />
             </div>

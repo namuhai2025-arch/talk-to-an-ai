@@ -194,7 +194,6 @@
   icon="weekly"
   title="Weekly Reflection"
   description="A thoughtful look back at what shaped your week."
-  tierLabel={!weeklyUnlocked ? "Companion" : undefined}
   locked={!weeklyUnlocked}
   onClick={
     weeklyUnlocked
@@ -207,39 +206,31 @@
   icon="monthly"
   title="Monthly Reflection"
   description="Notice the emotions and themes that keep returning."
-  tierLabel={
-  !advancedUnlocked
-    ? "Presence • Professional • Elite"
-    : undefined
-}
   locked={!advancedUnlocked}
   onClick={
     advancedUnlocked
       ? () => onOpenComingSoon("Monthly Reflection")
-      : () => onOpenLocked(
-  "Monthly Reflection",
-  "Presence, Professional, or Elite"
-)
+      : () =>
+          onOpenLocked(
+            "Monthly Reflection",
+            "Presence, Professional, or Elite"
+          )
   }
-/>  
+/>
 
 <ReflectionHomeCard
   icon="quarterly"
   title="Quarterly Reflection"
   description="See how your choices and patterns are evolving."
-  tierLabel={
-  !advancedUnlocked
-    ? "Presence • Professional • Elite"
-    : undefined
-}
   locked={!advancedUnlocked}
   onClick={
     advancedUnlocked
       ? () => onOpenComingSoon("Quarterly Reflection")
-      : () => onOpenLocked(
-  "Quarterly Reflection",
-  "Presence, Professional, or Elite"
-)
+      : () =>
+          onOpenLocked(
+            "Quarterly Reflection",
+            "Presence, Professional, or Elite"
+          )
   }
 />
 
@@ -247,19 +238,15 @@
   icon="yearly"
   title="Yearly Reflection"
   description="Understand the larger story your year has been telling."
-  tierLabel={
-  !advancedUnlocked
-    ? "Presence • Professional • Elite"
-    : undefined
-}
   locked={!advancedUnlocked}
   onClick={
     advancedUnlocked
       ? () => onOpenComingSoon("Yearly Reflection")
-      : () => onOpenLocked(
-  "Yearly Reflection",
-  "Presence, Professional, or Elite"
-)
+      : () =>
+          onOpenLocked(
+            "Yearly Reflection",
+            "Presence, Professional, or Elite"
+          )
   }
 />
 
@@ -267,11 +254,6 @@
   icon="portrait"
   title="Memory Portrait"
   description="A meaningful portrait of who you became this year."
-  tierLabel={
-    !portraitUnlocked
-      ? "Professional • Elite"
-      : undefined
-  }
   locked={!portraitUnlocked}
   onClick={
     portraitUnlocked
@@ -306,29 +288,27 @@
   }
 
   function ReflectionHomeCard({
-    icon,
-    title,
-    description,
-    tierLabel,
-    locked = false,
-    onClick,
-  }: {
-    icon: ReflectionIconName;
-    title: string;
-    description: string;
-    tierLabel?: string;
-    locked?: boolean;
-    onClick?: () => void;
-  }) {
+  icon,
+  title,
+  description,
+  locked = false,
+  onClick,
+}: {
+  icon: ReflectionIconName;
+  title: string;
+  description: string;
+  locked?: boolean;
+  onClick?: () => void;
+}) {
     return (
       <button
         type="button"
         onClick={onClick}
         aria-label={
-          locked
-            ? `${title}, available with Talkio ${tierLabel}`
-            : `Open ${title}`
-        }
+  locked
+    ? `${title}, locked`
+    : `Open ${title}`
+}
         className={`
           group
           relative
@@ -410,35 +390,21 @@
               {title}
             </h2>
 
-            {tierLabel ? (
-              <span
-                className="
-                  rounded-full
-                  border border-[#e1d3ad]
-                  bg-[#f4ead0]/80
-                  px-2.5 py-1
-                  text-[10px] font-semibold
-                  uppercase tracking-[0.08em]
-                  text-[#8a6d2c]
-                "
-              >
-                {tierLabel}
-              </span>
-            ) : (
-              <span
-                className="
-                  rounded-full
-                  border border-[#cfdac4]
-                  bg-[#e7eedf]
-                  px-2.5 py-1
-                  text-[10px] font-semibold
-                  uppercase tracking-[0.08em]
-                  text-[#627453]
-                "
-              >
-                Available
-              </span>
-            )}
+            {!locked ? (
+  <span
+    className="
+      rounded-full
+      border border-[#cfdac4]
+      bg-[#e7eedf]
+      px-2.5 py-1
+      text-[10px] font-semibold
+      uppercase tracking-[0.08em]
+      text-[#627453]
+    "
+  >
+    Available
+  </span>
+) : null}
           </div>
 
           <p

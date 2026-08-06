@@ -1648,7 +1648,7 @@
       </h1>
 
       <p className="mt-1 text-sm text-stone-500">
-  You don&apos;t have to carry it all. Let it out.
+  Reflect. Find Clarity. Grow
 </p>
     </div>
 

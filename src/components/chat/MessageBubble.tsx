@@ -58,7 +58,7 @@ function MessageBubble({
     showCopyMenu ? "ring-2 ring-stone-400/50" : "",
     isUser
       ? "mr-4 max-w-[74%] bg-[#dfe8d2] text-stone-900"
-      : "ml-4 max-w-[74%] bg-white text-stone-800 shadow-sm",
+      : "ml-4 max-w-[74%] bg-red-300 text-stone-800 shadow-sm",
     sameAsPrev ? "mt-1" : "mt-3",
     sameAsNext ? "mb-0" : "mb-1",
     isUser

@@ -107,7 +107,7 @@ export default function TalkioOnboarding() {
   />
 
   <div
-  className={`absolute inset-x-0 bottom-4 px-8 pb-4 pt-14 ${
+  className={`absolute inset-x-0 bottom-0 px-8 pb-6 pt-14 ${
     index <= 2
       ? "bg-gradient-to-t from-[#f7f1e8]/95 via-[#f7f1e8]/70 to-transparent"
       : "bg-gradient-to-t from-black/0 via-transparent to-transparent"
@@ -169,7 +169,7 @@ export default function TalkioOnboarding() {
   focus-visible:ring-2
   ${
     index <= 2
-      ? "border border-[#6F8A4A] bg-[#6F8A4A] text-white hover:bg-[#607942] focus-visible:ring-[#6F8A4A]/40"
+      ? "border border-[#6F8A4A] bg-[#6F8A4A] text-white shadow-md hover:bg-[#607942] focus-visible:ring-[#6F8A4A]/40"
       : isLast
         ? "border border-white/30 bg-[#173F2B]/25 text-white backdrop-blur-[2px] hover:bg-[#173F2B]/35 focus-visible:ring-white/40"
         : "border border-white/30 bg-white/5 text-white backdrop-blur-[2px] hover:bg-white/15 focus-visible:ring-white/40"

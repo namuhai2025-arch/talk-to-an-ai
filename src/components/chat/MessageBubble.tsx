@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 
 type ChatRole = "user" | "assistant";
 
@@ -26,6 +26,26 @@ function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
 
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+const startLongPress = () => {
+  longPressTimer.current = setTimeout(async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      console.log("Message copied");
+    } catch (error) {
+      console.error("Failed to copy message:", error);
+    }
+  }, 500);
+};
+
+const cancelLongPress = () => {
+  if (longPressTimer.current) {
+    clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
+  }
+};
+
   const formattedTime = useMemo(() => {
     if (!showTimestamp) return "";
 
@@ -40,7 +60,7 @@ function MessageBubble({
     : "flex flex-col items-start";
 
   const bubbleClassName = [
-    "whitespace-pre-wrap break-words px-4 py-3 text-[16.5px] leading-5.5",
+  "whitespace-pre-wrap break-words px-4 py-3 text-[16.5px] leading-5.5",
     isUser
       ? "mr-4 max-w-[74%] bg-[#dfe8d2] text-stone-900"
       : "ml-4 max-w-[74%] bg-white text-stone-800 shadow-sm",
@@ -58,7 +78,14 @@ function MessageBubble({
 
   return (
     <div className={wrapperClassName}>
-      <div className={bubbleClassName}>{message.content}</div>
+      <div
+  className={bubbleClassName}
+  onTouchStart={startLongPress}
+  onTouchEnd={cancelLongPress}
+  onTouchMove={cancelLongPress}
+>
+  {message.content}
+</div>
 
       {showTimestamp && (
         <div className={timestampClassName}>{formattedTime}</div>

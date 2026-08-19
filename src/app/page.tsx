@@ -1644,11 +1644,11 @@
     <div className="relative z-20 flex items-start justify-between gap-3 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+64px)]">
     <div>
       <h1 className="text-[2.15rem] font-semibold tracking-[-0.04em]">
-        Talkio
+        Talkio Reflect
       </h1>
 
       <p className="mt-1 text-sm text-stone-500">
-  Reflect. Find Clarity. Grow
+  Your Safe Space
 </p>
     </div>
 

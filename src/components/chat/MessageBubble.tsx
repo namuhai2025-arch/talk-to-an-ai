@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef } from "react";
 
 type ChatRole = "user" | "assistant";
 
@@ -16,6 +16,9 @@ type MessageBubbleProps = {
   sameAsPrev: boolean;
   sameAsNext: boolean;
   showTimestamp: boolean;
+  copyMenuOpen: boolean;
+  onOpenCopyMenu: () => void;
+  onCloseCopyMenu: () => void;
 };
 
 function MessageBubble({
@@ -23,10 +26,11 @@ function MessageBubble({
   sameAsPrev,
   sameAsNext,
   showTimestamp,
+  copyMenuOpen,
+  onOpenCopyMenu,
+  onCloseCopyMenu,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
-
-  const [showCopyMenu, setShowCopyMenu] = useState(false);
 
   const longPressTimer =
     useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,19 +59,19 @@ function MessageBubble({
     "whitespace-pre-wrap break-words px-4 py-3 text-[16.5px] leading-5.5",
     "select-none",
     "transition-all duration-150",
-    showCopyMenu ? "ring-2 ring-stone-400/50" : "",
+    copyMenuOpen ? "ring-2 ring-stone-400/50" : "",
     isUser
       ? "mr-4 max-w-[74%] bg-[#dfe8d2] text-stone-900"
-      : "ml-4 max-w-[74%] bg-red-300 text-stone-800 shadow-sm",
-    sameAsPrev ? "mt-1" : "mt-3",
-    sameAsNext ? "mb-0" : "mb-1",
+      : "ml-4 max-w-[74%] bg-white text-stone-800 shadow-sm",
+    sameAsPrev ? "mt-0.5" : "mt-2",
+    sameAsNext ? "mb-0" : "mb-0.5",
     isUser
       ? "rounded-[28px] rounded-br-md"
       : "rounded-[28px] rounded-bl-md",
   ].join(" ");
 
   const timestampClassName = [
-    "mt-1 text-[11px] text-stone-400",
+    "mt-0.5 text-[11px] text-stone-400",
     isUser ? "mr-5 text-right" : "ml-5 text-left",
   ].join(" ");
 
@@ -93,9 +97,9 @@ function MessageBubble({
     clearLongPressTimer();
 
     longPressTimer.current = setTimeout(() => {
-      didLongPress.current = true;
-      setShowCopyMenu(true);
-    }, 450);
+  didLongPress.current = true;
+  onOpenCopyMenu();
+}, 450);
   };
 
   const handleTouchMove = (
@@ -145,7 +149,7 @@ function MessageBubble({
         document.body.removeChild(textarea);
       }
 
-      setShowCopyMenu(false);
+      onCloseCopyMenu();
 
       console.log("Message copied");
     } catch (error) {
@@ -167,14 +171,14 @@ function MessageBubble({
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
         onContextMenu={(event) => {
-          event.preventDefault();
-          setShowCopyMenu(true);
-        }}
+  event.preventDefault();
+  onOpenCopyMenu();
+}}
       >
         {message.content}
       </div>
 
-      {showCopyMenu && (
+      {copyMenuOpen && (
         <button
           type="button"
           onClick={copyMessage}
@@ -210,7 +214,8 @@ function areMessageBubblePropsEqual(
       next.message.isFeedbackPrompt &&
     previous.sameAsPrev === next.sameAsPrev &&
     previous.sameAsNext === next.sameAsNext &&
-    previous.showTimestamp === next.showTimestamp
+    previous.showTimestamp === next.showTimestamp &&
+    previous.copyMenuOpen === next.copyMenuOpen
   );
 }
 

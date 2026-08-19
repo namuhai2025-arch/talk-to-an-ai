@@ -1,6 +1,11 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"; 
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 
@@ -32,6 +37,9 @@ function ChatList({
   const timeoutRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const shouldAutoScrollRef = useRef(true);
+
+  const [activeCopyMessage, setActiveCopyMessage] =
+  useState<number | null>(null);
 
   const visibleMessages = useMemo(() => {
     return messages.filter((message) => {
@@ -117,7 +125,7 @@ function ChatList({
       ref={scrollContainerRef}
       className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-2 md:px-10"
     >
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-0">
         {visibleMessages.map((message, index) => {
           const previous = visibleMessages[index - 1];
           const next = visibleMessages[index + 1];
@@ -128,12 +136,19 @@ function ChatList({
 
           return (
             <MessageBubble
-              key={`${message.timestamp}-${index}`}
-              message={message}
-              sameAsPrev={sameAsPrev}
-              sameAsNext={sameAsNext}
-              showTimestamp={showTimestamp}
-            />
+  key={`${message.timestamp}-${index}`}
+  message={message}
+  sameAsPrev={sameAsPrev}
+  sameAsNext={sameAsNext}
+  showTimestamp={showTimestamp}
+  copyMenuOpen={activeCopyMessage === message.timestamp}
+  onOpenCopyMenu={() => {
+    setActiveCopyMessage(message.timestamp);
+  }}
+  onCloseCopyMenu={() => {
+    setActiveCopyMessage(null);
+  }}
+/>
           );
         })}
 

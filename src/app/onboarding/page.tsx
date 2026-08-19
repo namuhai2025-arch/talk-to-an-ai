@@ -106,45 +106,51 @@ export default function TalkioOnboarding() {
     className="object-contain"
   />
 
-  <div className="absolute inset-x-0 bottom-4 bg-gradient-to-t from-black/0 via-transparent to-transparent px-12 pb-4 pt-14">
+  <div
+  className={`absolute inset-x-0 bottom-4 px-8 pb-4 pt-14 ${
+    index <= 2
+      ? "bg-gradient-to-t from-[#f7f1e8]/95 via-[#f7f1e8]/70 to-transparent"
+      : "bg-gradient-to-t from-black/0 via-transparent to-transparent"
+  }`}
+>
     {isFirst ? (
       <button
-        type="button"
-        onClick={next}
-        className="
-          mx-auto block min-h-[40px] w-[66%] rounded-full
-          border border-white/30 bg-white/5
-          px-5 py-2 text-[15px] font-semibold text-white
-          shadow-none backdrop-blur-[2px]
-          transition hover:bg-white/10
-          active:scale-[0.99]
-          focus-visible:outline-none
-          focus-visible:ring-2
-          focus-visible:ring-white/80
-        "
-      >
-        Continue
-      </button>
+  type="button"
+  onClick={next}
+  className={`
+    mx-auto block min-h-[46px] w-[72%] rounded-full
+    px-5 py-2 text-[15px] font-semibold
+    transition active:scale-[0.99]
+    focus-visible:outline-none focus-visible:ring-2
+    ${
+      index <= 2
+        ? "border border-[#6F8A4A] bg-[#6F8A4A] text-white shadow-md focus-visible:ring-[#6F8A4A]/40"
+        : "border border-white/30 bg-white/5 text-white backdrop-blur-[2px] hover:bg-white/10 focus-visible:ring-white/80"
+    }
+  `}
+>
+  Continue
+</button>
     ) : (
       <div className="mx-auto flex w-[72%] gap-2">
   <button
     type="button"
     onClick={back}
-    className="
-min-h-[42px] w-[32%] rounded-full
-border border-white/30
-bg-white/5
-px-3 py-2
-text-[15px] font-medium text-white
-shadow-none
-backdrop-blur-[2px]
-transition
-hover:bg-white/10
-active:scale-[0.99]
-focus-visible:outline-none
-focus-visible:ring-2
-focus-visible:ring-white/40
-"
+    className={`
+  min-h-[46px] w-[32%] rounded-full
+  px-3 py-2
+  text-[15px] font-medium
+  shadow-md
+  transition
+  active:scale-[0.99]
+  focus-visible:outline-none
+  focus-visible:ring-2
+  ${
+    index <= 2
+      ? "border border-stone-300 bg-white/95 text-stone-700 focus-visible:ring-stone-300"
+      : "border border-white/30 bg-white/5 text-white backdrop-blur-[2px] hover:bg-white/10 focus-visible:ring-white/40"
+  }
+`}
   >
     Back
   </button>
@@ -153,22 +159,21 @@ focus-visible:ring-white/40
     type="button"
     onClick={next}
     className={`
-min-h-[42px] w-[68%] rounded-full
-border border-white/30
-px-4 py-2
-text-[15px] font-semibold text-white
-shadow-none
-backdrop-blur-[2px]
-transition
-active:scale-[0.99]
-focus-visible:outline-none
-focus-visible:ring-2
-focus-visible:ring-white/40
-${
-  isLast
-    ? "bg-[#173F2B]/25 hover:bg-[#173F2B]/35"
-    : "bg-white/5 hover:bg-white/15"
-}
+  min-h-[46px] w-[68%] rounded-full
+  px-4 py-2
+  text-[15px] font-semibold
+  shadow-md
+  transition
+  active:scale-[0.99]
+  focus-visible:outline-none
+  focus-visible:ring-2
+  ${
+    index <= 2
+      ? "border border-[#6F8A4A] bg-[#6F8A4A] text-white hover:bg-[#607942] focus-visible:ring-[#6F8A4A]/40"
+      : isLast
+        ? "border border-white/30 bg-[#173F2B]/25 text-white backdrop-blur-[2px] hover:bg-[#173F2B]/35 focus-visible:ring-white/40"
+        : "border border-white/30 bg-white/5 text-white backdrop-blur-[2px] hover:bg-white/15 focus-visible:ring-white/40"
+  }
 `}
   >
     {isLast ? "Start Talking" : "Continue"}

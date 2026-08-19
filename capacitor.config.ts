@@ -7,9 +7,9 @@ const config: CapacitorConfig = {
   webDir: 'out',
 
   server: {
-    url: 'https://talkiochat.com',
-    cleartext: false
-  },
+  url: "https://talkiochat.com?v=20260819-2",
+  cleartext: false,
+},
 
   plugins: {
     FirebaseAuthentication: {

@@ -448,12 +448,8 @@
     useKeyboard();
 
     useEffect(() => {
-    const done = localStorage.getItem("talkio_onboarding_complete");
-
-    if (!done) {
-      window.location.href = "/onboarding";
-    }
-  }, []);
+    window.location.href = "/onboarding";
+    }, []);
 
     useEffect(() => {
       setMounted(true);

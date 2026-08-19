@@ -1643,14 +1643,31 @@
 
     <div className="relative z-20 flex items-start justify-between gap-3 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+64px)]">
     <div>
-      <h1 className="text-[2.15rem] font-semibold tracking-[-0.04em]">
-        Talkio Reflect
-      </h1>
+  <h1 className="
+    text-[1.95rem]
+    font-semibold
+    tracking-[-0.035em]
+    text-[#173F2B]
+    leading-tight
+  ">
+    Talkio Reflect
+  </h1>
 
-      <p className="mt-1 text-sm text-stone-500">
-  Your Safe Space
-</p>
-    </div>
+  <div className="mt-1.5 flex items-center gap-2">
+    <span className="h-px w-4 bg-[#6F8A4A]/60" />
+
+    <p className="
+      text-[14px]
+      font-medium
+      tracking-[0.08em]
+      text-[#6F8A4A]
+    ">
+      Your Safe Space
+    </p>
+
+    <span className="h-px w-4 bg-[#6F8A4A]/60" />
+  </div>
+</div>
 
     <div className="relative z-30 flex shrink-0 items-center gap-2 pt-1">
       <button

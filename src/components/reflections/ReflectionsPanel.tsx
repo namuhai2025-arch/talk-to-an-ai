@@ -668,6 +668,10 @@ const showMemoryPortrait =
 
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
+
+    const [weeklyGenerationChecked, setWeeklyGenerationChecked] =
+    useState(false);
+
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
 
@@ -715,6 +719,17 @@ const showMemoryPortrait =
               ? data.reflections
               : []
           );
+
+          console.log(
+  "REFLECTIONS",
+  data.reflections?.map((r) => ({
+    start: r.periodStart,
+    end: r.periodEnd,
+    generatedAt: r.generatedAt,
+    status: r.status,
+  }))
+);
+
         } catch (loadError) {
           console.error(
             "Failed to load weekly reflections:",
@@ -842,6 +857,31 @@ const showMemoryPortrait =
       }
     }
 
+    useEffect(() => {
+  if (
+    reflectionView !== "weekly" ||
+    !user ||
+    tier === "free" ||
+    tierLoading ||
+    loading ||
+    generating ||
+    weeklyGenerationChecked
+  ) {
+    return;
+  }
+
+  setWeeklyGenerationChecked(true);
+  void generateReflection();
+}, [
+  reflectionView,
+  user,
+  tier,
+  tierLoading,
+  loading,
+  generating,
+  weeklyGenerationChecked,
+]);
+
     const readyReflections = reflections.filter(
       (reflection) => reflection.status === "ready"
     );
@@ -855,9 +895,11 @@ const showMemoryPortrait =
         tier={tier}
         tierLoading={tierLoading}
         onBack={onBack}
-        onOpenWeekly={() =>
-          setReflectionView("weekly")
-        }
+        onOpenWeekly={() => {
+        setWeeklyGenerationChecked(false);
+        setReflectionView("weekly");
+        }}
+
         onOpenMonthly={() =>
           setReflectionView("monthly")
         }

@@ -71,14 +71,36 @@ function isoLocalDate(parts) {
 
 function getPreviousLocalWeekBounds(timeZone, now = new Date()) {
   const current = datePartsInTimeZone(now, timeZone);
+
   const currentDate = {
     year: Number(current.year),
     month: Number(current.month),
     day: Number(current.day),
   };
 
-  // This function is intended to run Monday local time.
-  const endLocal = currentDate;
+  const weekdayIndex = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+
+  const currentWeekday = weekdayIndex[current.weekday] ?? 1;
+
+  // Number of days since the current week's Monday.
+  const daysSinceMonday = (currentWeekday + 6) % 7;
+
+  // Monday at the start of the current week.
+  const currentWeekMonday = addDaysToDateParts(
+    currentDate,
+    -daysSinceMonday
+  );
+
+  // Previous completed Monday–Sunday week.
+  const endLocal = currentWeekMonday;
   const startLocal = addDaysToDateParts(endLocal, -7);
   const displayEndLocal = addDaysToDateParts(endLocal, -1);
 

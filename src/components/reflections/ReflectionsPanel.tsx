@@ -1126,62 +1126,65 @@ if (!authChecked || loading) {
           ) : (
             <>
               <article className="rounded-3xl border border-stone-200 bg-white/80 p-6 shadow-sm">
-                <div className="border-b border-stone-200 pb-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
-                    Looking back
-                  </p>
+  <div className="border-b border-stone-200 pb-4">
+    <div className="flex items-center gap-3">
+      <ReflectionSectionIcon type="lookingBack" />
 
-                  <p className="mt-2 text-sm text-stone-500">
-                    {formatReflectionPeriod(
-                      latestReflection.periodStart,
-                      latestReflection.periodEnd
-                    )}
-                  </p>
-                </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
+          Looking back
+        </p>
 
-                <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-stone-800">
-                  {latestReflection.lookingBack}
-                </p>
-              </article>
+        <p className="mt-1 text-sm text-stone-500">
+          {formatReflectionPeriod(
+            latestReflection.periodStart,
+            latestReflection.periodEnd
+          )}
+        </p>
+      </div>
+    </div>
+  </div>
 
-              {latestReflection.whatWeighedOnYou?.length ? (
-                <ReflectionSection
-                  title="What weighed on you"
-                  items={latestReflection.whatWeighedOnYou}
-                />
-              ) : null}
+  <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-stone-800">
+    {latestReflection.lookingBack}
+  </p>
+</article>
 
-              {latestReflection.whatHelped?.length ? (
-                <ReflectionSection
-                  title="What helped"
-                  items={latestReflection.whatHelped}
-                />
-              ) : null}
+{latestReflection.oneThingINoticed ? (
+  <StandoutReflectionCard
+    text={latestReflection.oneThingINoticed}
+  />
+) : null}
 
-              {latestReflection.momentsThatMattered?.length ? (
-                <ReflectionSection
-                  title="Moments that mattered"
-                  items={
-                    latestReflection.momentsThatMattered
-                  }
-                />
-              ) : null}
+{latestReflection.whatWeighedOnYou?.length ? (
+  <ReflectionSection
+    icon="weighed"
+    title="What weighed on you"
+    items={latestReflection.whatWeighedOnYou}
+  />
+) : null}
 
-              {latestReflection.somethingToCarryForward ? (
-                <TextReflectionCard
-                  title="Something to carry forward"
-                  text={
-                    latestReflection.somethingToCarryForward
-                  }
-                />
-              ) : null}
+{latestReflection.whatHelped?.length ? (
+  <ReflectionSection
+    icon="helped"
+    title="What helped"
+    items={latestReflection.whatHelped}
+  />
+) : null}
 
-              {latestReflection.oneThingINoticed ? (
-                <TextReflectionCard
-                  title="One thing I noticed"
-                  text={latestReflection.oneThingINoticed}
-                />
-              ) : null}
+{latestReflection.momentsThatMattered?.length ? (
+  <ReflectionSection
+    icon="moments"
+    title="Moments that mattered"
+    items={latestReflection.momentsThatMattered}
+  />
+) : null}
+
+{latestReflection.somethingToCarryForward ? (
+  <GoldenLineCard
+    text={latestReflection.somethingToCarryForward}
+  />
+) : null}
 
               <button
                 type="button"
@@ -1257,53 +1260,277 @@ if (!authChecked || loading) {
   );
 }
 
-  function ReflectionSection({
-    title,
-    items,
-  }: {
-    title: string;
-    items: string[];
-  }) {
-    return (
-      <section className="rounded-3xl border border-stone-200 bg-white/70 p-6">
+  type ReflectionContentIcon =
+  | "lookingBack"
+  | "weighed"
+  | "helped"
+  | "moments"
+  | "standout"
+  | "golden";
+
+function ReflectionSection({
+  icon,
+  title,
+  items,
+}: {
+  icon: ReflectionContentIcon;
+  title: string;
+  items: string[];
+}) {
+  return (
+    <section className="rounded-3xl border border-stone-200 bg-white/70 p-6 shadow-[0_6px_24px_rgba(69,58,42,0.04)]">
+      <div className="flex items-center gap-3">
+        <ReflectionSectionIcon type={icon} />
+
         <h3 className="text-base font-semibold text-stone-900">
           {title}
         </h3>
+      </div>
 
-        <ul className="mt-4 space-y-3">
-          {items.map((item, index) => (
-            <li
-              key={`${title}-${index}`}
-              className="flex gap-3 text-sm leading-6 text-stone-700"
-            >
-              <span
-                aria-hidden="true"
-                className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-700"
-              />
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-    );
-  }
+      <ul className="mt-5 space-y-3.5">
+        {items.map((item, index) => (
+          <li
+            key={`${title}-${index}`}
+            className="flex gap-3 text-sm leading-6 text-stone-700"
+          >
+            <span
+              aria-hidden="true"
+              className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#78906f]"
+            />
 
-  function TextReflectionCard({
-    title,
-    text,
-  }: {
-    title: string;
-    text: string;
-  }) {
-    return (
-      <section className="rounded-3xl border border-stone-200 bg-white/70 p-6">
-        <h3 className="text-base font-semibold text-stone-900">
-          {title}
-        </h3>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-stone-700">
-          {text}
+  function StandoutReflectionCard({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <section
+      className="
+        relative overflow-hidden
+        rounded-3xl
+        border border-[#d4dfc9]
+        bg-gradient-to-br
+        from-[#edf3e7]
+        via-[#f4f7ef]
+        to-[#fbfaf6]
+        p-6
+        shadow-[0_10px_30px_rgba(95,113,72,0.10)]
+      "
+    >
+      <div
+        aria-hidden="true"
+        className="absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-[#78906f] to-[#d9b96e]"
+      />
+
+      <div className="flex items-center gap-3">
+        <ReflectionSectionIcon type="standout" />
+
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#637454]">
+          What stood out
         </p>
-      </section>
-    );
-  }
+      </div>
+
+      <p className="mt-5 text-[17px] font-medium leading-7 text-stone-800">
+        {text}
+      </p>
+    </section>
+  );
+}
+
+  function GoldenLineCard({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <section
+      className="
+        relative overflow-hidden
+        rounded-3xl
+        border border-[#e5ce8d]
+        bg-gradient-to-br
+        from-[#fff9e8]
+        via-[#fbf4df]
+        to-[#f7edcf]
+        px-6 py-7
+        shadow-[0_10px_30px_rgba(197,154,67,0.12)]
+      "
+    >
+      <div className="flex items-center gap-3">
+        <ReflectionSectionIcon type="golden" />
+
+        <p className="text-xs font-semibold uppercase tracking-[0.17em] text-[#9a792e]">
+          Something to carry forward
+        </p>
+      </div>
+
+      <div className="mt-5 border-l-2 border-[#d9b96e] pl-4">
+        <p className="text-[18px] font-semibold leading-8 tracking-[-0.01em] text-[#4a3b22]">
+          “{text}”
+        </p>
+      </div>
+
+      <div className="mt-5 flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="text-lg text-emerald-700"
+        >
+          ✦
+        </span>
+
+        <span className="text-xs font-medium text-stone-500">
+          Carry this with you.
+        </span>
+      </div>
+    </section>
+  );
+}
+  function ReflectionSectionIcon({
+  type,
+}: {
+  type: ReflectionContentIcon;
+}) {
+  const styles: Record<
+    ReflectionContentIcon,
+    string
+  > = {
+    lookingBack:
+      "border-[#d8dfce] bg-[#e8eee1] text-[#637454]",
+
+    weighed:
+      "border-[#e2d7cc] bg-[#f3ebe4] text-[#8a6954]",
+
+    helped:
+      "border-[#d7e2ce] bg-[#e9f0e2] text-[#607653]",
+
+    moments:
+      "border-[#e8dbb7] bg-[#f8f0d9] text-[#a17d2f]",
+
+    standout:
+      "border-[#d5dfca] bg-[#e6edde] text-[#607653]",
+
+    golden:
+      "border-[#e6cf8e] bg-[#faedc8] text-[#a77e24]",
+  };
+
+  return (
+    <span
+      aria-hidden="true"
+      className={`
+        flex h-10 w-10 shrink-0
+        items-center justify-center
+        rounded-2xl border
+        ${styles[type]}
+      `}
+    >
+      {type === "lookingBack" ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className="h-5 w-5"
+        >
+          <path
+            d="M4 12A8 8 0 1 0 6.34 6.34L4 8.68"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+          <path
+            d="M4 4V8.7H8.7"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : null}
+
+      {type === "weighed" ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className="h-5 w-5"
+        >
+          <path
+            d="M12 4V20M6 7H18M7 7L4 13H10L7 7ZM17 7L14 13H20L17 7Z"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : null}
+
+      {type === "helped" ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className="h-5 w-5"
+        >
+          <path
+            d="M12 20V11M12 14C9 14 6.5 12 6 8.5C9.4 8.2 11.4 9.8 12 12M12 10C13 7 15.5 5.5 19 6C18.7 9 16.6 11 12 11"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : null}
+
+      {type === "moments" ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className="h-5 w-5"
+        >
+          <path
+            d="M12 3L13.7 8.3L19 10L13.7 11.7L12 17L10.3 11.7L5 10L10.3 8.3L12 3Z"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M18.5 15L19.2 17.3L21.5 18L19.2 18.7L18.5 21L17.8 18.7L15.5 18L17.8 17.3L18.5 15Z"
+            fill="currentColor"
+          />
+        </svg>
+      ) : null}
+
+      {type === "standout" ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className="h-5 w-5"
+        >
+          <path
+            d="M12 3L14 9L20 11L14 13L12 19L10 13L4 11L10 9L12 3Z"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : null}
+
+      {type === "golden" ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className="h-5 w-5"
+        >
+          <path
+            d="M12 3L14 9L20 11L14 13L12 19L10 13L4 11L10 9L12 3Z"
+            fill="currentColor"
+          />
+        </svg>
+      ) : null}
+    </span>
+  );
+}

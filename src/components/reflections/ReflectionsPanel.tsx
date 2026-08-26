@@ -26,6 +26,7 @@
     periodStart?: string;
     periodEnd?: string;
     lookingBack?: string;
+    highlight?: string;
     whatWeighedOnYou?: string[];
     whatHelped?: string[];
     momentsThatMattered?: string[];
@@ -1150,9 +1151,9 @@ if (!authChecked || loading) {
   </p>
 </article>
 
-{latestReflection.oneThingINoticed ? (
+{latestReflection.highlight ? (
   <StandoutReflectionCard
-    text={latestReflection.oneThingINoticed}
+    text={latestReflection.highlight}
   />
 ) : null}
 

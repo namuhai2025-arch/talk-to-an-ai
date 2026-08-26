@@ -146,12 +146,39 @@ function clampStringArray(value, maxItems, maxLength) {
 function validateReflectionPayload(payload) {
   const reflection = {
     lookingBack: clampString(payload?.lookingBack, 1800),
-    whatWeighedOnYou: clampStringArray(payload?.whatWeighedOnYou, 4, 180),
-    whatHelped: clampStringArray(payload?.whatHelped, 4, 220),
-    momentsThatMattered: clampStringArray(payload?.momentsThatMattered, 3, 240),
-    somethingToCarryForward: clampString(payload?.somethingToCarryForward, 500),
-    oneThingINoticed: clampString(payload?.oneThingINoticed, 500),
-    language: clampString(payload?.language, 40) || "unknown",
+
+    highlight: clampString(payload?.highlight, 320),
+
+    whatWeighedOnYou: clampStringArray(
+      payload?.whatWeighedOnYou,
+      4,
+      180
+    ),
+
+    whatHelped: clampStringArray(
+      payload?.whatHelped,
+      4,
+      220
+    ),
+
+    momentsThatMattered: clampStringArray(
+      payload?.momentsThatMattered,
+      3,
+      240
+    ),
+
+    somethingToCarryForward: clampString(
+      payload?.somethingToCarryForward,
+      500
+    ),
+
+    oneThingINoticed: clampString(
+      payload?.oneThingINoticed,
+      500
+    ),
+
+    language:
+      clampString(payload?.language, 40) || "unknown",
   };
 
   if (
@@ -159,7 +186,9 @@ function validateReflectionPayload(payload) {
     !reflection.somethingToCarryForward ||
     !reflection.oneThingINoticed
   ) {
-    throw new Error("Reflection model output is missing required fields");
+    throw new Error(
+      "Reflection model output is missing required fields"
+    );
   }
 
   return reflection;

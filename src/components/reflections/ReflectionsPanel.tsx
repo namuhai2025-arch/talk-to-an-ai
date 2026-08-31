@@ -21,20 +21,35 @@
     `${FUNCTIONS_BASE_URL}/generateMyWeeklyReflection`;
 
   type WeeklyReflection = {
-    id?: string;
-    status?: "ready" | "generating" | "failed" | "insufficient_activity";
-    periodStart?: string;
-    periodEnd?: string;
-    lookingBack?: string;
-    highlight?: string;
-    whatWeighedOnYou?: string[];
-    whatHelped?: string[];
-    momentsThatMattered?: string[];
-    somethingToCarryForward?: string;
-    oneThingINoticed?: string;
-    language?: string;
-    generatedAt?: string;
+  id?: string;
+  status?: "ready" | "generating" | "failed" | "insufficient_activity";
+  periodStart?: string;
+  periodEnd?: string;
+
+  lookingBack?: string;
+  highlight?: string;
+
+  whatWeighedOnYou?: string[];
+  whatHelped?: string[];
+  momentsThatMattered?: string[];
+
+  strengthsINoticed?: string[];
+  somethingToStrengthen?: string;
+
+  gratitude?: {
+    score: number;
+    evidenceCount: number;
+    items: string[];
   };
+
+  patternWorthNoticing?: string;
+
+  somethingToCarryForward?: string;
+  oneThingINoticed?: string;
+
+  language?: string;
+  generatedAt?: string;
+};
 
   type ReflectionListResponse = {
     ok?: boolean;
@@ -1181,9 +1196,47 @@ if (!authChecked || loading) {
   />
 ) : null}
 
+{latestReflection.strengthsINoticed?.length ? (
+  <ReflectionSection
+    icon="strengths"
+    title="Strengths I noticed"
+    items={latestReflection.strengthsINoticed}
+  />
+) : null}
+
+{latestReflection.somethingToStrengthen ? (
+  <TextReflectionCard
+    icon="strengthen"
+    title="Something to strengthen"
+    text={latestReflection.somethingToStrengthen}
+  />
+) : null}
+
+{latestReflection.gratitude ? (
+  <GratitudeCard
+    gratitude={latestReflection.gratitude}
+  />
+) : null}
+
+{latestReflection.patternWorthNoticing ? (
+  <TextReflectionCard
+    icon="pattern"
+    title="A pattern worth noticing"
+    text={latestReflection.patternWorthNoticing}
+  />
+) : null}
+
 {latestReflection.somethingToCarryForward ? (
   <GoldenLineCard
     text={latestReflection.somethingToCarryForward}
+  />
+) : null}
+
+{latestReflection.oneThingINoticed ? (
+  <TextReflectionCard
+    icon="noticed"
+    title="One thing I noticed"
+    text={latestReflection.oneThingINoticed}
   />
 ) : null}
 
@@ -1266,6 +1319,11 @@ if (!authChecked || loading) {
   | "weighed"
   | "helped"
   | "moments"
+  | "strengths"
+  | "strengthen"
+  | "gratitude"
+  | "pattern"
+  | "noticed"
   | "standout"
   | "golden";
 
@@ -1303,6 +1361,86 @@ function ReflectionSection({
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function TextReflectionCard({
+  icon,
+  title,
+  text,
+}: {
+  icon: ReflectionContentIcon;
+  title: string;
+  text: string;
+}) {
+  return (
+    <section className="rounded-3xl border border-stone-200 bg-white/70 p-6 shadow-[0_6px_24px_rgba(69,58,42,0.04)]">
+      <div className="flex items-center gap-3">
+        <ReflectionSectionIcon type={icon} />
+
+        <h3 className="text-base font-semibold text-stone-900">
+          {title}
+        </h3>
+      </div>
+
+      <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-stone-700">
+        {text}
+      </p>
+    </section>
+  );
+}
+
+function GratitudeCard({
+  gratitude,
+}: {
+  gratitude: {
+    score: number;
+    evidenceCount: number;
+    items: string[];
+  };
+}) {
+  const items = Array.isArray(gratitude.items)
+    ? gratitude.items
+    : [];
+
+  return (
+    <section className="rounded-3xl border border-[#e8dbb7] bg-gradient-to-br from-[#fffaf0] via-[#fbf6e8] to-white p-6 shadow-[0_6px_24px_rgba(197,154,67,0.06)]">
+      <div className="flex items-center gap-3">
+        <ReflectionSectionIcon type="gratitude" />
+
+        <h3 className="text-base font-semibold text-stone-900">
+          Gratitude
+        </h3>
+      </div>
+
+      {items.length > 0 ? (
+        <>
+          <p className="mt-4 text-sm leading-6 text-stone-600">
+            These were some of the things you seemed genuinely grateful for this week.
+          </p>
+
+          <ul className="mt-4 space-y-3">
+            {items.map((item, index) => (
+              <li
+                key={`gratitude-${index}`}
+                className="flex gap-3 text-sm leading-6 text-stone-700"
+              >
+                <span
+                  aria-hidden="true"
+                  className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#c59a43]"
+                />
+
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="mt-4 text-sm leading-6 text-stone-600">
+          No clear expressions of gratitude appeared in your conversations this week.
+        </p>
+      )}
     </section>
   );
 }
@@ -1415,6 +1553,21 @@ function ReflectionSection({
     moments:
       "border-[#e8dbb7] bg-[#f8f0d9] text-[#a17d2f]",
 
+    strengths:
+      "border-[#d7e2ce] bg-[#e9f0e2] text-[#607653]",
+
+    strengthen:
+      "border-[#d8dde4] bg-[#edf0f3] text-[#66717d]",
+
+    gratitude:
+      "border-[#ead9a8] bg-[#fbf1d7] text-[#b58a28]",
+
+    pattern:
+      "border-[#d8dfce] bg-[#edf1e8] text-[#68785a]",
+
+    noticed:
+      "border-[#ddd6e5] bg-[#f0ebf4] text-[#756683]",
+
     standout:
       "border-[#d5dfca] bg-[#e6edde] text-[#607653]",
 
@@ -1504,6 +1657,103 @@ function ReflectionSection({
           />
         </svg>
       ) : null}
+
+      {type === "strengths" ? (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    className="h-5 w-5"
+  >
+    <path
+      d="M12 20V11M12 14C9 14 6.5 12 6 8.5C9.4 8.2 11.4 9.8 12 12M12 10C13 7 15.5 5.5 19 6C18.7 9 16.6 11 12 11"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+) : null}
+
+      {type === "strengthen" ? (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    className="h-5 w-5"
+  >
+    <circle
+      cx="12"
+      cy="12"
+      r="8"
+      stroke="currentColor"
+      strokeWidth="1.7"
+    />
+    <path
+      d="M12 7V12L15 14"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+    />
+  </svg>
+) : null}
+
+      {type === "gratitude" ? (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    className="h-5 w-5"
+  >
+    <path
+      d="M12 20C12 20 5 15.8 5 10.2C5 7.4 7 5.5 9.5 5.5C10.9 5.5 12 6.3 12 6.3C12 6.3 13.1 5.5 14.5 5.5C17 5.5 19 7.4 19 10.2C19 15.8 12 20 12 20Z"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinejoin="round"
+    />
+  </svg>
+) : null}
+
+      {type === "pattern" ? (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    className="h-5 w-5"
+  >
+    <path
+      d="M6 8C8 5.5 10.5 5 12 5C15.9 5 19 8.1 19 12C19 15.9 15.9 19 12 19C9.4 19 7.2 17.6 6 15.5"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+    />
+    <path
+      d="M6 5V9H10"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+) : null}
+
+      {type === "noticed" ? (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    className="h-5 w-5"
+  >
+    <path
+      d="M4 12C6 8.5 8.7 7 12 7C15.3 7 18 8.5 20 12C18 15.5 15.3 17 12 17C8.7 17 6 15.5 4 12Z"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinejoin="round"
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r="2"
+      stroke="currentColor"
+      strokeWidth="1.7"
+    />
+  </svg>
+) : null}
 
       {type === "standout" ? (
         <svg

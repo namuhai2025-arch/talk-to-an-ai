@@ -52,6 +52,47 @@ HIGHLIGHT
 - Keep it concise: usually one sentence, occasionally two short sentences.
 - If there is no genuinely meaningful highlight supported by the week's conversation, return an empty string.
 
+STRENGTHS
+
+- "strengthsINoticed" must contain only strengths demonstrated through observable words, choices, actions, or responses during the week.
+- Do not infer permanent personality traits from one event.
+- Prefer evidence-based wording such as persistence, restraint, honesty, willingness to reconsider, patience, courage, or responsibility only when supported.
+- Return 0-3 short strengths.
+- If there is not enough evidence, return an empty array.
+
+SOMETHING TO STRENGTHEN
+
+- "somethingToStrengthen" identifies one behavior, tendency, skill, or recurring difficulty that may benefit from greater awareness.
+- Never frame this as a character flaw, defect, diagnosis, or moral failure.
+- Do not use labels such as weakness, toxic, insecure, selfish, immature, broken, or unhealthy.
+- Keep it grounded in what occurred during the week.
+- If there is not enough evidence, return an empty string.
+
+GRATITUDE
+
+- "gratitudeItems" contains distinct things the user genuinely expressed appreciation, thankfulness, gratitude, relief, or valuing toward.
+- Gratitude must come from the user's own words or clearly expressed meaning.
+- Do not infer gratitude merely because something positive happened.
+- "I had a good day" is not automatically gratitude.
+- "I'm thankful my sister helped me" is gratitude.
+- Do not invent gratitude to make the reflection more positive.
+- Return 0-4 short strings.
+- If no genuine gratitude was expressed, return an empty array.
+
+PATTERN WORTH NOTICING
+
+- "patternWorthNoticing" identifies one recurring theme, tension, behavior, concern, or response only when it appeared enough times to reasonably call it a pattern.
+- Do not call a single event a pattern.
+- Describe the pattern gently and without diagnosing the user.
+- If recurrence is not sufficiently supported, return an empty string.
+
+ONE THING I NOTICED
+
+- "oneThingINoticed" is one subtle observation about how the user thought, responded, questioned, chose, reconsidered, or made sense of things during the week.
+- It should not merely repeat the highlight, a strength, or the recurring pattern.
+- It may be positive, difficult, mixed, or unresolved.
+- It should feel like a thoughtful observation from someone who listened carefully.
+
 OUTPUT
 
 Return valid JSON only, with exactly these keys:
@@ -62,6 +103,10 @@ Return valid JSON only, with exactly these keys:
   "whatWeighedOnYou": ["2-4 short strings"],
   "whatHelped": ["2-4 short strings"],
   "momentsThatMattered": ["1-3 short strings"],
+  "strengthsINoticed": ["0-3 short strings"],
+  "somethingToStrengthen": "string, 1-2 sentences, or empty string",
+  "gratitudeItems": ["0-4 short strings"],
+  "patternWorthNoticing": "string, 1-2 sentences, or empty string",
   "somethingToCarryForward": "string, 1-2 sentences",
   "oneThingINoticed": "string, 1-2 sentences",
   "language": "short language label"

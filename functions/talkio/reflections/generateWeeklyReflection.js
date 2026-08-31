@@ -167,6 +167,28 @@ function validateReflectionPayload(payload) {
       240
     ),
 
+    strengthsINoticed: clampStringArray(
+  payload?.strengthsINoticed,
+  3,
+  220
+),
+
+somethingToStrengthen: clampString(
+  payload?.somethingToStrengthen,
+  500
+),
+
+gratitudeItems: clampStringArray(
+  payload?.gratitudeItems,
+  4,
+  220
+),
+
+patternWorthNoticing: clampString(
+  payload?.patternWorthNoticing,
+  500
+),
+
     somethingToCarryForward: clampString(
       payload?.somethingToCarryForward,
       500
@@ -190,6 +212,22 @@ function validateReflectionPayload(payload) {
       "Reflection model output is missing required fields"
     );
   }
+
+  const gratitudeEvidenceCount =
+  reflection.gratitudeItems.length;
+
+const gratitudeScore = Math.min(
+  4,
+  gratitudeEvidenceCount
+);
+
+reflection.gratitude = {
+  score: gratitudeScore,
+  evidenceCount: gratitudeEvidenceCount,
+  items: reflection.gratitudeItems,
+};
+
+delete reflection.gratitudeItems;
 
   return reflection;
 }

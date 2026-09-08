@@ -15,7 +15,8 @@
   const { analyzeBehavioralSafety } = require("./behavioralSafety");
 
   const {
-    HARMFUL_INTENT_STEERING_PROMPT,
+  HARMFUL_INTENT_STEERING_PROMPT,
+  HUMAN_EXPERIENCE_LAYER,
   } = require("./prompts");
 
   const {
@@ -510,20 +511,119 @@
   `.trim();
   }
 
+  function buildHumanExperienceRuntimeBlock({
+  activeSystemPrompt = "",
+  conversationMessages = [],
+  latestUserMessage = "",
+  behavioralSafety,
+}) {
+  const latestText = String(
+    latestUserMessage || ""
+  ).trim();
+
+  const userMessages =
+    sanitizeConversationMessages(
+      conversationMessages
+    ).filter(
+      (message) =>
+        message.role === "user"
+    );
+
+  /*
+   * Some clients include the latest message in
+   * conversationMessages and some send it separately.
+   *
+   * Remove one matching trailing copy so this count
+   * represents messages that came before the latest
+   * disclosure.
+   */
+  let priorUserMessageCount =
+    userMessages.length;
+
+  const trailingUserMessage =
+    userMessages.at(-1)?.content?.trim();
+
+  if (
+    latestText &&
+    trailingUserMessage === latestText
+  ) {
+    priorUserMessageCount = Math.max(
+      0,
+      priorUserMessageCount - 1
+    );
+  }
+
+  const elevatedSafetyRisk =
+    behavioralSafety?.shouldRedirect === true ||
+    ["medium", "high"].includes(
+      behavioralSafety?.riskLevel
+    );
+
+  /*
+   * The dynamic prompt builder may have already
+   * included this layer. Avoid adding it twice.
+   */
+  const layerAlreadyPresent =
+    String(activeSystemPrompt).includes(
+      "HUMAN EXPERIENCE AND GROUNDED HOPE"
+    );
+
+  const layerText =
+    layerAlreadyPresent
+      ? ""
+      : HUMAN_EXPERIENCE_LAYER;
+
+  const namedStoryStatus =
+    elevatedSafetyRisk
+      ? "DISABLED_SAFETY"
+      : priorUserMessageCount === 0
+        ? "DISABLED_FIRST_DISCLOSURE"
+        : "MODEL_ASSESSMENT_REQUIRED";
+
+  return `
+${layerText}
+
+HUMAN EXPERIENCE — RUNTIME CONTROL
+
+Prior user messages available: ${priorUserMessageCount}
+Named public-person story status: ${namedStoryStatus}
+
+Runtime rules:
+
+- Gentle normalization and a named public-person story are different tools.
+
+- Gentle normalization may be used when it accurately reduces shame or isolation.
+
+- A named story is rare and requires a repeated hopeless belief, sufficient context,
+  prior listening, a close factual match, and emotional readiness.
+
+- MODEL_ASSESSMENT_REQUIRED is not permission to use a story. It means the full
+  conversation must still satisfy every activation condition.
+
+- When the status is DISABLED_FIRST_DISCLOSURE or DISABLED_SAFETY, do not use a
+  named public-person story in this reply.
+
+- Never force either tool into the response.
+
+- If listening, one question, or a personal observation is enough, use that instead.
+  `.trim();
+}
+
   function buildBrainPrompt({
-    systemPrompt,
-    timeContextBlock,
-    nicknameBlock,
-    memoryPromptBlock,
-    continuityBlock,
-    nativeExpressionBlock,
-    emotionalGuidanceBlock,
-    harmfulIntentBlock,
-    variationBlock,
-    checkinModeBlock,
-    languageInstruction,
-    planConfig,
-  }) {
+  systemPrompt,
+  timeContextBlock,
+  nicknameBlock,
+  memoryPromptBlock,
+  continuityBlock,
+  nativeExpressionBlock,
+  emotionalGuidanceBlock,
+  humanExperienceBlock,
+  harmfulIntentBlock,
+  variationBlock,
+  checkinModeBlock,
+  languageInstruction,
+  planConfig,
+}) {
 
     return [
       buildLanguageControlBlock(),
@@ -571,6 +671,8 @@
       nativeExpressionBlock,
 
       emotionalGuidanceBlock,
+
+      humanExperienceBlock,
 
       harmfulIntentBlock,
 
@@ -1048,7 +1150,17 @@ try {
     nativeExpressionBlock,
 
     emotionalGuidanceBlock:
-      emotional.emotionalGuidanceBlock,
+    emotional.emotionalGuidanceBlock,
+
+    humanExperienceBlock:
+    buildHumanExperienceRuntimeBlock({
+    activeSystemPrompt,
+    conversationMessages:
+      safeMessages,
+      latestUserMessage,
+      behavioralSafety:
+      localSafetyFallback,
+   }),
 
     harmfulIntentBlock,
 
@@ -1056,7 +1168,7 @@ try {
     checkinModeBlock,
     languageInstruction,
     planConfig,
-  });
+   });
 
       debugLog(
     "TALKIO_PIPELINE_DEBUG",

@@ -1836,9 +1836,7 @@ useEffect(() => {
   }
   attachment={selectedImage}
   onAttachmentChange={setSelectedImage}
-  canAttach={
-    imageAccess?.uid === userId &&
-    imageAccess?.canAttach === true
+  canAttach={true}
   }
   attachmentStatus={
     imageAccess?.uid === userId

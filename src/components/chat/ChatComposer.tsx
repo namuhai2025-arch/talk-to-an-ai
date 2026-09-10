@@ -254,7 +254,7 @@ function ChatComposer({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/jpeg,image/png"
               className="hidden"
               onChange={chooseFile}
               disabled={disabled || !canAttach}

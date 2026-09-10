@@ -166,6 +166,9 @@ async function getUserAccessProfile(uid, decodedToken = {}) {
   };
 }
 
+export { revenuecatWebhook } from "./revenuecatWebhook.mjs";
+export { getTalkioImageAccess } from "./talkioImageAccess.mjs";
+
 export const activateTestPaid = onRequest(async (req, res) => {
   try {
     if (req.method !== "POST") {

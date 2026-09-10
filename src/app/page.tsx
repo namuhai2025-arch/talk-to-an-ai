@@ -241,6 +241,108 @@
 
     const [input, setInput] = useState("");
 
+    const [selectedImage, setSelectedImage] =
+  useState<File | null>(null);
+
+const [imageAccess, setImageAccess] = useState<{
+  uid: string;
+  canAttach: boolean;
+  remaining: number;
+  status: string;
+} | null>(null);
+
+useEffect(() => {
+  setSelectedImage(null);
+  setImageAccess(null);
+
+  if (!userId || userId === "signed_out") return;
+
+  const uid = userId;
+  const controller = new AbortController();
+  let active = true;
+
+  const timeout = window.setTimeout(
+    () => controller.abort(),
+    30_000,
+  );
+
+  const checkAccess = async () => {
+    try {
+      const user = getFirebaseAuth().currentUser;
+
+      if (!user || user.uid !== uid) return;
+
+      const token = await user.getIdToken();
+      if (!active) return;
+
+      const response = await fetch("/api/image-access", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: "{}",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error("Image access unavailable");
+      }
+
+      if (
+        !data ||
+        typeof data.canAttach !== "boolean" ||
+        !Number.isSafeInteger(data.remaining) ||
+        data.remaining < 0 ||
+        typeof data.eligible !== "boolean"
+      ) {
+        throw new Error("Invalid image access response");
+      }
+
+      if (
+        !active ||
+        getFirebaseAuth().currentUser?.uid !== uid
+      ) {
+        return;
+      }
+
+      setImageAccess({
+        uid,
+        canAttach: data.canAttach,
+        remaining: data.remaining,
+        status: data.eligible
+          ? `${data.remaining} of 30 images remaining this month`
+          : data.reason === "IMAGE_ALLOWANCE_NOT_CONFIGURED"
+            ? "Image attachments are not available on this plan yet."
+            : "Image attachments require an active Companion subscription.",
+      });
+    } catch {
+      if (active) {
+        setImageAccess({
+          uid,
+          canAttach: false,
+          remaining: 0,
+          status:
+            "Unable to check image access. Please reload to try again.",
+        });
+      }
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
+
+  void checkAccess();
+
+  return () => {
+    active = false;
+    controller.abort();
+    window.clearTimeout(timeout);
+  };
+}, [userId]);
+
     const [loading, setLoading] = useState(false);
     const [showTyping, setShowTyping] = useState(false);
 
@@ -943,8 +1045,10 @@
   }
 
     async function sendMessage(overrideText?: string) {
-      const text = (overrideText ?? input).trim();
-      const normalizedText = text.toLowerCase();
+  if (selectedImage) return;
+
+  const text = (overrideText ?? input).trim();
+  const normalizedText = text.toLowerCase();
 
   const positiveSignals = [
     "thank you",
@@ -1730,6 +1834,18 @@
         ? "Daily free limit reached."
         : "Type your message..."
   }
+  attachment={selectedImage}
+  onAttachmentChange={setSelectedImage}
+  canAttach={
+    imageAccess?.uid === userId &&
+    imageAccess?.canAttach === true
+  }
+  attachmentStatus={
+    imageAccess?.uid === userId
+      ? imageAccess.status
+      : "Checking image allowance..."
+  }
+  imageSendingReady={true}
 />
         </>
       )}

@@ -1,14 +1,22 @@
 "use client";
 
-import React, { useMemo, useRef } from "react";
+import React, { useMemo } from "react";
 
 type ChatRole = "user" | "assistant";
+
+export type ChatAttachment = {
+  name: string;
+  mimeType: string;
+  base64: string;
+};
 
 type ChatMessage = {
   role: ChatRole;
   content: string;
   timestamp: number;
   isFeedbackPrompt?: boolean;
+  attachments?: ChatAttachment[];
+  attachment?: ChatAttachment | null;
 };
 
 type MessageBubbleProps = {
@@ -32,150 +40,112 @@ function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
 
-  const longPressTimer =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const touchStartPosition = useRef({
-    x: 0,
-    y: 0,
-  });
-
-  const didLongPress = useRef(false);
-
-  const formattedTime = useMemo(() => {
+  const formattedDateTime = useMemo(() => {
     if (!showTimestamp) return "";
+    const dateObj = new Date(message.timestamp);
 
-    return new Date(message.timestamp).toLocaleTimeString([], {
+    const dateStr = dateObj.toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+    });
+
+    const timeStr = dateObj.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
+
+    return `${dateStr} • ${timeStr}`;
   }, [message.timestamp, showTimestamp]);
-
-  const wrapperClassName = isUser
-    ? "relative flex flex-col items-end"
-    : "relative flex flex-col items-start";
-
-  const bubbleClassName = [
-    "whitespace-pre-wrap break-words px-4 py-3 text-[16.5px] leading-5.5",
-    "select-none",
-    "transition-all duration-150",
-    copyMenuOpen ? "ring-2 ring-stone-400/50" : "",
-    isUser
-      ? "mr-4 max-w-[74%] bg-[#dfe8d2] text-stone-900"
-      : "ml-4 max-w-[74%] bg-white text-stone-800 shadow-sm",
-    sameAsPrev ? "mt-0.5" : "mt-2",
-    sameAsNext ? "mb-0" : "mb-0.5",
-    isUser
-      ? "rounded-[28px] rounded-br-md"
-      : "rounded-[28px] rounded-bl-md",
-  ].join(" ");
-
-  const timestampClassName = [
-    "mt-0.5 text-[11px] text-stone-400",
-    isUser ? "mr-5 text-right" : "ml-5 text-left",
-  ].join(" ");
-
-  const clearLongPressTimer = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const startLongPress = (
-    event: React.TouchEvent<HTMLDivElement>,
-  ) => {
-    const touch = event.touches[0];
-
-    touchStartPosition.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-    };
-
-    didLongPress.current = false;
-
-    clearLongPressTimer();
-
-    longPressTimer.current = setTimeout(() => {
-  didLongPress.current = true;
-  onOpenCopyMenu();
-}, 450);
-  };
-
-  const handleTouchMove = (
-    event: React.TouchEvent<HTMLDivElement>,
-  ) => {
-    const touch = event.touches[0];
-
-    const deltaX = Math.abs(
-      touch.clientX - touchStartPosition.current.x,
-    );
-
-    const deltaY = Math.abs(
-      touch.clientY - touchStartPosition.current.y,
-    );
-
-    /*
-     * Cancel the long press only when the user
-     * is clearly scrolling.
-     */
-    if (deltaX > 12 || deltaY > 12) {
-      clearLongPressTimer();
-    }
-  };
-
-  const handleTouchEnd = () => {
-    clearLongPressTimer();
-  };
 
   const copyMessage = async () => {
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(message.content);
-      } else {
-        const textarea = document.createElement("textarea");
-
-        textarea.value = message.content;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-
-        document.body.appendChild(textarea);
-
-        textarea.focus();
-        textarea.select();
-
-        document.execCommand("copy");
-
-        document.body.removeChild(textarea);
       }
-
       onCloseCopyMenu();
-
-      console.log("Message copied");
     } catch (error) {
       console.error("Failed to copy message:", error);
     }
   };
 
+  const allAttachments: ChatAttachment[] = useMemo(() => {
+    if (Array.isArray(message.attachments) && message.attachments.length > 0) {
+      return message.attachments;
+    }
+    if (message.attachment) {
+      return [message.attachment];
+    }
+    return [];
+  }, [message.attachments, message.attachment]);
+
+  // Prevent rendering empty bubble shells (fixes ghost boxes above timestamps)
+  if (!message.content && allAttachments.length === 0) {
+    return null;
+  }
+
   return (
-    <div className={wrapperClassName}>
+    <div 
+      className={`relative flex flex-col ${isUser ? "items-end" : "items-start"} w-full my-1`}
+      style={{ touchAction: "pan-y" }}
+    >
       <div
-        className={bubbleClassName}
-        style={{
-          WebkitTouchCallout: "none",
-          WebkitUserSelect: "none",
-          userSelect: "none",
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onOpenCopyMenu();
         }}
-        onTouchStart={startLongPress}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
-        onContextMenu={(event) => {
-  event.preventDefault();
-  onOpenCopyMenu();
-}}
+        className={[
+          // User bubble expands up to 85%, Assistant expands up to 96%
+          isUser ? "max-w-[85%] md:max-w-[80%]" : "max-w-[96%] md:max-w-[94%]",
+          "min-w-0 whitespace-pre-wrap break-words px-5 py-3 text-[15px] leading-relaxed",
+          "select-text transition-all duration-150",
+          copyMenuOpen ? "ring-2 ring-stone-400/50" : "",
+          isUser
+            ? "mr-1 rounded-[22px] rounded-br-sm bg-[#dfe8d2] text-stone-900"
+            : "ml-1 rounded-[22px] rounded-tl-sm bg-white text-stone-800 shadow-xs border border-stone-200/60 dark:border-stone-800 dark:bg-[#212121] dark:text-stone-100",
+          sameAsPrev ? "mt-1" : "mt-2",
+          sameAsNext ? "mb-0" : "mb-1",
+        ].join(" ")}
+        style={{ touchAction: "pan-y" }}
       >
-        {message.content}
+        {/* Attachments preview grid */}
+        {allAttachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {allAttachments.map((att, idx) => (
+              <div key={idx} className="overflow-hidden rounded-lg">
+                {att.mimeType?.startsWith("image/") ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`data:${att.mimeType};base64,${att.base64}`}
+                    alt={att.name || "Attachment"}
+                    className="max-h-80 max-w-full rounded-lg object-contain pointer-events-none"
+                  />
+                ) : (
+                  <div className="flex items-center gap-2 rounded-lg bg-black/5 px-3 py-2 text-xs font-medium text-stone-700 dark:bg-white/10 dark:text-stone-200">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    <span className="truncate max-w-[240px]">{att.name}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Text Content */}
+        {message.content && (
+          <div className="w-full min-w-0 select-text font-normal break-words">
+            {message.content}
+          </div>
+        )}
       </div>
 
       {copyMenuOpen && (
@@ -183,9 +153,9 @@ function MessageBubble({
           type="button"
           onClick={copyMessage}
           className={[
-            "z-20 mt-1 rounded-xl bg-white",
-            "px-4 py-2 text-sm font-medium text-stone-800",
-            "shadow-lg border border-stone-200",
+            "z-20 mt-1 rounded-lg bg-white dark:bg-stone-800",
+            "px-3 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200",
+            "shadow-md border border-stone-200 dark:border-stone-700",
             isUser ? "mr-4" : "ml-4",
           ].join(" ")}
         >
@@ -194,32 +164,16 @@ function MessageBubble({
       )}
 
       {showTimestamp && (
-        <div className={timestampClassName}>
-          {formattedTime}
+        <div
+          className={`mt-0.5 text-[11px] text-stone-400 ${
+            isUser ? "mr-3 text-right" : "ml-3 text-left"
+          }`}
+        >
+          {formattedDateTime}
         </div>
       )}
     </div>
   );
 }
 
-function areMessageBubblePropsEqual(
-  previous: MessageBubbleProps,
-  next: MessageBubbleProps,
-) {
-  return (
-    previous.message.role === next.message.role &&
-    previous.message.content === next.message.content &&
-    previous.message.timestamp === next.message.timestamp &&
-    previous.message.isFeedbackPrompt ===
-      next.message.isFeedbackPrompt &&
-    previous.sameAsPrev === next.sameAsPrev &&
-    previous.sameAsNext === next.sameAsNext &&
-    previous.showTimestamp === next.showTimestamp &&
-    previous.copyMenuOpen === next.copyMenuOpen
-  );
-}
-
-export default React.memo(
-  MessageBubble,
-  areMessageBubblePropsEqual,
-);
+export default React.memo(MessageBubble);

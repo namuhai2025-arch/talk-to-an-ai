@@ -1,1858 +1,419 @@
-  "use client";
+"use client";
 
-  import {
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-  } from "react";
-  import {
-    getFirebaseAuth,
-    getFirebaseAnalytics,
-    logEvent,
-  } from "@/lib/firebase";
-  import {
-    registerTalkioPushToken,
-    syncTalkioProfile,
-  } from "@/lib/registerPushToken";
-  import { configureRevenueCat } from "@/lib/revenuecat";
-  import { App } from "@capacitor/app";
+import { useState, useEffect, useRef } from "react";
+import ChatList from "@/components/chat/ChatList";
+import ChatComposer from "@/components/chat/ChatComposer";
+import AuthGate from "@/components/auth/AuthGate";
 
-  import ChatList from "@/components/chat/ChatList";
-  import ChatComposer from "@/components/chat/ChatComposer";
-  import ReflectionsPanel from "@/components/reflections/ReflectionsPanel";
+export interface ChatAttachment {
+  name: string;
+  mimeType: string;
+  base64: string;
+}
 
-  import {
-    GoogleAuthProvider,
-    OAuthProvider,
-    signInWithPopup,
-    signInWithCredential,
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-  } from "firebase/auth";
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  attachments?: ChatAttachment[];
+  attachment?: ChatAttachment | null;
+  timestamp: number;
+}
 
-  import EmailAuthCard from "@/components/auth/EmailAuthCard";
+export interface Session {
+  id: string;
+  title: string;
+  createdAt: number;
+  messages: ChatMessage[];
+}
 
-  import { Capacitor } from "@capacitor/core";
-  import {
-    AppleSignIn,
-    SignInScope,
-  } from "@capawesome/capacitor-apple-sign-in";
-  import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
+const STORAGE_KEY = "intel_personal_sessions_v1";
+const ACTIVE_SESSION_KEY = "intel_personal_active_id_v1";
 
-  import { useAutoScroll } from "@/hooks/useAutoScroll";
-  import { resolveTalkioTier } from "@/lib/subscription";
-  import { useKeyboard } from "@/hooks/useKeyboard";
+function cleanSessionTitle(rawText: string, fallbackName?: string): string {
+  if (!rawText && fallbackName) return fallbackName.replace(/\.[^/.]+$/, "");
 
-  type ChatRole = "user" | "assistant";
+  let cleaned = rawText
+    .replace(/^(\/\*|\/\/|#+|<!--|\*)\s*/, "")
+    .replace(/(\*\/|-->)\s*$/, "")
+    .replace(/[`"'{}()[\]]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  type ChatMessage = {
-    role: ChatRole;
-    content: string;
-    timestamp: number;
-    isFeedbackPrompt?: boolean;
+  if (!cleaned) return "Workspace Task";
+  return cleaned.length > 36 ? `${cleaned.slice(0, 36).trim()}...` : cleaned;
+}
+
+export default function WorkspacePage() {
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string>("");
+  const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Inline title editing
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editTitleValue, setEditTitleValue] = useState("");
+
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const editInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const rawSessions = localStorage.getItem(STORAGE_KEY);
+    const savedActiveId = localStorage.getItem(ACTIVE_SESSION_KEY);
+
+    if (rawSessions) {
+      try {
+        const parsed: Session[] = JSON.parse(rawSessions);
+        setSessions(parsed);
+        if (savedActiveId && parsed.some((s) => s.id === savedActiveId)) {
+          setActiveSessionId(savedActiveId);
+        } else if (parsed.length > 0) {
+          setActiveSessionId(parsed[0].id);
+        }
+      } catch (e) {
+        console.error("Failed to restore sessions", e);
+      }
+    } else {
+      createNewSession();
+    }
+  }, []);
+
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || {
+    id: activeSessionId,
+    title: "New Session",
+    createdAt: Date.now(),
+    messages: [],
   };
 
-  const MAX_MESSAGES = 30;
+  useEffect(() => {
+    if (activeSession.messages.length > 0 || loading) {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "auto" });
+      });
+    }
+  }, [activeSessionId, activeSession.messages.length, loading]);
 
-  const CHAT_REQUEST_TIMEOUT_MS = 30_000;
-  const CHAT_RETRY_DELAY_MS = 800;
-  const MAX_CHAT_ATTEMPTS = 2;
+  useEffect(() => {
+    if (sessions.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    }
+    if (activeSessionId) {
+      localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId);
+    }
+  }, [sessions, activeSessionId]);
 
-  type SafetyInterruption = {
-    blocked: boolean;
-    reason?: "violent_admission" | "violent_threat" | "coverup_request";
+  useEffect(() => {
+    if (editingSessionId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingSessionId]);
+
+  const createNewSession = (title = "New Task") => {
+    const newId = `session_${Date.now()}`;
+    const newSession: Session = {
+      id: newId,
+      title,
+      createdAt: Date.now(),
+      messages: [],
+    };
+    setSessions((prev) => [newSession, ...prev]);
+    setActiveSessionId(newId);
+    setInput("");
+    setAttachments([]);
   };
 
-  function normalizeSafetyText(value: string) {
-    return value
-      .toLowerCase()
-      .replace(/[’']/g, "'")
-      .replace(/1/g, "i")
-      .replace(/0/g, "o")
-      .replace(/@/g, "a")
-      .replace(/3/g, "e")
-      .replace(/[^a-z\s']/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
+  const startRenaming = (session: Session, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingSessionId(session.id);
+    setEditTitleValue(session.title);
+  };
 
-  function classifySafetyInterruption(input: string): SafetyInterruption {
-    const text = normalizeSafetyText(input);
+  const saveRenamedTitle = () => {
+    if (!editingSessionId) return;
+    const finalTitle = editTitleValue.trim() || "Workspace Task";
+    setSessions((prev) =>
+      prev.map((s) => (s.id === editingSessionId ? { ...s, title: finalTitle } : s))
+    );
+    setEditingSessionId(null);
+  };
 
-    const emotionalHurtOnly =
-    /\b(hurt me|hurt my feelings|i feel hurt|felt hurt|they hurt me|he hurt me|she hurt me|acted like i hurt them|acted like i hurt him|acted like i hurt her)\b/i.test(text) &&
-    !/\b(kill|murder|shoot|stab|poison|strangle|weapon|gun|knife|blood|body|corpse)\b/i.test(text);
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      saveRenamedTitle();
+    } else if (e.key === "Escape") {
+      setEditingSessionId(null);
+    }
+  };
 
-  if (emotionalHurtOnly) {
-    return { blocked: false };
-  }
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.includes(",") ? result.split(",")[1] : result;
+        resolve(base64);
+      };
+      reader.onerror = (error) => reject(error);
+      reader.readAsDataURL(file);
+    });
+  };
 
-  const emotionalManipulationOnly =
-    /\b(gaslight|gaslighting|manipulate|manipulated|narcissist|narcissistic|emotionally abusive|toxic relationship|they blamed me|made me feel crazy|made me doubt myself)\b/i.test(text);
+  const handleSend = async () => {
+    if ((!input.trim() && attachments.length === 0) || loading) return;
 
-  if (emotionalManipulationOnly) {
-    return { blocked: false };
-  }
+    let attachedDataList: ChatAttachment[] = [];
+    if (attachments.length > 0) {
+      attachedDataList = await Promise.all(
+        attachments.map(async (file) => ({
+          name: file.name,
+          mimeType: file.type || "application/octet-stream",
+          base64: await fileToBase64(file),
+        }))
+      );
+    }
 
-    const violentAdmission =
-    /\b(i|we)\b.{0,40}\b(killed|kill|k1lled|murdered|murderd|murdr|shot|shoot|stabbed|stab|stabb|poisoned|poison|strangled|strangle|choked|choke|beat)\b.{0,20}\b(someone|somebody|person|him|her|them|wife|husband|girlfriend|boyfriend|boss|coworker|friend|child)\b/i.test(text) ||
-
-    /\b(i|we)\b.{0,20}\b(committed murder|killed a person|murdered a person)\b/i.test(text) ||
-
-    /\b(yes|yeah|yep|actually|honestly|seriously)\b.{0,20}\b(i|we)\b.{0,20}\b(killed|murdered|shot|stabbed)\b/i.test(text);
-
-    const violentThreat =
-    /\b(i|im|i'm|we)\b.{0,20}\b(will|wil|gonna|going to|am going to|are going to|want to|wanna|plan to|planning to|about to)?\b.{0,20}\b(kill|kil|k1ll|murder|murdr|shoot|shot|stab|stabb|poison|poizon|strangle)\b.{0,20}\b(him|her|them|someone|somebody|person|people|wife|husband|boyfriend|girlfriend|boss|friend)?\b/i.test(text);
-
-    const coverupRequest =
-      /\b(hide|bury|dispose of|get rid of|cover up|clean up)\b.*\b(body|corpse|evidence|weapon|blood)\b/.test(text) ||
-      /\bhow\s+(do|can)\s+i\s+(hide|bury|dispose of|get rid of|cover up)\b/.test(text);
-
-    if (violentAdmission) return { blocked: true, reason: "violent_admission" };
-    if (violentThreat) return { blocked: true, reason: "violent_threat" };
-    if (coverupRequest) return { blocked: true, reason: "coverup_request" };
-
-    return { blocked: false };
-  }
-
-  function buildGreeting(displayName: string): ChatMessage {
-    const name = displayName.trim();
-
-    return {
-      role: "assistant",
-      content: name ? `Hey ${name}, I'm Talkio.` : "Hey, I'm Talkio.",
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: input,
+      attachments: attachedDataList,
       timestamp: Date.now(),
     };
-  }
 
-  function buildConversationTitle(messages: ChatMessage[]): string {
-    const firstUser = messages.find(
-      (m) => m.role === "user" && m.content.trim().length > 0
+    const currentMessages = activeSession.messages;
+    const nextMessages = [...currentMessages, userMessage];
+
+    const isFirstMessage = currentMessages.length === 0;
+    const updatedTitle = isFirstMessage
+      ? cleanSessionTitle(input, attachedDataList[0]?.name)
+      : activeSession.title;
+
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === activeSessionId
+          ? { ...s, title: updatedTitle, messages: nextMessages }
+          : s
+      )
     );
 
-    if (!firstUser) return "New conversation";
-
-    const text = firstUser.content.trim().replace(/\s+/g, " ");
-    return text.length <= 36 ? text : `${text.slice(0, 36).trim()}...`;
-  }
-
-  function loadJson<T>(key: string, fallback: T): T {
-    if (typeof window === "undefined") return fallback;
+    setInput("");
+    setAttachments([]);
+    setLoading(true);
 
     try {
-      const raw = localStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as T) : fallback;
-    } catch {
-      return fallback;
-    }
-  }
+      const auth = (await import("@/lib/firebase")).getFirebaseAuth();
+      const token = await auth.currentUser?.getIdToken();
 
-  function sleep(ms: number) {
-    return new Promise<void>((resolve) => {
-      window.setTimeout(resolve, ms);
-    });
-  }
-
-  type ChatApiResponse = {
-    reply?: string;
-    error?: string;
-    code?: string;
-    retryable?: boolean;
-    retryAfterSeconds?: number;
-    requestId?: string;
-
-    paywallRequired?: boolean;
-    safetyBlocked?: boolean;
-    crisisLock?: boolean;
-    remainingDaily?: number;
-
-    dynamicMode?: string;
-    path?: string;
-  };
-
-  type ChatRequestPayload = {
-    message: string;
-    messages: ChatMessage[];
-    userTier: string;
-    source: "chat" | "checkin";
-  };
-
-  type ChatAttemptResult = {
-    res: Response;
-    data: ChatApiResponse;
-    rawResponseBody: string;
-  };
-
-  class ChatTransportError extends Error {
-    code: "CHAT_TIMEOUT" | "CHAT_NETWORK_ERROR";
-
-    constructor(
-      code: "CHAT_TIMEOUT" | "CHAT_NETWORK_ERROR",
-      message: string
-    ) {
-      super(message);
-      this.name = "ChatTransportError";
-      this.code = code;
-    }
-  }
-
-  export default function Page() {
-    const bottomRef = useRef<HTMLDivElement | null>(null);
-
-    const [acceptedTerms, setAcceptedTerms] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("talkio_terms_accepted") === "true";
-  });
-    const [showEmailAuth, setShowEmailAuth] = useState(false);
-
-  const [emailAuthMode, setEmailAuthMode] =
-    useState<"signup" | "signin">("signup");
-
-  const [emailAddress, setEmailAddress] = useState("");
-  const [emailPassword, setEmailPassword] = useState("");
-  const [emailAuthError, setEmailAuthError] = useState("");
-
-  const [isSigningIn, setIsSigningIn] = useState(false);
-
-  const [signingProvider, setSigningProvider] =
-    useState<"google" | "apple" | "email" | null>(null);
-
-    const [authInProgress, setAuthInProgress] = useState(false);
-
-    const [mounted, setMounted] = useState(false);
-    const [userId, setUserId] = useState<string | null>(null);
-    const [authReady, setAuthReady] = useState(false);
-    const [checkingAuth, setCheckingAuth] = useState(true);
-    const isSignedOut = userId === "signed_out";
-
-    const [pinRequired, setPinRequired] = useState(false);
-    const [pinUnlocked, setPinUnlocked] = useState(false);
-    const [enteredPin, setEnteredPin] = useState("");
-
-    const [displayName, setDisplayName] = useState("");
-    const [draftNickname, setDraftNickname] = useState("");
-    const [showNamePrompt, setShowNamePrompt] = useState(false);
-
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [conversationLoaded, setConversationLoaded] = useState(false);
-    const [conversationTitle, setConversationTitle] =
-      useState("New conversation");
-
-    const [input, setInput] = useState("");
-
-    const [selectedImage, setSelectedImage] =
-  useState<File | null>(null);
-
-const [imageAccess, setImageAccess] = useState<{
-  uid: string;
-  canAttach: boolean;
-  remaining: number;
-  status: string;
-} | null>(null);
-
-useEffect(() => {
-  setSelectedImage(null);
-  setImageAccess(null);
-
-  if (!userId || userId === "signed_out") return;
-
-  const uid = userId;
-  const controller = new AbortController();
-  let active = true;
-
-  const timeout = window.setTimeout(
-    () => controller.abort(),
-    30_000,
-  );
-
-  const checkAccess = async () => {
-    try {
-      const user = getFirebaseAuth().currentUser;
-
-      if (!user || user.uid !== uid) return;
-
-      const token = await user.getIdToken();
-      if (!active) return;
-
-      const response = await fetch("/api/image-access", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: "{}",
-        cache: "no-store",
-        signal: controller.signal,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error("Image access unavailable");
-      }
-
-      if (
-        !data ||
-        typeof data.canAttach !== "boolean" ||
-        !Number.isSafeInteger(data.remaining) ||
-        data.remaining < 0 ||
-        typeof data.eligible !== "boolean"
-      ) {
-        throw new Error("Invalid image access response");
-      }
-
-      if (
-        !active ||
-        getFirebaseAuth().currentUser?.uid !== uid
-      ) {
-        return;
-      }
-
-      setImageAccess({
-        uid,
-        canAttach: data.canAttach,
-        remaining: data.remaining,
-        status: data.eligible
-          ? `${data.remaining} of 30 images remaining this month`
-          : data.reason === "IMAGE_ALLOWANCE_NOT_CONFIGURED"
-            ? "Image attachments are not available on this plan yet."
-            : "Image attachments require an active Companion subscription.",
-      });
-    } catch {
-      if (active) {
-        setImageAccess({
-          uid,
-          canAttach: false,
-          remaining: 0,
-          status:
-            "Unable to check image access. Please reload to try again.",
-        });
-      }
-    } finally {
-      window.clearTimeout(timeout);
-    }
-  };
-
-  void checkAccess();
-
-  return () => {
-    active = false;
-    controller.abort();
-    window.clearTimeout(timeout);
-  };
-}, [userId]);
-
-    const [loading, setLoading] = useState(false);
-    const [showTyping, setShowTyping] = useState(false);
-
-    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-
-    const [showSafety, setShowSafety] = useState(false);
-    const [isLimitReached, setIsLimitReached] = useState(false);
-
-    const [crisisLock, setCrisisLock] = useState(false);
-
-    const [feedbackAsked, setFeedbackAsked] = useState(false);
-    const [showReviewPrompt, setShowReviewPrompt] = useState(false);
-
-    const [activeTab, setActiveTab] =
-    useState<"chat" | "reflections">("chat");
-
-    const startupServicesUidRef = useRef<string | null>(null);
-
-    const storageKeys = useMemo(
-      () => ({
-        messages: "talkio_messages",
-        title: "talkio_title",
-        nickname: "talkio_nickname",
-        safety: "talkio_safety_acknowledged",
-      }),
-      []
-    );
-
-    useAutoScroll({
-    bottomRef,
-    messageCount: messages.length,
-    showTyping,
-    mounted,
-  });
-
-    async function performChatAttempt(
-    payload: ChatRequestPayload,
-    token: string
-  ): Promise<ChatAttemptResult> {
-    const controller = new AbortController();
-
-    const timeoutId = window.setTimeout(() => {
-      controller.abort();
-    }, CHAT_REQUEST_TIMEOUT_MS);
-
-    try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
+        body: JSON.stringify({
+          message: userMessage.content,
+          messages: nextMessages,
+          attachments: attachedDataList,
+        }),
       });
 
-      const rawResponseBody = await res.text();
-
-      let data: ChatApiResponse = {};
-
-      if (rawResponseBody.trim()) {
-        try {
-          data = JSON.parse(rawResponseBody) as ChatApiResponse;
-        } catch (jsonError) {
-          console.error("Chat JSON parse failed:", {
-            error: jsonError,
-            status: res.status,
-            statusText: res.statusText,
-            contentType: res.headers.get("content-type"),
-            rawBodyPreview: rawResponseBody.slice(0, 500),
-          });
-        }
-      }
-
-      return {
-        res,
-        data,
-        rawResponseBody,
+      const data = await res.json();
+      const assistantMessage: ChatMessage = {
+        role: "assistant",
+        content: data.reply,
+        timestamp: Date.now(),
       };
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new ChatTransportError(
-          "CHAT_TIMEOUT",
-          "The chat request took too long."
-        );
-      }
 
-      if (error instanceof TypeError) {
-        throw new ChatTransportError(
-          "CHAT_NETWORK_ERROR",
-          "The chat service could not be reached."
-        );
-      }
+      const finalMessages = [...nextMessages, assistantMessage];
 
-      throw error;
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === activeSessionId
+            ? { ...s, messages: finalMessages }
+            : s
+        )
+      );
+    } catch (err) {
+      console.error("Chat dispatch error:", err);
     } finally {
-      window.clearTimeout(timeoutId);
-    }
-  }
-    function shouldRetryChatResult(
-    res: Response,
-    data: ChatApiResponse
-  ): boolean {
-    /*
-    * Never retry account limits or paywall responses.
-    */
-    const isAccountLimit =
-      data.paywallRequired === true ||
-      data.code === "DAILY_LIMIT_REACHED" ||
-      data.code === "MESSAGE_LIMIT_REACHED" ||
-      data.code === "PAYWALL_REQUIRED";
-
-    if (isAccountLimit) {
-      return false;
-    }
-
-    /*
-    * Retry temporary gateway and service failures.
-    */
-    if (
-      res.status === 408 ||
-      res.status === 502 ||
-      res.status === 503 ||
-      res.status === 504
-    ) {
-      return true;
-    }
-
-    /*
-    * Only retry a 429 when the backend explicitly identifies it
-    * as temporary and retryable.
-    */
-    if (res.status === 429) {
-      return (
-        data.retryable === true ||
-        data.code === "AI_RATE_LIMITED" ||
-        data.code === "UPSTREAM_RATE_LIMITED"
-      );
-    }
-
-    return false;
-  }
-    async function requestChatWithRetry(
-    payload: ChatRequestPayload,
-    token: string
-  ): Promise<ChatAttemptResult> {
-    let lastTransportError: unknown;
-
-    for (let attempt = 1; attempt <= MAX_CHAT_ATTEMPTS; attempt += 1) {
-      try {
-        const result = await performChatAttempt(payload, token);
-
-        const hasAnotherAttempt = attempt < MAX_CHAT_ATTEMPTS;
-        const shouldRetry =
-          hasAnotherAttempt &&
-          shouldRetryChatResult(result.res, result.data);
-
-        if (!shouldRetry) {
-          return result;
-        }
-
-        console.warn("Retrying temporary chat response:", {
-          attempt,
-          nextAttempt: attempt + 1,
-          status: result.res.status,
-          statusText: result.res.statusText,
-          code: result.data.code,
-          retryable: result.data.retryable,
-          requestId:
-            result.data.requestId ||
-            result.res.headers.get("x-request-id") ||
-            undefined,
-        });
-      } catch (error: unknown) {
-        lastTransportError = error;
-
-        const hasAnotherAttempt = attempt < MAX_CHAT_ATTEMPTS;
-
-        const isRetryableTransportError =
-          error instanceof ChatTransportError &&
-          (error.code === "CHAT_TIMEOUT" ||
-            error.code === "CHAT_NETWORK_ERROR");
-
-        if (!hasAnotherAttempt || !isRetryableTransportError) {
-          throw error;
-        }
-
-        console.warn("Retrying failed chat connection:", {
-          attempt,
-          nextAttempt: attempt + 1,
-          code: error.code,
-          message: error.message,
-        });
-      }
-
-      await sleep(CHAT_RETRY_DELAY_MS);
-    }
-
-    throw (
-      lastTransportError ||
-      new Error("Chat request failed after the retry.")
-    );
-  }
-    
-    useKeyboard();
-
-    useEffect(() => {
-  const done = localStorage.getItem("talkio_onboarding_complete");
-
-  if (!done) {
-    window.location.href = "/onboarding";
-  }
-}, []);
-
-    useEffect(() => {
-      setMounted(true);
-    }, []);
-
-    useEffect(() => {
-    if (!mounted) return;
-
-    const enabled =
-      localStorage.getItem("talkio_pin_enabled") === "true";
-    const savedPin = localStorage.getItem("talkio_pin_code");
-    const locked =
-      localStorage.getItem("talkio_pin_locked") === "true";
-
-    if (enabled && savedPin && locked) {
-      setPinRequired(true);
-      setPinUnlocked(false);
-    } else {
-      setPinRequired(false);
-      setPinUnlocked(true);
-    }
-  }, [mounted]);
-
-    useEffect(() => {
-      if (!mounted) return;
-
-      const acknowledged = localStorage.getItem(storageKeys.safety);
-      if (!acknowledged) setShowSafety(true);
-    }, [mounted, storageKeys]);
-
-    useEffect(() => {
-      if (!mounted) return;
-
-      const savedNickname = loadJson<string>(storageKeys.nickname, "");
-      const cleanNickname =
-        typeof savedNickname === "string" ? savedNickname.trim() : "";
-
-      if (cleanNickname) {
-        setDisplayName(cleanNickname);
-        setDraftNickname(cleanNickname);
-      }
-
-      const savedMessages = loadJson<ChatMessage[]>(storageKeys.messages, []);
-      const normalizedMessages = Array.isArray(savedMessages)
-        ? savedMessages
-            .filter(
-              (m) =>
-                m &&
-                (m.role === "user" || m.role === "assistant") &&
-                typeof m.content === "string"
-            )
-            .map((m, i) => ({
-              role: m.role,
-              content: m.content,
-              timestamp:
-                typeof m.timestamp === "number" ? m.timestamp : Date.now() + i,
-            }))
-            .slice(-MAX_MESSAGES)
-        : [];
-
-      if (normalizedMessages.length > 0) {
-    setMessages(normalizedMessages);
-  } else {
-    setMessages([buildGreeting(cleanNickname)]);
-  }
-
-      const savedTitle = loadJson<string>(storageKeys.title, "New conversation");
-      if (typeof savedTitle === "string" && savedTitle.trim()) {
-        setConversationTitle(savedTitle);
-      }
-      setConversationLoaded(true);
-    }, [mounted, storageKeys]);
-
-    useEffect(() => {
-      if (!mounted) return;
-      localStorage.setItem(storageKeys.nickname, JSON.stringify(displayName));
-    }, [displayName, mounted, storageKeys]);
-
-    useEffect(() => {
-    if (!mounted || !conversationLoaded) return;
-    localStorage.setItem(storageKeys.messages, JSON.stringify(messages));
-  }, [messages, mounted, conversationLoaded, storageKeys]);
-
-    useEffect(() => {
-    if (!mounted || !conversationLoaded) return;
-    localStorage.setItem(storageKeys.title, JSON.stringify(conversationTitle));
-  }, [conversationTitle, mounted, conversationLoaded, storageKeys]);
-
-    useEffect(() => {
-      if (!mounted) return;
-
-      setMessages((prev) => {
-        if (!prev.length) return [buildGreeting(displayName)];
-
-        const first = prev[0];
-        const shouldReplaceGreeting =
-          first.role === "assistant" &&
-          (first.content.startsWith("Hey") ||
-            first.content.includes("I'm Talkio."));
-
-        if (!shouldReplaceGreeting) return prev;
-
-        return [buildGreeting(displayName), ...prev.slice(1)];
-      });
-    }, [displayName, mounted]);
-
-    useEffect(() => {
-    if (!mounted) return;
-
-    const params = new URLSearchParams(window.location.search);
-    const source = params.get("source");
-    const message = params.get("message");
-
-    if (source === "checkin") {
-      sessionStorage.setItem("talkio_checkin_opened", "true");
-
-      if (message) {
-        sessionStorage.setItem("talkio_checkin_message", message);
-      }
-    }
-  }, [mounted]);
-
-    useEffect(() => {
-    if (!mounted) return;
-
-    const openedFromCheckin =
-      sessionStorage.getItem("talkio_checkin_opened") === "true";
-
-    if (!openedFromCheckin) return;
-
-    const checkinMessage =
-      sessionStorage.getItem("talkio_checkin_message") ||
-      "how did today feel for you";
-
-    sessionStorage.removeItem("talkio_checkin_opened");
-    sessionStorage.removeItem("talkio_checkin_message");
-
-    setMessages((prev) => {
-      const alreadyInserted = prev.some(
-        (m) =>
-          m.role === "assistant" &&
-          m.content === checkinMessage
-      );
-
-      if (alreadyInserted) return prev;
-
-      return [
-    ...prev,
-    {
-      role: "assistant" as const,
-      content: checkinMessage,
-      timestamp: Date.now(),
-    },
-  ].slice(-MAX_MESSAGES);
-    });
-  }, [mounted]);
-
-    useEffect(() => {
-    if (!mounted) return;
-
-    let cleanup: { remove: () => Promise<void> } | undefined;
-
-    const setupAppLock = async () => {
-      cleanup = await App.addListener("appStateChange", ({ isActive }) => {
-        
-        if (localStorage.getItem("talkio_auth_in_progress") === "true") {
-    return;
-  }
-
-        const enabled =
-          localStorage.getItem("talkio_pin_enabled") === "true";
-        const savedPin = localStorage.getItem("talkio_pin_code");
-
-        if (!enabled || !savedPin) return;
-
-        if (!isActive) {
-          localStorage.setItem("talkio_pin_locked", "true");
-          setPinUnlocked(false);
-        }
-
-        if (isActive) {
-          
-          const locked =
-            localStorage.getItem("talkio_pin_locked") === "true";
-
-          if (locked) {
-            setPinRequired(true);
-            setPinUnlocked(false);
-          }
-        }
-      });
-    };
-
-    setupAppLock();
-
-    return () => {
-      cleanup?.remove();
-    };
-  }, [mounted]);
-
-  useEffect(() => {
-    if (!mounted) return;
-
-    const auth = getFirebaseAuth();
-
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (!user || user.isAnonymous) {
-        setUserId("signed_out");
-        setCheckingAuth(false);
-        setAuthReady(true);
-        return;
-      }
-
-      setUserId(user.uid);
-
-      // Firebase has confirmed the returning user.
-      // Allow the chat screen to open immediately.
-      setCheckingAuth(false);
-      setAuthReady(true);
-
-      if (startupServicesUidRef.current !== user.uid) {
-        startupServicesUidRef.current = user.uid;
-
-        try {
-          await syncTalkioProfile();
-
-          await Promise.all([
-            registerTalkioPushToken(),
-            configureRevenueCat(user.uid),
-          ]);
-        } catch (error) {
-          console.error("Startup auth services failed:", error);
-        }
-      }
-    });
-
-    return unsubscribe;
-  }, [mounted]);
-
-    useEffect(() => {
-    const shouldOpenNickname = localStorage.getItem("openNicknamePrompt");
-
-    if (shouldOpenNickname === "true") {
-      localStorage.removeItem("openNicknamePrompt");
-      setShowNamePrompt(true);
-    }
-  }, []);
-
-    function clearChat() {
-    const greeting = buildGreeting(displayName);
-
-    setMessages([greeting]);
-    setConversationTitle("New conversation");
-    setInput("");
-    setShowTyping(false);
-    setLoading(false);
-    setIsLimitReached(false);
-    setCrisisLock(false);
-
-  }
-    
-    function saveNickname() {
-      const clean = draftNickname.trim().slice(0, 40);
-      setDisplayName(clean);
-      setDraftNickname(clean);
-      setShowNamePrompt(false);
-    } 
-    
-    async function handleGoogleSignIn() {
-    if (!acceptedTerms || isSigningIn) return;
-
-    localStorage.setItem("talkio_auth_in_progress", "true");
-    setIsSigningIn(true);
-    setAuthInProgress(true);
-    setSigningProvider("google");
-
-    try {
-      const platform = Capacitor.getPlatform();
-      const auth = getFirebaseAuth();
-
-      if (platform === "android" || platform === "ios") {
-        const result = await FirebaseAuthentication.signInWithGoogle();
-        const idToken = result?.credential?.idToken;
-
-        if (!idToken) throw new Error("No Google ID token returned.");
-
-        const credential = GoogleAuthProvider.credential(idToken);
-        const userCredential = await signInWithCredential(auth, credential);
-
-        localStorage.removeItem("talkio_signed_out");
-        localStorage.removeItem("talkio_auth_in_progress");
-
-        setUserId(userCredential.user.uid);
-        setSigningProvider(null);
-        setIsSigningIn(false);
-        setAuthInProgress(false);
-        return;
-      }
-
-      const provider = new GoogleAuthProvider();
-      const userCredential = await signInWithPopup(auth, provider);
-
-      localStorage.removeItem("talkio_signed_out");
-      localStorage.removeItem("talkio_auth_in_progress");
-
-      setUserId(userCredential.user.uid);
-      setSigningProvider(null);
-      setIsSigningIn(false);
-      setAuthInProgress(false);
-    } catch (error: any) {
-      localStorage.removeItem("talkio_auth_in_progress");
-      setSigningProvider(null);
-      setIsSigningIn(false);
-      setAuthInProgress(false);
-      console.error("Google sign-in failed:", error);
-      alert(`Google sign in failed.\n\n${error?.message || JSON.stringify(error)}`);
+      setLoading(false);
     }
   };
 
-    async function handleAppleSignIn() {
-    if (!acceptedTerms || isSigningIn) return;
-
-    setIsSigningIn(true);
-    setAuthInProgress(true);
-    setSigningProvider("apple");
-    localStorage.setItem("talkio_auth_in_progress", "true");
-
-    try {
-      const auth = getFirebaseAuth();
-      const provider = new OAuthProvider("apple.com");
-
-      if (Capacitor.getPlatform() === "ios") {
-        const result = await AppleSignIn.signIn({
-          scopes: [SignInScope.Email, SignInScope.FullName],
-        });
-
-        const idToken =
-          (result as any).idToken || (result as any).identityToken;
-
-        if (!idToken) throw new Error("No Apple identity token returned.");
-
-        const credential = provider.credential({ idToken });
-        const userCredential = await signInWithCredential(auth, credential);
-
-        localStorage.removeItem("talkio_signed_out");
-        localStorage.removeItem("talkio_auth_in_progress");
-
-        setUserId(userCredential.user.uid);
-        setSigningProvider(null);
-        setIsSigningIn(false);
-        setAuthInProgress(false);
-        return;
-      }
-
-      const userCredential = await signInWithPopup(auth, provider);
-
-      localStorage.removeItem("talkio_signed_out");
-      localStorage.removeItem("talkio_auth_in_progress");
-
-      setUserId(userCredential.user.uid);
-      setSigningProvider(null);
-      setIsSigningIn(false);
-      setAuthInProgress(false);
-    } catch (error: any) {
-      localStorage.removeItem("talkio_auth_in_progress");
-      setSigningProvider(null);
-      setIsSigningIn(false);
-      setAuthInProgress(false);
-      console.error("Apple sign-in failed:", error);
-      alert(
-        `Apple sign in failed.\n\nCode: ${error?.code || "none"}\nMessage: ${
-          error?.message || String(error)
-        }`
-      );
-    }
-
-  };
-
-    async function handleEmailAuth() {
-    if (!acceptedTerms || isSigningIn) return;
-
-    const cleanEmail = emailAddress.trim().toLowerCase();
-
-    if (!cleanEmail) {
-      setEmailAuthError("Enter your email address.");
-      return;
-    }
-
-    if (emailPassword.length < 6) {
-      setEmailAuthError("Your password must contain at least 6 characters.");
-      return;
-    }
-
-    setEmailAuthError("");
-    setIsSigningIn(true);
-    setAuthInProgress(true);
-    setSigningProvider("email");
-    localStorage.setItem("talkio_auth_in_progress", "true");
-
-    try {
-      const auth = getFirebaseAuth();
-
-      if (emailAuthMode === "signup") {
-    const credential =
-      await createUserWithEmailAndPassword(
-        auth,
-        cleanEmail,
-        emailPassword
-      );
-
-    setUserId(credential.user.uid);
-
-  } else {
-    const credential =
-      await signInWithEmailAndPassword(
-        auth,
-        cleanEmail,
-        emailPassword
-      );
-
-    setUserId(credential.user.uid);
-  }
-
-      localStorage.removeItem("talkio_signed_out");
-      setShowEmailAuth(false);
-      setEmailPassword("");
-      setEmailAuthError("");
-    } catch (error: unknown) {
-      console.error("Email authentication failed:", error);
-
-      const firebaseError =
-        error && typeof error === "object"
-          ? (error as { code?: string; message?: string })
-          : {};
-
-      switch (firebaseError.code) {
-        case "auth/email-already-in-use":
-          setEmailAuthError(
-            "An account already exists with this email. Choose Sign in."
-          );
-          break;
-
-        case "auth/invalid-credential":
-        case "auth/wrong-password":
-          setEmailAuthError("The email or password is incorrect.");
-          break;
-
-        case "auth/user-not-found":
-          setEmailAuthError(
-            "No account was found. Choose Create account."
-          );
-          break;
-
-        case "auth/invalid-email":
-          setEmailAuthError("Enter a valid email address.");
-          break;
-
-        case "auth/weak-password":
-          setEmailAuthError(
-            "Choose a stronger password with at least 6 characters."
-          );
-          break;
-
-        case "auth/too-many-requests":
-          setEmailAuthError(
-            "Too many attempts. Please wait before trying again."
-          );
-          break;
-
-        case "auth/network-request-failed":
-          setEmailAuthError(
-            "We could not connect. Check your internet connection and try again."
-          );
-          break;
-
-        default:
-          setEmailAuthError(
-            firebaseError.message || "Email authentication failed."
-          );
-      }
-    } finally {
-      localStorage.removeItem("talkio_auth_in_progress");
-      setSigningProvider(null);
-      setIsSigningIn(false);
-      setAuthInProgress(false);
-    }
-  }
-
-    async function sendMessage(overrideText?: string) {
-  if (selectedImage) return;
-
-  const text = (overrideText ?? input).trim();
-  const normalizedText = text.toLowerCase();
-
-  const positiveSignals = [
-    "thank you",
-    "thanks",
-    "helped",
-    "i feel better",
-    "that helped",
-    "glad",
-    "appreciate",
-    "needed that",
-    "feel calmer",
-    "feel okay",
-  ];
-
-  const isPositiveMoment = positiveSignals.some((signal) =>
-    normalizedText.includes(signal)
-  );
-      if (!text || loading || isLimitReached || showSafety || crisisLock) return;
-
-      const safetyInterruption = classifySafetyInterruption(text);
-
-  if (safetyInterruption.blocked) {
-    if (!overrideText) {
-      setInput("");
-    }
-
-    const nextMessages: ChatMessage[] = [
-      ...messages,
-      {
-        role: "user" as const,
-        content: text,
-        timestamp: Date.now(),
-      },
-    ].slice(-MAX_MESSAGES);
-
-    setMessages(nextMessages);
-
-    if (conversationTitle === "New conversation") {
-      setConversationTitle(buildConversationTitle(nextMessages));
-    }
-
-    setCrisisLock(true);
-    setShowTyping(false);
-    setLoading(false);
-
-    const safetyAnalytics = await getFirebaseAnalytics();
-
-  if (safetyAnalytics) {
-    logEvent(safetyAnalytics, "safety_interruption_triggered", {
-      reason: safetyInterruption.reason || "unknown",
-      source: "frontend",
-    });
-  }
-
-    return;
-  }
-
-      setLoading(true);
-      setShowTyping(false);
-
-      if (!overrideText) {
-        setInput("");
-      }
-
-      const nextMessages: ChatMessage[] = [
-        ...messages,
-        {
-          role: "user" as const,
-          content: text,
-          timestamp: Date.now(),
-        },
-      ].slice(-MAX_MESSAGES);
-
-      setMessages(nextMessages);
-
-      if (conversationTitle === "New conversation") {
-        setConversationTitle(buildConversationTitle(nextMessages));
-      }
-
-      const typingTimer = window.setTimeout(() => {
-    setShowTyping(true);
-  }, 300);
-
-  const humanDelay = Math.floor(Math.random() * 700) + 300;
-
-  await sleep(humanDelay);
-
-      try {
-        const auth = getFirebaseAuth();
-
-        if (!auth.currentUser) {
-    alert("Please wait a moment and try again.");
-    setLoading(false);
-    setShowTyping(false);
-    return;
-  }
-        const user = auth.currentUser;
-        const token = user ? await user.getIdToken() : "";
-
-        let userTier = "free";
-
-  try {
-    userTier = await resolveTalkioTier();
-  } catch (err) {
-    console.warn("Failed to resolve chat tier. Falling back to free.", err);
-    userTier = "free";
-  }
-
-  const chatPayload: ChatRequestPayload = {
-    message: text,
-    messages: nextMessages,
-    userTier,
-    source:
-      typeof window !== "undefined" &&
-      sessionStorage.getItem("talkio_checkin_reply_context") === "true"
-        ? "checkin"
-        : "chat",
-  };
-
-  const {
-    res,
-    data,
-    rawResponseBody,
-  } = await requestChatWithRetry(chatPayload, token);
-
-  /*
-  * Handle account limits and paywall responses before the generic
-  * !res.ok check. Otherwise, a 429 response throws immediately and
-  * never reaches the intended limit/paywall handling.
-  */
-  if (data.paywallRequired === true) {
-    console.warn("Chat paywall required:", {
-      status: res.status,
-      statusText: res.statusText,
-      code: data.code,
-      error: data.error,
-      requestId:
-        data.requestId ||
-        res.headers.get("x-request-id") ||
-        undefined,
-      remainingDaily: data.remainingDaily,
-    });
-
-    setIsLimitReached(true);
-    setShowTyping(false);
-
-    window.location.href = "/paywall";
-    return;
-  }
-
-  /*
-  * Distinguish an account message limit from a temporary service rate limit.
-  */
-  if (res.status === 429) {
-    console.warn("Chat request returned 429:", {
-      status: res.status,
-      statusText: res.statusText,
-      code: data.code,
-      error: data.error,
-      retryable: data.retryable,
-      retryAfterSeconds: data.retryAfterSeconds,
-      requestId:
-        data.requestId ||
-        res.headers.get("x-request-id") ||
-        undefined,
-      remainingDaily: data.remainingDaily,
-      rawBodyPreview:
-        rawResponseBody && !data.error
-          ? rawResponseBody.slice(0, 500)
-          : undefined,
-    });
-
-    const isAccountLimit =
-    data.code === "DAILY_LIMIT_REACHED" ||
-    data.code === "MESSAGE_LIMIT_REACHED" ||
-    data.code === "PAYWALL_REQUIRED";
-
-    if (isAccountLimit) {
-      setIsLimitReached(true);
-      setShowTyping(false);
-      return;
-    }
-
-    throw new Error(
-      data.error ||
-        "Talkio is receiving too many requests right now. Please try again."
-    );
-  }
-
-  /*
-  * Other unsuccessful responses should still reach the catch block.
-  */
-  if (!res.ok) {
-    console.error("Chat API request failed:", {
-      status: res.status,
-      statusText: res.statusText,
-      code: data.code,
-      error: data.error,
-      retryable: data.retryable,
-      retryAfterSeconds: data.retryAfterSeconds,
-      requestId:
-        data.requestId ||
-        res.headers.get("x-request-id") ||
-        undefined,
-      contentType: res.headers.get("content-type"),
-      rawBodyPreview: rawResponseBody.slice(0, 500),
-    });
-
-    throw new Error(
-      data.error ||
-        `Chat request failed with status ${res.status} ${res.statusText}`.trim()
-    );
-  }
-
-  if (data?.safetyBlocked === true) {
-    setCrisisLock(true);
-    setShowTyping(false);
-    setLoading(false);
-    return;
-  }
-
-  const analytics = await getFirebaseAnalytics();
-
-  if (analytics) {
-    logEvent(analytics, "chat_message_sent", {
-      source: "chat",
-    });
-  }
-
-  if (typeof window !== "undefined") {
-    sessionStorage.removeItem("talkio_checkin_reply_context");
-  }
-
-  if (data?.crisisLock === true) {
-    setCrisisLock(true);
-  }
-
-  if (typeof data?.remainingDaily === "number") {
-    setIsLimitReached(data.remainingDaily <= 0);
-  }
-
-        let assistantReply =
-    typeof data?.reply === "string" && data.reply.trim()
-      ? data.reply
-      : "I lost your message while I was thinking. Could you send it again?";
-      
-        
-
-        const replyDelay = 700 + Math.min(assistantReply.length * 5, 700);
-        await sleep(replyDelay);
-
-        setMessages((prev): ChatMessage[] => {
-    const nextMessages: ChatMessage[] = [
-      ...prev,
-      {
-        role: "assistant" as const,
-        content: assistantReply,
-        timestamp: Date.now(),
-      },
-    ];
-
-    return nextMessages.slice(-MAX_MESSAGES);
-  });
-
-  const replyAnalytics = await getFirebaseAnalytics();
-
-  if (replyAnalytics) {
-    logEvent(replyAnalytics, "reply_generated", {
-      mode: data?.dynamicMode || "unknown",
-      path: data?.path || "unknown",
-    });
-  }
-
-  const reviewCompleted =
-    typeof window !== "undefined" &&
-    localStorage.getItem("talkio_review_prompt_completed") === "true";
-
-  if (
-    !feedbackAsked &&
-    !reviewCompleted &&
-    messages.filter((m) => m.role === "assistant").length >= 7 &&
-    isPositiveMoment
-  ) {
-    setFeedbackAsked(true);
-    setShowReviewPrompt(true);
-  }
-
-    } catch (error) {
-      console.error("========== CHAT ERROR ==========");
-      console.error(error);
-
-      if (error instanceof Error) {
-        console.error(error.message);      
-      }
-
-      setMessages((prev): ChatMessage[] => {
-        const nextMessages: ChatMessage[] = [
-          ...prev,
-          {
-            role: "assistant" as const,
-            content:
-              "Sorry, something went wrong. Could you try sending that again?",
-            timestamp: Date.now(),
-          },
-        ];
-
-        return nextMessages.slice(-MAX_MESSAGES);
-      });
-    } finally {
-      clearTimeout(typingTimer);
-      setShowTyping(false);
-      setLoading(false);    
-    }
-  }
-
-    if (
-    !mounted ||
-    !authReady ||
-    checkingAuth ||
-    !conversationLoaded ||
-    authInProgress ||
-    isSigningIn
-  ) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f7f1e8] px-6">
-        <div className="w-full max-w-sm rounded-[32px] border border-stone-200 bg-white/80 p-8 text-center shadow-sm ">
-          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl">
-            🌿
-          </div>
-
-          <h1 className="text-4xl font-semibold tracking-tight text-stone-900">
-            Talkio
-          </h1>
-
-          <p className="mt-3 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
-            Emotional Relief AI
-          </p>
-
-          <p className="mt-5 text-sm leading-6 text-stone-500">
-            Getting your calm space ready...
-          </p>
-
-          <div className="mt-6 text-sm text-stone-500">
-      Loading...
-  </div>
-        </div>
-      </main>
-    );
-  }
-
-    if (!isSignedOut && pinRequired && !pinUnlocked) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
-        <div className="w-full max-w-sm rounded-[32px] bg-white p-8 shadow-sm ring-1 ring-stone-100">
-          <h1 className="text-3xl font-semibold text-stone-900">
-            Privacy Lock
-          </h1>
-
-          <p className="mt-3 text-stone-600">
-            Enter your 4-digit PIN to open Talkio.
-          </p>
-
-          <input
-            type="password"
-            inputMode="numeric"
-            maxLength={4}
-            value={enteredPin}
-            onChange={(e) =>
-              setEnteredPin(
-                e.target.value.replace(/\D/g, "").slice(0, 4)
-              )
-            }
-            className="mt-6 w-full rounded-2xl border border-stone-200 px-4 py-4 text-center text-2xl tracking-[10px] outline-none focus:border-emerald-500"
-            autoFocus
-          />
-
-          <button
-            type="button"
-            onClick={() => {
-              const savedPin = localStorage.getItem("talkio_pin_code");
-
-              if (enteredPin === savedPin) {
-                setEnteredPin("");
-                localStorage.removeItem("talkio_pin_locked");
-                setPinUnlocked(true);
-              } else {
-                alert("Incorrect PIN");
-                setEnteredPin("");
-              }
-            }}
-            className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-4 font-semibold text-white"
+  return (
+    <AuthGate>
+      {(user, handleSignOut) => (
+        <div className="flex h-dvh w-full overflow-hidden bg-[#fafafa] text-stone-900 antialiased dark:bg-[#181818] dark:text-stone-100">
+          {/* Sidebar */}
+          <aside
+            className={`${
+              sidebarOpen ? "w-64" : "w-0"
+            } flex flex-col shrink-0 border-r border-stone-200 bg-[#f7f7f8] transition-all duration-200 overflow-hidden dark:border-stone-800 dark:bg-[#171717]`}
           >
-            Unlock Talkio
-          </button>
+            <div className="flex items-center justify-between p-3">
+              <button
+                onClick={() => createNewSession()}
+                className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-stone-50 dark:border-stone-700 dark:bg-[#212121] dark:hover:bg-stone-800"
+              >
+                <span>+</span> New chat
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-3 py-2 text-xs font-semibold text-stone-500">
+              <p className="px-2 pb-1 text-[11px] uppercase tracking-wider text-stone-400">
+                Notebooks & Tasks
+              </p>
+              <div className="space-y-1">
+                {sessions.map((session) => {
+                  const isActive = session.id === activeSessionId;
+                  const isEditing = session.id === editingSessionId;
+
+                  return (
+                    <div
+                      key={session.id}
+                      onClick={() => !isEditing && setActiveSessionId(session.id)}
+                      className={`group relative flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm transition cursor-pointer ${
+                        isActive
+                          ? "bg-stone-200/80 text-stone-900 font-medium dark:bg-stone-800 dark:text-white"
+                          : "text-stone-700 hover:bg-stone-200/50 dark:text-stone-300 dark:hover:bg-stone-800/60"
+                      }`}
+                    >
+                      {isEditing ? (
+                        <input
+                          ref={editInputRef}
+                          type="text"
+                          value={editTitleValue}
+                          onChange={(e) => setEditTitleValue(e.target.value)}
+                          onBlur={saveRenamedTitle}
+                          onKeyDown={handleEditKeyDown}
+                          className="w-full rounded bg-white px-1.5 py-0.5 text-xs text-stone-900 shadow-sm outline-none ring-1 ring-stone-400 dark:bg-stone-900 dark:text-stone-100"
+                        />
+                      ) : (
+                        <>
+                          <span className="truncate pr-4 select-none">
+                            {session.title || "Untitled Session"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => startRenaming(session, e)}
+                            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-stone-300/60 text-stone-400 hover:text-stone-700 transition dark:hover:bg-stone-700 dark:hover:text-stone-200"
+                            title="Rename task"
+                          >
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                              <path d="m15 5 4 4" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bottom Profile Bar */}
+            <div className="border-t border-stone-200 p-3 dark:border-stone-800 flex items-center justify-between">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white uppercase">
+                  {user.email?.[0] || "U"}
+                </div>
+                <div
+                  className="truncate text-xs font-medium text-stone-700 dark:text-stone-300 max-w-[120px]"
+                  title={user.email || ""}
+                >
+                  {user.email}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="rounded px-2 py-1 text-xs font-medium text-stone-500 hover:bg-stone-200 hover:text-rose-600 transition dark:text-stone-400 dark:hover:bg-stone-800"
+              >
+                Log out
+              </button>
+            </div>
+          </aside>
+
+          {/* Main Workspace Area - Expanded Canvas */}
+          <main className="relative flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden">
+            <header className="h-12 shrink-0 flex items-center px-4">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="rounded p-1.5 text-stone-500 hover:bg-stone-200 dark:hover:bg-stone-800"
+                title="Toggle Sidebar"
+              >
+                ☰
+              </button>
+            </header>
+
+            {activeSession.messages.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center px-4 pb-20">
+                <h2 className="mb-6 text-2xl font-semibold tracking-tight text-stone-800 dark:text-stone-100">
+                  What should we work on?
+                </h2>
+                {/* Widened initial composer */}
+                <div className="w-full max-w-4xl px-4">
+                  <ChatComposer
+                    value={input}
+                    onChange={setInput}
+                    onSend={handleSend}
+                    disabled={loading}
+                    attachments={attachments}
+                    onAttachmentsChange={setAttachments}
+                    canAttach={true}
+                    placeholder="Ask anything, drag files, or paste screenshots..."
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="relative flex flex-1 min-h-0 w-full flex-col">
+                <div
+                  className="flex-1 min-h-0 w-full overflow-y-auto px-4 md:px-8 focus:outline-none"
+                  style={{
+                    touchAction: "pan-y",
+                    overscrollBehaviorY: "contain",
+                    WebkitOverflowScrolling: "touch",
+                  }}
+                >
+                  {/* Widened message container from max-w-3xl to max-w-6xl */}
+                  <div className="mx-auto flex w-full max-w-6xl flex-col justify-start py-6 pointer-events-auto">
+                    <ChatList
+                      messages={activeSession.messages}
+                      showTyping={loading}
+                    />
+                    <div ref={bottomRef} className="h-4 w-full shrink-0" />
+                  </div>
+                </div>
+
+                {/* Widened bottom input container to max-w-5xl */}
+                <div className="mx-auto w-full max-w-5xl shrink-0 p-4">
+                  <ChatComposer
+                    value={input}
+                    onChange={setInput}
+                    onSend={handleSend}
+                    disabled={loading}
+                    attachments={attachments}
+                    onAttachmentsChange={setAttachments}
+                    canAttach={true}
+                    placeholder="Message your workspace..."
+                  />
+                </div>
+              </div>
+            )}
+          </main>
         </div>
-      </main>
-    );
-  }
-
-    if (isSignedOut) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
-        <div className="w-full max-w-sm rounded-[32px] bg-white p-8 shadow-sm ring-1 ring-stone-100">
-          <h1 className="text-3xl font-semibold tracking-tight text-stone-900">
-            Welcome to Talkio
-          </h1>
-
-          <p className="mt-5 text-base leading-7 text-stone-600">
-            You don&apos;t have to carry it all alone.
-          </p>
-
-          
-    <label className="mb-4 flex items-start gap-3 text-left">
-      <input
-        type="checkbox"
-        checked={acceptedTerms}
-        onChange={(e) => {
-          setAcceptedTerms(e.target.checked);
-
-          if (e.target.checked) {
-            localStorage.setItem("talkio_terms_accepted", "true");
-          } else {
-            localStorage.removeItem("talkio_terms_accepted");
-          }
-        }}
-        className="mt-1 h-5 w-5"
-      />
-
-      <span className="text-sm leading-6 text-stone-600">
-        I agree to Talkio&apos;s{" "}
-        <a href="/terms" className="font-medium text-emerald-700 underline">
-          Terms
-        </a>{" "}
-        and{" "}
-        <a href="/privacy" className="font-medium text-emerald-700 underline">
-          Privacy Policy
-        </a>
-        .
-      </span>
-    </label>
-
-
-          <div className="mt-8 space-y-3">
-    <button
-      type="button"
-      disabled={!acceptedTerms || isSigningIn}
-      onClick={handleGoogleSignIn}
-      className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
-    >
-      {signingProvider === "google"
-        ? "Opening Google..."
-        : "Continue with Google"}
-    </button>
-
-    <button
-      type="button"
-      disabled={!acceptedTerms || isSigningIn}
-      onClick={handleAppleSignIn}
-      className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
-    >
-      {signingProvider === "apple"
-        ? "Opening Apple..."
-        : "Continue with Apple"}
-    </button>
-
-    <button
-      type="button"
-      disabled={!acceptedTerms || isSigningIn}
-      onClick={() => {
-        setEmailAuthError("");
-        setShowEmailAuth(true);
-      }}
-      className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-base font-semibold text-stone-900 shadow-sm disabled:opacity-50"
-    >
-      Continue with Email 
-    </button>
-  </div>
-
-    {showEmailAuth && (
-    <EmailAuthCard
-      emailAuthMode={emailAuthMode}
-      emailAddress={emailAddress}
-      emailPassword={emailPassword}
-      emailAuthError={emailAuthError}
-      isSigningIn={isSigningIn}
-      signingProvider={signingProvider}
-      onModeChange={(mode) => {
-        setEmailAuthMode(mode);
-        setEmailAuthError("");
-      }}
-      onEmailChange={setEmailAddress}
-      onPasswordChange={setEmailPassword}
-      onSubmit={handleEmailAuth}
-      onCancel={() => {
-        setShowEmailAuth(false);
-        setEmailAuthError("");
-        setEmailPassword("");
-      }}
-    />
-  )}
-              </div>
-      </main>
-    );
-  }
-
-    return (
-      <main className="mx-auto flex h-[100dvh] max-w-2xl flex-col overflow-hidden text-stone-900">
-        <style jsx global>{`
-        @keyframes paywallSlideUp {
-          from {
-            opacity: 0;
-            transform: translateY(14px) scale(0.98);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-      `}</style>
-        {showSafety && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
-              <h2 className="mb-3 text-lg font-semibold">Safety & Disclaimer</h2>
-
-              <p className="mb-2 text-sm leading-relaxed text-stone-700">
-                Talkio is an AI conversation tool for casual conversation and
-                emotional support. It is not a therapist, doctor, or emergency
-                service.
-              </p>
-
-              <p className="mb-2 text-sm leading-relaxed text-stone-700">
-                If you feel unsafe or in immediate danger, please contact local
-                emergency services or a qualified professional.
-              </p>
-
-              <p className="mb-4 text-sm leading-relaxed text-stone-700">
-                By continuing, you understand and agree to use Talkio at your own
-                discretion.
-              </p>
-
-              <button
-                type="button"
-                className="w-full rounded-none bg-emerald-500 px-4 py-2.5 text-white hover:bg-emerald-600"
-                onClick={() => {
-                  localStorage.setItem(storageKeys.safety, "true");
-                  setShowSafety(false);
-                }}
-              >
-                I understand
-              </button>
-            </div>
-          </div>
-        )}
-
-        {showNamePrompt && !showSafety && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-md rounded-none bg-white p-6 shadow-lg">
-              <h2 className="mb-2 text-lg font-semibold">Quick thing</h2>
-              <p className="mb-3 text-sm text-stone-700">
-                What nickname should I call you?
-              </p>
-
-              <input
-                value={draftNickname}
-                onChange={(e) => setDraftNickname(e.target.value)}
-                placeholder="Enter a nickname"
-                className="mb-3 w-full rounded-none border px-3 py-2.5 outline-none focus:border-emerald-500"
-              />
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="flex-1 rounded-none border px-3 py-2.5"
-                  onClick={() => setShowNamePrompt(false)}
-                >
-                  Skip
-                </button>
-
-                <button
-                  type="button"
-                  className="flex-1 rounded-none bg-emerald-500 px-3 py-2.5 text-white"
-                  onClick={saveNickname}
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showUpgradeModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-md rounded-none bg-white p-6 shadow-lg">
-              <h2 className="mb-2 text-lg font-semibold">Talkio Pro</h2>
-              <p className="mb-4 text-sm text-stone-700">
-                Unlimited chats will be available with Talkio Pro. For now, free
-                messages reset tomorrow.
-              </p>
-
-              <button
-                type="button"
-                className="w-full rounded-none bg-emerald-500 px-4 py-2.5 text-white hover:bg-emerald-600"
-                onClick={() => setShowUpgradeModal(false)}
-              >
-                Got it
-              </button>
-            </div>
-          </div>
-        )}
-        {showReviewPrompt && (
-    <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-sm rounded-none border border-stone-200 bg-white/95 p-5 shadow-sm ">
-      <button
-        type="button"
-        onClick={() => setShowReviewPrompt(false)}
-        className="absolute right-4 top-4 text-lg text-stone-400 hover:text-stone-700"
-        aria-label="Close review prompt"
-      >
-        ×
-      </button>
-
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-none bg-rose-100 text-2xl">
-        💗
-      </div>
-
-      <h2 className="text-lg font-semibold text-stone-900">
-        Enjoying Talkio?
-      </h2>
-
-      <p className="mt-2 text-sm leading-6 text-stone-600">
-        If Talkio has helped you even a little, would you mind leaving a quick review?
-      </p>
-
-      <div className="mt-5 space-y-3">
-        <button
-          type="button"
-          onClick={() => {
-    localStorage.setItem("talkio_review_prompt_completed", "true");
-    window.open(
-      "https://play.google.com/store/apps/details?id=com.talkio.app",
-      "_blank"
-    );
-    setShowReviewPrompt(false);
-  }}
-          className="flex w-full items-center justify-between rounded-none border border-stone-200 bg-white px-4 py-3 text-left shadow-sm active:scale-[0.99]"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">▶️</span>
-            <div>
-              <p className="text-sm font-semibold text-stone-900">
-                Review on Google Play
-              </p>
-              <p className="text-xs text-stone-500">
-                It really helps us grow
-              </p>
-            </div>
-          </div>
-          <span className="text-xl text-stone-400">›</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-    localStorage.setItem("talkio_review_prompt_completed", "true");
-    window.open(
-    "https://apps.apple.com/us/app/talkio-reflect-ai-companion/id6770395386/",
-    "_blank"
+      )}
+    </AuthGate>
   );
-    setShowReviewPrompt(false);
-  }}
-          className="flex w-full items-center justify-between rounded-none border border-stone-200 bg-white px-4 py-3 text-left shadow-sm active:scale-[0.99]"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-2xl"></span>
-            <div>
-              <p className="text-sm font-semibold text-stone-900">
-                Review on App Store
-              </p>
-              <p className="text-xs text-stone-500">
-                It really helps us grow
-              </p>
-            </div>
-          </div>
-          <span className="text-xl text-stone-400">›</span>
-        </button>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => setShowReviewPrompt(false)}
-        className="mt-5 w-full text-center text-sm font-medium text-stone-500 hover:text-stone-800"
-      >
-        Maybe later
-      </button>
-    </div>
-  )}
-
-    <div className="relative z-20 flex items-start justify-between gap-3 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+64px)]">
-    <div>
-  <h1 className="text-[1.95rem] font-semibold leading-tight tracking-[-0.035em] text-[#173F2B]">
-    Talkio Reflect
-  </h1>
-
-  <div className="mt-1.5 flex items-center gap-2">
-    <span className="h-px w-4 bg-[#6F8A4A]/60" />
-
-    <p className="text-[14px] font-medium tracking-[0.08em] text-[#6F8A4A]">
-      Your Safe Space
-    </p>
-
-    <span className="h-px w-4 bg-[#6F8A4A]/60" />
-  </div>
-</div>
-
-    <div className="relative z-30 flex shrink-0 items-center gap-2 pt-1">
-      <button
-        type="button"
-        aria-label="Open settings"
-        className="rounded-none border border-stone-200 bg-white/60 px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
-        onClick={() => {
-          window.location.href = "/settings";
-        }}
-      >
-        ⚙️
-      </button>
-
-      {activeTab === "chat" && (
-        <button
-          type="button"
-          className="rounded-none border border-stone-200 bg-white/60 px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
-          disabled={loading || messages.length <= 1}
-          onClick={clearChat}
-        >
-          Clear
-        </button>
-      )}
-    </div>
-  </div>
-  
-  {activeTab === "chat" ? (
-    <>
-      <ChatList
-        messages={messages}
-        isLimitReached={isLimitReached}
-        showTyping={showTyping}
-        bottomRef={bottomRef}
-      />
-
-      {!isLimitReached && (
-        <>
-          {crisisLock && (
-            <div className="mx-3 mb-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
-              <p>
-                Talkio paused this conversation because it mentioned serious
-                violence or immediate harm. If anyone may be in danger, contact
-                local emergency services now.
-              </p>
-
-              <button
-                type="button"
-                onClick={clearChat}
-                className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm"
-              >
-                Start new conversation
-              </button>
-            </div>
-          )}
-
-          <ChatComposer
-  value={input}
-  onChange={setInput}
-  onSend={() => sendMessage()}
-  onOpenReflections={() => setActiveTab("reflections")}
-  disabled={
-    loading ||
-    showSafety ||
-    crisisLock ||
-    isLimitReached
-  }
-  placeholder={
-    crisisLock
-      ? "Chat paused for safety"
-      : isLimitReached
-        ? "Daily free limit reached."
-        : "Type your message..."
-  }
-  attachment={selectedImage}
-  onAttachmentChange={setSelectedImage}
-  canAttach={true}
-  }
-  attachmentStatus={
-    imageAccess?.uid === userId
-      ? imageAccess.status
-      : "Checking image allowance..."
-  }
-  imageSendingReady={true}
-/>
-        </>
-      )}
-    </>
-  ) : (
-    <ReflectionsPanel
-  onBack={() => setActiveTab("chat")}
-/>
-)}
-</main>
-);
 }

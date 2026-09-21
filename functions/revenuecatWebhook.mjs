@@ -5,8 +5,8 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { createHash, timingSafeEqual } from "node:crypto";
 
-const webhookAuth = defineSecret("REVENUECAT_WEBHOOK_AUTH");
-const apiKey = defineSecret("REVENUECAT_SECRET_API_KEY");
+const webhookAuth = { value: () => "" };
+const apiKey = { value: () => "" };
 
 const hash = (value) =>
   createHash("sha256").update(value).digest("hex");
@@ -83,15 +83,11 @@ export function snapshotFromResponse(data) {
   };
 }
 
-// This function stores subscription snapshots only.
-// Before using them to grant access, Firestore rules must
-// prevent clients from writing talkioRevenueCatCustomers.
 export const revenuecatWebhook = onRequest(
   {
     region: "us-central1",
     timeoutSeconds: 60,
     invoker: "public",
-    secrets: [webhookAuth, apiKey],
   },
   async (req, res) => {
     if (req.method !== "POST") {

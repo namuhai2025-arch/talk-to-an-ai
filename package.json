@@ -21,6 +21,9 @@
     "@revenuecat/purchases-capacitor": "^13.2.0",
     "@stripe/stripe-js": "^9.8.0",
     "firebase": "^12.11.0",
+    "firebase-admin": "^14.4.0",
+    "google-auth-library": "^11.1.0",
+    "jose": "^6.2.12",
     "next": "^16.2.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"

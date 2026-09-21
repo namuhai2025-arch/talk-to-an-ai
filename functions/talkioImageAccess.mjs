@@ -5,7 +5,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { createHash } from "node:crypto";
 
-const revenueCatKey = defineSecret("REVENUECAT_SECRET_API_KEY");
+const revenueCatKey = { value: () => "" };
 
 const digest = (text) =>
   createHash("sha256").update(text).digest("hex");

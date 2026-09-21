@@ -1,206 +1,72 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+
 export const runtime = "nodejs";
 
-import { corsEmpty, corsJson } from "./_cors";
+const AUTHORIZED_EMAIL = "lacidamuriel@gmail.com";
+const CLOUD_RUN_URL = "https://generatetalkioreply-cf6feywhrq-uc.a.run.app";
+const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "intel-personal";
+const ENGINE_SECRET = process.env.ENGINE_SECRET || "intel-engine-super-secret-2026";
 
-const FIREBASE_FUNCTION_URL =
-  "https://generatetalkioreply-ndury54xsq-uc.a.run.app";
+const JWKS = createRemoteJWKSet(
+  new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
+);
 
-const FIREBASE_TIMEOUT_MS = 45_000;
-
-export async function OPTIONS(req: Request) {
-  return corsEmpty(204, req);
+async function verifyFirebaseToken(token: string) {
+  const { payload } = await jwtVerify(token, JWKS, {
+    issuer: `https://securetoken.google.com/${PROJECT_ID}`,
+    audience: PROJECT_ID,
+  });
+  return payload;
 }
 
-export async function POST(req: Request) {
-  const reply = (data: unknown, status = 200) => {
-    return corsJson(data, { status, req });
-  };
-
+export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization") || "";
+    const clientToken = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-    if (!authHeader.startsWith("Bearer ")) {
-      return reply(
-        {
-          error: "Unauthorized",
-          reply: "",
-        },
-        401
+    if (!clientToken) {
+      return NextResponse.json(
+        { error: "Access Denied: Missing authentication token." },
+        { status: 401 }
       );
     }
 
-    const rawBody = await req.text();
-    let body: Record<string, unknown> = {};
-
-    try {
-      body = rawBody
-        ? (JSON.parse(rawBody) as Record<string, unknown>)
-        : {};
-    } catch {
-      return reply(
-        {
-          error: "Invalid JSON body",
-          reply: "",
-        },
-        400
+    // 1. Strict operator verification
+    const payload = await verifyFirebaseToken(clientToken);
+    if (typeof payload.email !== "string" || payload.email.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
+      return NextResponse.json(
+        { error: "Forbidden: Unauthorized operator." },
+        { status: 403 }
       );
     }
 
-    const message =
-      typeof body.message === "string" ? body.message.trim() : "";
+    const body = await req.json();
 
-    if (!message) {
-      return reply(
-        {
-          error: "Invalid message",
-          reply: "",
-        },
-        400
-      );
-    }
-
-    const payload = {
-      message,
-      messages: Array.isArray(body.messages) ? body.messages : [],
-      userTier:
-        typeof body.userTier === "string" && body.userTier.trim()
-          ? body.userTier.trim()
-          : "free",
-    };
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      FIREBASE_TIMEOUT_MS
-    );
-
-    let firebaseRes: Response;
-
-    try {
-      firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-          "x-talkio-app-key": process.env.INTERNAL_APP_KEY || "",
-        },
-        body: JSON.stringify(payload),
-        cache: "no-store",
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    const rawText = await firebaseRes.text();
-
-    let data: Record<string, any> = {};
-
-    try {
-      data = rawText
-        ? (JSON.parse(rawText) as Record<string, any>)
-        : {};
-    } catch {
-      console.error("Firebase returned non-JSON:", {
-        status: firebaseRes.status,
-        statusText: firebaseRes.statusText,
-        rawText: rawText.slice(0, 1000),
-      });
-
-      return reply(
-        {
-          error: "Firebase returned non-JSON",
-          reply: "",
-          upstreamStatus: firebaseRes.status,
-          rawText: rawText.slice(0, 500),
-        },
-        502
-      );
-    }
-
-    if (!firebaseRes.ok) {
-      console.error("Firebase function returned an error:", {
-        status: firebaseRes.status,
-        statusText: firebaseRes.statusText,
-        error: data.error || null,
-        details: data.details || null,
-        reason: data.reason || null,
-        path: data.path || null,
-        model: data.model || null,
-        analyticsType: data.analyticsType || null,
-        fallbackTriggered: data.fallbackTriggered === true,
-        rawText: rawText.slice(0, 1000),
-      });
-    }
-
-    if (typeof data.reply !== "string" || !data.reply.trim()) {
-      console.error("Firebase function returned no usable reply:", {
-        status: firebaseRes.status,
-        statusText: firebaseRes.statusText,
-        error: data.error || null,
-        details: data.details || null,
-        reason: data.reason || null,
-        path: data.path || null,
-        model: data.model || null,
-        analyticsType: data.analyticsType || null,
-        fallbackTriggered: data.fallbackTriggered === true,
-        rawText: rawText.slice(0, 1000),
-      });
-    }
-
-    return reply(
-      {
-        reply:
-          typeof data.reply === "string"
-            ? data.reply
-            : "",
-        error: data.error || null,
-        details: data.details || null,
-        reason: data.reason || null,
-        model: data.model || null,
-        path: data.path || null,
-        analyticsType: data.analyticsType || null,
-        fallbackTriggered: data.fallbackTriggered === true,
-        crisisLock: data.crisisLock === true,
-        remainingDaily: data.remainingDaily ?? null,
-        upstreamStatus: firebaseRes.status,
+    // 2. Dispatch to Cloud Run with pre-shared engine key
+    const backendRes = await fetch(CLOUD_RUN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-engine-secret": ENGINE_SECRET,
       },
-      firebaseRes.status
-    );
-  } catch (error: unknown) {
-    const details =
-      error instanceof Error
-        ? {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-          }
-        : {
-            name: "UnknownError",
-            message: String(error),
-            stack: null,
-          };
-
-    const timedOut =
-      error instanceof Error && error.name === "AbortError";
-
-    console.error("Talkio /api/chat request failed:", {
-      ...details,
-      timedOut,
+      body: JSON.stringify(body),
     });
 
-    return reply(
-      {
-        error: timedOut
-          ? "Upstream request timed out"
-          : "Server error",
-        reply: "",
-        details: details.message,
-        path: timedOut
-          ? "api_chat_timeout"
-          : "api_chat_exception",
-      },
-      timedOut ? 504 : 500
+    if (!backendRes.ok) {
+      const errorText = await backendRes.text();
+      return NextResponse.json(
+        { error: `Backend engine error: ${errorText}` },
+        { status: backendRes.status }
+      );
+    }
+
+    const data = await backendRes.json();
+    return NextResponse.json(data);
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error?.message || "Unauthorized request rejected." },
+      { status: 401 }
     );
   }
 }

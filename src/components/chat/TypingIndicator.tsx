@@ -2,14 +2,21 @@
 
 import React from "react";
 
-function TypingIndicator() {
+export default function TypingIndicator() {
   return (
-    <div className="ml-4 mt-3 flex w-fit items-center gap-1 rounded-2xl bg-white px-4 py-3 shadow-sm">
-      <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.3s]" />
-      <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:-0.15s]" />
-      <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400" />
+    <div className="ml-4 mt-2 flex w-fit items-center gap-1.5 rounded-[20px] bg-white px-4 py-3 shadow-sm dark:bg-[#232323]">
+      <span
+        className="h-2 w-2 rounded-full bg-stone-400 animate-pulse dark:bg-stone-500"
+        style={{ animationDuration: "600ms", animationDelay: "0ms" }}
+      />
+      <span
+        className="h-2 w-2 rounded-full bg-stone-400 animate-pulse dark:bg-stone-500"
+        style={{ animationDuration: "600ms", animationDelay: "150ms" }}
+      />
+      <span
+        className="h-2 w-2 rounded-full bg-stone-400 animate-pulse dark:bg-stone-500"
+        style={{ animationDuration: "600ms", animationDelay: "300ms" }}
+      />
     </div>
   );
 }
-
-export default React.memo(TypingIndicator);

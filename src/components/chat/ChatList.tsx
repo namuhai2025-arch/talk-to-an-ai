@@ -16,20 +16,26 @@ type ChatMessage = {
   content: string;
   timestamp: number;
   isFeedbackPrompt?: boolean;
+  image?: {
+    id: string;
+    caption: string;
+    width: number;
+    height: number;
+  };
 };
 
 type ChatListProps = {
   messages: ChatMessage[];
-  isLimitReached: boolean;
+  isLimitReached?: boolean;
   showTyping: boolean;
-  bottomRef: React.RefObject<HTMLDivElement | null>;
+  bottomRef?: React.RefObject<HTMLDivElement | null>;
 };
 
 const AUTO_SCROLL_THRESHOLD_PX = 140;
 
 function ChatList({
   messages,
-  isLimitReached,
+  isLimitReached = false,
   showTyping,
   bottomRef,
 }: ChatListProps) {
@@ -39,7 +45,7 @@ function ChatList({
   const shouldAutoScrollRef = useRef(true);
 
   const [activeCopyMessage, setActiveCopyMessage] =
-  useState<number | null>(null);
+    useState<number | null>(null);
 
   const visibleMessages = useMemo(() => {
     return messages.filter((message) => {
@@ -54,7 +60,6 @@ function ChatList({
 
   useEffect(() => {
     const container = scrollContainerRef.current;
-
     if (!container) return;
 
     const handleScroll = () => {
@@ -80,7 +85,6 @@ function ChatList({
 
   useEffect(() => {
     const container = scrollContainerRef.current;
-
     if (!container || visibleMessages.length === 0) return;
 
     if (frameRef.current !== null) {
@@ -95,7 +99,6 @@ function ChatList({
       if (shouldAutoScrollRef.current) {
         container.scrollTop = container.scrollHeight;
       }
-
       frameRef.current = null;
     });
 
@@ -103,7 +106,6 @@ function ChatList({
       if (shouldAutoScrollRef.current) {
         container.scrollTop = container.scrollHeight;
       }
-
       timeoutRef.current = null;
     }, 100);
 
@@ -123,9 +125,9 @@ function ChatList({
   return (
     <div
       ref={scrollContainerRef}
-      className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-2 md:px-10"
+      className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain px-0 pb-4 pt-2"
     >
-      <div className="flex flex-col gap-0">
+      <div className="flex w-full flex-col gap-2">
         {visibleMessages.map((message, index) => {
           const previous = visibleMessages[index - 1];
           const next = visibleMessages[index + 1];
@@ -136,19 +138,19 @@ function ChatList({
 
           return (
             <MessageBubble
-  key={`${message.timestamp}-${index}`}
-  message={message}
-  sameAsPrev={sameAsPrev}
-  sameAsNext={sameAsNext}
-  showTimestamp={showTimestamp}
-  copyMenuOpen={activeCopyMessage === message.timestamp}
-  onOpenCopyMenu={() => {
-    setActiveCopyMessage(message.timestamp);
-  }}
-  onCloseCopyMenu={() => {
-    setActiveCopyMessage(null);
-  }}
-/>
+              key={`${message.timestamp}-${index}`}
+              message={message}
+              sameAsPrev={sameAsPrev}
+              sameAsNext={sameAsNext}
+              showTimestamp={showTimestamp}
+              copyMenuOpen={activeCopyMessage === message.timestamp}
+              onOpenCopyMenu={() => {
+                setActiveCopyMessage(message.timestamp);
+              }}
+              onCloseCopyMenu={() => {
+                setActiveCopyMessage(null);
+              }}
+            />
           );
         })}
 

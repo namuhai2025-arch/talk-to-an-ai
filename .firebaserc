@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "talkio-production"
-  }
+    "default": "intel-personal"
+  },
+  "targets": {},
+  "etags": {}
 }

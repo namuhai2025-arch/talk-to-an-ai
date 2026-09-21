@@ -25,21 +25,11 @@ console.log("generateTalkioReplyEngine type:", typeof generateTalkioReplyEngine)
 
 const ENGINE_SECRET = process.env.ENGINE_SECRET || "intel-engine-super-secret-2026";
 
-export const generateTalkioReply = async (req, res) => {
-  // Enforce operator key
-  const requestSecret = req.headers["x-engine-secret"];
-  if (requestSecret !== ENGINE_SECRET) {
-    return res.status(403).json({ error: "Access denied: Unauthorized engine invocation." });
-  }
-
-  // ... existing AI handling logic ...
-};
-
 // ==============================
 // Configuration & Limits
 // ==============================
 
-const ACTIVE_MODEL = "gemini-3.1-pro-preview";
+const DEFAULT_MODEL = "gemini-3.1-pro-preview";
 const INTERNAL_APP_KEY = process.env.INTERNAL_APP_KEY;
 
 const TALKIO_LIMITS = {
@@ -246,7 +236,6 @@ async function generateModelText({ ai, model, systemPrompt, messages }) {
     const contents = (Array.isArray(messages) ? messages : []).map((m) => {
       const parts = [];
 
-      // Multimodal payload handling: supports up to 15 images/files
       const fileList = Array.isArray(m.attachments)
         ? m.attachments
         : m.attachment
@@ -334,12 +323,17 @@ export const generateTalkioReply = onRequest(
         return;
       }
 
+      // Enforce Pre-Shared Engine Key
+      const requestSecret = req.headers["x-engine-secret"];
+      if (requestSecret !== ENGINE_SECRET) {
+        return res.status(403).json({ error: "Access denied: Unauthorized engine invocation." });
+      }
+
       body = req.body || {};
 
       const latestUserMessage =
         typeof body.message === "string" ? body.message.trim() : "";
 
-      // Support multi-file payload
       const rawAttachments = Array.isArray(body?.attachments)
         ? body.attachments
         : body?.attachment
@@ -361,7 +355,9 @@ export const generateTalkioReply = onRequest(
       );
 
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const model = ACTIVE_MODEL;
+      
+      // Dynamically select model passed from Vercel, falling back to default
+      const model = (typeof body.model === "string" && body.model.trim()) || DEFAULT_MODEL;
 
       // Invoke the direct workspace engineering engine
       const result = await generateTalkioReplyEngine({

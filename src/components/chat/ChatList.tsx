@@ -40,6 +40,7 @@ function ChatList({
   bottomRef,
 }: ChatListProps) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const internalBottomRef = useRef<HTMLDivElement | null>(null);
   const timeoutRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -58,8 +59,13 @@ function ChatList({
     });
   }, [messages, isLimitReached]);
 
+  // Track the newest message identity so session switches reliably trigger scrolling
+  const latestMessageTimestamp = visibleMessages[visibleMessages.length - 1]?.timestamp || 0;
+  const activeBottomRef = bottomRef || internalBottomRef;
+
   useEffect(() => {
-    const container = scrollContainerRef.current;
+    // Determine the active scrolling container (either this element or its scrollable parent in WorkspacePage)
+    const container = scrollContainerRef.current?.parentElement || scrollContainerRef.current;
     if (!container) return;
 
     const handleScroll = () => {
@@ -84,48 +90,60 @@ function ChatList({
   }, []);
 
   useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || visibleMessages.length === 0) return;
+    if (visibleMessages.length === 0 && !showTyping) return;
+
+    const scrollToNewest = () => {
+      if (!shouldAutoScrollRef.current && visibleMessages.length > 1) return;
+
+      // 1. Scroll direct container and parent container to bottom
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+        if (scrollContainerRef.current.parentElement) {
+          scrollContainerRef.current.parentElement.scrollTop =
+            scrollContainerRef.current.parentElement.scrollHeight;
+        }
+      }
+
+      // 2. Pin view instantly to bottom marker
+      activeBottomRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior });
+    };
 
     if (frameRef.current !== null) {
       window.cancelAnimationFrame(frameRef.current);
     }
-
     if (timeoutRef.current !== null) {
       window.clearTimeout(timeoutRef.current);
     }
 
+    // Run on paint frame
     frameRef.current = window.requestAnimationFrame(() => {
-      if (shouldAutoScrollRef.current) {
-        container.scrollTop = container.scrollHeight;
-      }
+      scrollToNewest();
       frameRef.current = null;
     });
 
+    // Run slightly delayed backup to account for mobile keyboard pop or font reflow
     timeoutRef.current = window.setTimeout(() => {
-      if (shouldAutoScrollRef.current) {
-        container.scrollTop = container.scrollHeight;
-      }
+      scrollToNewest();
       timeoutRef.current = null;
-    }, 100);
+    }, 60);
 
     return () => {
       if (frameRef.current !== null) {
         window.cancelAnimationFrame(frameRef.current);
         frameRef.current = null;
       }
-
       if (timeoutRef.current !== null) {
         window.clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
     };
-  }, [visibleMessages.length, showTyping]);
+  }, [visibleMessages.length, latestMessageTimestamp, showTyping, activeBottomRef]);
 
   return (
     <div
       ref={scrollContainerRef}
-      className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain px-0 pb-4 pt-2"
+      className="min-h-0 w-full flex-1 touch-pan-y px-0 pb-4 pt-2"
+      style={{ touchAction: "pan-y" }}
     >
       <div className="flex w-full flex-col gap-2">
         {visibleMessages.map((message, index) => {
@@ -156,7 +174,7 @@ function ChatList({
 
         {showTyping && <TypingIndicator />}
 
-        <div ref={bottomRef} className="h-px shrink-0" />
+        <div ref={activeBottomRef} className="h-px shrink-0" />
       </div>
     </div>
   );

@@ -1,138 +1,229 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createRemoteJWKSet, jwtVerify } from "jose";
-
 export const runtime = "nodejs";
 
-const AUTHORIZED_EMAIL = "lacidamuriel@gmail.com";
-const CLOUD_RUN_URL = "https://generatetalkioreply-cf6feywhrq-uc.a.run.app";
-const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "intel-personal";
-const ENGINE_SECRET = process.env.ENGINE_SECRET || "intel-engine-super-secret-2026";
+import { corsEmpty, corsJson } from "./_cors";
 
-// Model tiers
-const MODEL_PRO = "gemini-3.1-pro-preview";
-const MODEL_FLASH = "gemini-2.5-flash";
+const FIREBASE_FUNCTION_URL =
+  "https://generatetalkioreply-ndury54xsq-uc.a.run.app";
 
-const JWKS = createRemoteJWKSet(
-  new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
-);
+const FIREBASE_TIMEOUT_MS = 45_000;
 
-async function verifyFirebaseToken(token: string) {
-  const { payload } = await jwtVerify(token, JWKS, {
-    issuer: `https://securetoken.google.com/${PROJECT_ID}`,
-    audience: PROJECT_ID,
-  });
-  return payload;
+export async function OPTIONS(req: Request) {
+  return corsEmpty(204, req);
 }
 
-/**
- * Sliding-window context pruning:
- * Preserves the initial task kickoff (index 0) + the trailing 8 interaction turns.
- */
-function pruneMessageHistory(messages: any[] = []) {
-  if (!Array.isArray(messages) || messages.length <= 8) {
-    return messages;
-  }
+export async function POST(req: Request) {
+  const reply = (data: unknown, status = 200) => {
+    return corsJson(data, { status, req });
+  };
 
-  const rootMessage = messages[0];
-  const trailingMessages = messages.slice(-8);
-
-  const hasRootDuplicate = trailingMessages.some(
-    (m) => m.timestamp === rootMessage.timestamp
-  );
-
-  return hasRootDuplicate ? trailingMessages : [rootMessage, ...trailingMessages];
-}
-
-/**
- * Dynamic tier selection:
- * Elevates to Pro for attachments, complex prompts, or manual trigger keywords.
- */
-function determineModelTier(prompt: string, attachments: any[] = []): string {
-  const normalized = prompt.toLowerCase();
-
-  // Manual override: include '!pro' or '/pro' anywhere in prompt
-  if (normalized.includes("!pro") || normalized.includes("/pro")) {
-    return MODEL_PRO;
-  }
-
-  // Vision or binary analysis always targets Pro
-  if (Array.isArray(attachments) && attachments.length > 0) {
-    return MODEL_PRO;
-  }
-
-  // Complexity heuristics: markdown blocks, long contexts, architectural patterns
-  const isDeepDive =
-    prompt.length > 600 ||
-    prompt.includes("```") ||
-    /\b(refactor|architecture|schema|interface|type-safe|benchmark|optimize|vulnerability)\b/i.test(prompt);
-
-  return isDeepDive ? MODEL_PRO : MODEL_FLASH;
-}
-
-export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization") || "";
-    const clientToken = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-    if (!clientToken) {
-      return NextResponse.json(
-        { error: "Access Denied: Missing authentication token." },
-        { status: 401 }
+    if (!authHeader.startsWith("Bearer ")) {
+      return reply(
+        {
+          error: "Unauthorized",
+          reply: "",
+        },
+        401
       );
     }
 
-    // 1. Strict operator verification
-    const payload = await verifyFirebaseToken(clientToken);
-    if (
-      typeof payload.email !== "string" ||
-      payload.email.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()
-    ) {
-      return NextResponse.json(
-        { error: "Forbidden: Unauthorized operator." },
-        { status: 403 }
+    const rawBody = await req.text();
+    let body: Record<string, unknown> = {};
+
+    try {
+      body = rawBody
+        ? (JSON.parse(rawBody) as Record<string, unknown>)
+        : {};
+    } catch {
+      return reply(
+        {
+          error: "Invalid JSON body",
+          reply: "",
+        },
+        400
       );
     }
 
-    const body = await req.json();
+    const message =
+      typeof body.message === "string" ? body.message.trim() : "";
 
-    const rawPrompt = typeof body.message === "string" ? body.message : "";
-    const cleanPrompt = rawPrompt.replace(/^[!/](pro)\s*/i, "").trim();
+    if (!message) {
+      return reply(
+        {
+          error: "Invalid message",
+          reply: "",
+        },
+        400
+      );
+    }
 
-    // Optimize payload before network dispatch
-    const prunedMessages = pruneMessageHistory(body.messages);
-    const targetModel = determineModelTier(rawPrompt, body.attachments);
+    const payload = {
+  message,
 
-    const optimizedPayload = {
-      ...body,
-      message: cleanPrompt || rawPrompt,
-      messages: prunedMessages,
-      model: targetModel,
-    };
+  messages: Array.isArray(body.messages)
+    ? body.messages
+    : [],
 
-    // 2. Dispatch to Cloud Run with pre-shared engine key
-    const backendRes = await fetch(CLOUD_RUN_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-engine-secret": ENGINE_SECRET,
-      },
-      body: JSON.stringify(optimizedPayload),
+  userTier:
+    typeof body.userTier === "string" && body.userTier.trim()
+      ? body.userTier.trim()
+      : "free",
+
+  source: body.source === "checkin" ? "checkin" : "chat",
+
+  ...(body.image != null
+    ? {
+        image: body.image,
+        requestId: body.requestId,
+      }
+    : {}),
+};
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+  () => controller.abort(),
+  body.image != null ? 65_000 : FIREBASE_TIMEOUT_MS
+);
+    let firebaseRes: Response;
+
+    let rawText: string;
+
+    try {
+      firebaseRes = await fetch(FIREBASE_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+          "x-talkio-app-key": process.env.INTERNAL_APP_KEY || "",
+        },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+              signal: controller.signal,
     });
 
-    if (!backendRes.ok) {
-      const errorText = await backendRes.text();
-      return NextResponse.json(
-        { error: `Backend engine error: ${errorText}` },
-        { status: backendRes.status }
+    rawText = await firebaseRes.text();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+    let data: Record<string, any> = {};
+
+    try {
+      data = rawText
+        ? (JSON.parse(rawText) as Record<string, any>)
+        : {};
+    } catch {
+      console.error("Firebase returned non-JSON:", {
+        status: firebaseRes.status,
+        statusText: firebaseRes.statusText,
+        rawText: rawText.slice(0, 1000),
+      });
+
+      return reply(
+        {
+          error: "Firebase returned non-JSON",
+          reply: "",
+          upstreamStatus: firebaseRes.status,
+          rawText: rawText.slice(0, 500),
+        },
+        502
       );
     }
 
-    const data = await backendRes.json();
-    return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message || "Unauthorized request rejected." },
-      { status: 401 }
+    if (!firebaseRes.ok) {
+      console.error("Firebase function returned an error:", {
+        status: firebaseRes.status,
+        statusText: firebaseRes.statusText,
+        error: data.error || null,
+        details: data.details || null,
+        reason: data.reason || null,
+        path: data.path || null,
+        model: data.model || null,
+        analyticsType: data.analyticsType || null,
+        fallbackTriggered: data.fallbackTriggered === true,
+        rawText: rawText.slice(0, 1000),
+      });
+    }
+
+    if (typeof data.reply !== "string" || !data.reply.trim()) {
+      console.error("Firebase function returned no usable reply:", {
+        status: firebaseRes.status,
+        statusText: firebaseRes.statusText,
+        error: data.error || null,
+        details: data.details || null,
+        reason: data.reason || null,
+        path: data.path || null,
+        model: data.model || null,
+        analyticsType: data.analyticsType || null,
+        fallbackTriggered: data.fallbackTriggered === true,
+        rawText: rawText.slice(0, 1000),
+      });
+    }
+
+    return reply(
+      {
+        reply:
+          typeof data.reply === "string"
+            ? data.reply
+            : "",
+        error: data.error || null,
+        details: data.details || null,
+        reason: data.reason || null,
+        model: data.model || null,
+        path: data.path || null,
+        analyticsType: data.analyticsType || null,
+        fallbackTriggered: data.fallbackTriggered === true,
+        crisisLock: data.crisisLock === true,
+        remainingDaily: data.remainingDaily ?? null,
+
+        code: data.code ?? null,
+        requestId: data.requestId ?? null,
+        imageAccepted: data.imageAccepted === true,
+        imageUsage: data.imageUsage ?? null,
+        retryable: data.retryable === true,
+        paywallRequired: data.paywallRequired === true,
+        safetyBlocked: data.safetyBlocked === true,
+
+        upstreamStatus: firebaseRes.status,
+      },
+      firebaseRes.status
+    );
+  } catch (error: unknown) {
+    const details =
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          }
+        : {
+            name: "UnknownError",
+            message: String(error),
+            stack: null,
+          };
+
+    const timedOut =
+      error instanceof Error && error.name === "AbortError";
+
+    console.error("Talkio /api/chat request failed:", {
+      ...details,
+      timedOut,
+    });
+
+    return reply(
+      {
+        error: timedOut
+          ? "Upstream request timed out"
+          : "Server error",
+        reply: "",
+        details: details.message,
+        path: timedOut
+          ? "api_chat_timeout"
+          : "api_chat_exception",
+      },
+      timedOut ? 504 : 500
     );
   }
 }

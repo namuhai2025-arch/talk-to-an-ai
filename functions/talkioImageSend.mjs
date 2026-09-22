@@ -110,7 +110,18 @@ export async function beginImageSend(uid, body) {
     }
   }
 
-  // Unmetered personal access granted
+  const access = await fetchImageAccess(
+    uid,
+    process.env.REVENUECAT_SECRET_API_KEY
+  );
+
+  if (
+    !access.eligible ||
+    access.verifiedTier !== "companion" ||
+    access.limit !== 30
+  ) {
+    fail(403, "COMPANION_REQUIRED", "Image attachments require Companion.");
+  }
 
   const quotaRef = db
     .collection("talkioImageUsage")

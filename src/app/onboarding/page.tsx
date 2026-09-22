@@ -7,35 +7,35 @@ import { Capacitor } from "@capacitor/core";
 export default function TalkioOnboarding() {
   const screens = [
   {
-    image: "/onboarding-webp/screen1-welcome-safe-space.webp",
+    image: "/onboarding-webp/screen1-welcome-safe-space.png",
     dotColor: "bg-[#6F8A4A]",
   },
   {
-    image: "/onboarding-webp/screen5-how-it-works.webp",
+    image: "/onboarding-webp/screen5-how-it-works.png",
     dotColor: "bg-[#6F8A4A]",
   },
   {
-    image: "/onboarding-webp/screen6-reflection-journey.webp",
+    image: "/onboarding-webp/screen6-reflection-journey.png",
     dotColor: "bg-[#B8893D]",
   },
   {
-    image: "/onboarding-webp/screen2-heavy-thoughts.webp",
+    image: "/onboarding-webp/screen2-heavy-thoughts.png",
     dotColor: "bg-[#90A88B]",
   },
   {
-    image: "/onboarding-webp/screen3-no-advice.webp",
+    image: "/onboarding-webp/screen3-no-advice.png",
     dotColor: "bg-[#89A17E]",
   },
   {
-    image: "/onboarding-webp/screen4-no-judgment.webp",
+    image: "/onboarding-webp/screen4-no-judgment.png",
     dotColor: "bg-[#6F8A4A]",
   },
   {
-    image: "/onboarding-webp/screen7-clarity.webp",
+    image: "/onboarding-webp/screen7-clarity.png",
     dotColor: "bg-[#D08A4E]",
   },
   {
-    image: "/onboarding-webp/screen8-feel-lighter.webp",
+    image: "/onboarding-webp/screen8-feel-lighter.png",
     dotColor: "bg-[#7F8F58]",
   },
 ];

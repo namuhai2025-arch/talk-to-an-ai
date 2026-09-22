@@ -23,10 +23,11 @@ let analyticsInstance: Analytics | null = null;
 
 export function getFirebaseApp(): FirebaseApp {
   if (typeof window === "undefined") {
-    throw new Error("Firebase client app should only be initialized in the browser");
+    throw new Error("Firebase app should only be initialized in the browser");
   }
 
   if (app) return app;
+
   app = getApps().length ? getApps()[0]! : initializeApp(firebaseConfig);
   return app;
 }
@@ -37,20 +38,23 @@ export function getFirebaseAuth(): Auth {
   }
 
   if (authInstance) return authInstance;
+
   authInstance = getAuth(getFirebaseApp());
   return authInstance;
 }
 
 export async function getFirebaseAnalytics(): Promise<Analytics | null> {
-  if (typeof window === "undefined" || Capacitor.isNativePlatform()) return null;
+  if (typeof window === "undefined") return null;
+
+  if (Capacitor.isNativePlatform()) return null;
 
   const supported = await isSupported();
   if (!supported) return null;
 
   if (analyticsInstance) return analyticsInstance;
+
   analyticsInstance = getAnalytics(getFirebaseApp());
   return analyticsInstance;
 }
 
-export const auth = typeof window !== "undefined" ? getFirebaseAuth() : (null as unknown as Auth);
 export { logEvent };

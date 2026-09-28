@@ -1,5 +1,5 @@
 "use client";
-import { Camera, CameraResultType } from '@capacitor/camera';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import React, {
   useCallback,
@@ -179,34 +179,40 @@ function ChatComposer({
     onAttachmentChange(file);
   };
 
-  // --- NEW NATIVE UPLOAD LOGIC ---
-  const handleAttachmentClick = async () => {
-    if (Capacitor.isNativePlatform()) {
-      try {
-        const image = await Camera.getPhoto({
-          quality: 90,
-          allowEditing: false,
-          resultType: CameraResultType.DataUrl, // Get Data URL to easily convert to File
+  const handleAttachment = async () => {
+    try {
+      const image = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.Uri,
+        source: CameraSource.Prompt,
+      });
+
+      if (image.webPath) {
+        const response = await fetch(image.webPath);
+        const blob = await response.blob();
+
+        const file = new File([blob], `photo_${Date.now()}.jpg`, {
+          type: "image/jpeg",
         });
 
-        if (image.dataUrl && onAttachmentChange) {
-          // Convert base64 Data URL to a standard JavaScript File object
-          const response = await fetch(image.dataUrl);
-          const blob = await response.blob();
-          const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
-
-          setFileError("");
-          onAttachmentChange(file); // Pass to Talkio!
+        if (onAttachmentChange) {
+          onAttachmentChange(file);
         }
-      } catch (error) {
-        console.error("Camera/Gallery cancelled or failed", error);
       }
+    } catch (error) {
+      console.error("Camera error:", error);
+    }
+  };
+
+  const handleAttachmentClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (Capacitor.isNativePlatform()) {
+      handleAttachment();
     } else {
-      // If we are on the normal website (Desktop/Mobile Safari), just click the hidden input
       fileInputRef.current?.click();
     }
   };
-  // ---------------------------------
 
   return (
     <form
@@ -295,7 +301,7 @@ function ChatComposer({
               aria-label="Attach image"
               title="Attach image"
               disabled={disabled || !canAttach}
-              onClick={handleAttachmentClick} // <-- CHANGED THIS LINE
+              onClick={handleAttachmentClick}
               className="
                 flex h-12 w-11 shrink-0
                 items-center justify-center rounded-md

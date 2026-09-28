@@ -7,8 +7,6 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const AUTHORIZED_EMAIL = "lacidamuriel@gmail.com";
-
 function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -114,6 +112,7 @@ async function generateTalkioReplyEngine({
 // Cloud Run HTTP Entrypoint
 // ==========================================
 async function generateTalkioReplyEndpoint(req, res) {
+  // CORS Headers
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -134,20 +133,19 @@ async function generateTalkioReplyEndpoint(req, res) {
     return res.status(401).json({ error: "Access Denied: Missing Bearer token." });
   }
 
+  let uid;
   try {
     const decodedToken = await admin.auth().verifyIdToken(token, true);
-
-    if (decodedToken.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
-      return res.status(403).json({ error: "Forbidden: Unauthorized operator." });
-    }
+    uid = decodedToken.uid;
   } catch (err) {
+    console.error("Token verification failed:", err.message);
     return res.status(401).json({ error: "Invalid, expired, or revoked token signature." });
   }
 
   // 2. Dispatch to execution engine
   try {
     const result = await generateTalkioReplyEngine({
-      uid: "operator-admin",
+      uid: uid,
       messages: req.body.messages || [],
       latestUserMessage: req.body.message || "",
       attachments: req.body.attachments || [],
@@ -155,6 +153,7 @@ async function generateTalkioReplyEndpoint(req, res) {
 
     return res.status(200).json(result);
   } catch (err) {
+    console.error("Execution error in generateTalkioReplyEngine:", err);
     return res.status(500).json({ error: err.message || "Internal server error." });
   }
 }

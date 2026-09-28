@@ -27,6 +27,7 @@ const crypto = require("crypto");
 const { Redis } = require("@upstash/redis");
 
 const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
+const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
 const TALKIO_VERIFICATION_TEMPLATE =
   "90bfdd75-bfda-4ad9-96a0-4ea25123a81a";
@@ -230,7 +231,7 @@ const FREE_TRIAL_DAILY_LIMIT = 10;
 
 const FREE_MODEL = "gemini-3.5-flash-lite";
 const COMPANION_MODEL = "gemini-3.8-flash";
-const PRESENCE_MODEL = "gemini-3.8-pro";
+const PRESENCE_MODEL = "gemini-3.8-flash";
 
 function logInfo(event, data = {}) {
   logger.info(event, {
@@ -1115,7 +1116,7 @@ async function generateModelText({
   config: {
     systemInstruction: systemPrompt,
     responseMimeType: "application/json",
-    maxOutputTokens: 600, 
+    maxOutputTokens: 2048, 
   },
 });
 
@@ -1759,12 +1760,13 @@ export const deleteMyAccount = onRequest({ cors: true }, async (req, res) => {
       reply: "Something went wrong while deleting your account.",
     });
   }
-});
+}); 
 
 export const generateTalkioReply = onRequest(
   {
     timeoutSeconds: 60,
     minInstances: 0,
+    secrets: [GEMINI_API_KEY],
   },
   async (req, res) => {
     let imageSend = null;
@@ -1872,7 +1874,7 @@ export const generateTalkioReply = onRequest(
 
       // 5. INFERENCE SETUP
       imageSend = await beginImageSend(uid, body);
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY.value() });
       const model =
         access?.plan === "presence"
           ? PRESENCE_MODEL
@@ -1900,8 +1902,7 @@ export const generateTalkioReply = onRequest(
         finalReply = "You do not have to force trust here. We can go slowly.";
       }
 
-      // 6. SAFE ASYNCHRONOUS PERSISTENCE
-      // Wrap background work to guarantee execution finishes without blocking main response latency
+            // 6. SAFE ASYNCHRONOUS PERSISTENCE
       const backgroundPersistence = Promise.allSettled([
         upsertPeopleMemory(uid, extractPeopleFromMessage(latestUserMessage)),
         upsertStyleMemory(uid, extractStyleExpressions(latestUserMessage)),
@@ -1913,19 +1914,24 @@ export const generateTalkioReply = onRequest(
           language: languageMeta?.language || "en",
           safety: result?.safety || { riskLevel: "none" },
         }),
-      ]).catch((err) => logError("talkio_bg_persist_error", err, { uid }));
+      ]);
 
       const responseBody = {
         reply: finalReply,
         safety: result?.safety || { riskLevel: "none" },
         action: result?.action || "show_reply",
         model,
-        path: getReplyPath(result),
+        path: getReplyPath(result), 
         remainingDaily: Math.max(0, dailyLimit - userDailyCount),
       };
 
-      // Await background write completion after sending response to prevent CPU freezing instance termination
-      await backgroundPersistence;
+      // Ensure DB operations finish before function terminates, logging any write failures
+      const writeResults = await backgroundPersistence;
+      for (const resItem of writeResults) {
+        if (resItem.status === "rejected") {
+          logError("talkio_bg_persist_error", resItem.reason, { uid });
+        }
+      }
 
       if (imageSend && imageProcessed) {
         res.status(200).json(await imageSend.complete(responseBody));

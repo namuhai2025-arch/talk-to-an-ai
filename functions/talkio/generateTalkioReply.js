@@ -60,23 +60,6 @@
     return String(reply || "").trim();
   }
 
-function getLocalSafetyHeuristic(text = "") {
-  // Use String() to prevent a crash if text is undefined, null, or an object
-  const lowerText = String(text || "").toLowerCase();
-  
-  const crisisKeywords = [
-    "suicide", "kill myself", "end my life", "hurt myself", 
-    "cut myself", "want to die", "ending it all"
-  ];
-  
-  const isCrisis = crisisKeywords.some(keyword => lowerText.includes(keyword));
-  
-  return {
-    riskLevel: isCrisis ? "high" : "none",
-    shouldRedirect: isCrisis
-  };
-}
-
   function cleanReply(text = "") {
     return String(text || "")
       .replace(/\bAs an AI language model,?\s*/gi, "")
@@ -102,7 +85,7 @@ function getLocalSafetyHeuristic(text = "") {
 
     const text = reply.trim();
 
-    if (text.length < 8) return false;
+    if (text.length < 20) return false;
 
     if (/^\W+$/.test(text)) return false;
 
@@ -340,24 +323,20 @@ function getLocalSafetyHeuristic(text = "") {
   `.trim();
   }
 
-    function sanitizeConversationMessages(messages) {
+  function sanitizeConversationMessages(messages) {
     if (!Array.isArray(messages)) return [];
 
-    return messages.filter((message) => {
-      if (!message || !["user", "assistant", "system"].includes(message.role)) return false;
-      
-      // If it's standard text, make sure it's not empty
-      if (typeof message.content === "string") {
-        return message.content.trim().length > 0;
-      }
-      
-      // If it's an array (Image/Multimodal format), allow it!
-      if (Array.isArray(message.content)) {
-        return message.content.length > 0;
-      }
-
-      return false;
-    });
+    return messages.filter(
+      (message) =>
+        message &&
+        [
+          "user",
+          "assistant",
+          "system",
+        ].includes(message.role) &&
+        typeof message.content === "string" &&
+        message.content.trim()
+    );
   }
 
   function buildLanguageControlBlock() {
@@ -861,16 +840,10 @@ Runtime rules:
       };
     }
 
-        // 1. Sanitize the messages as usual
-    const allSafeMessages = sanitizeConversationMessages(conversationMessages);
-
-    // 2. Determine max history length based on tier
-    const isFreeTierUser = !planConfig?.label || planConfig.label.toLowerCase() === "free";
-    const maxHistoryLength = isFreeTierUser ? 8 : 20;
-
-    // 3. Keep only the most recent messages (Token Trimming)
-    // If the array is larger than our limit, we slice from the end to keep the newest ones.
-    const safeMessages = allSafeMessages.slice(-maxHistoryLength);
+    const safeMessages =
+      sanitizeConversationMessages(
+        conversationMessages
+      );
 
     const languageEnv =
       detectLanguageEnvironment(
@@ -942,12 +915,23 @@ Runtime rules:
         emotional.responseMode ||
         "reflect";
 
-      localSafetyFallback = getLocalSafetyHeuristic(latestUserMessage);
-
+      try {
+        localSafetyFallback =
+          await analyzeBehavioralSafety({
+            modelGenerate,
+            latestUserMessage,
+          });
+      } catch (error) {
+        console.error(
+          "behavioral_safety_non_blocking_failed",
+          error?.message || error
+        );
+      }
       const harmfulIntentBlock =
-  localSafetyFallback.shouldRedirect === true
-    ? HARMFUL_INTENT_STEERING_PROMPT
-    : "";
+    localSafetyFallback.shouldRedirect &&
+    ["medium","high"].includes(localSafetyFallback.riskLevel)
+      ? HARMFUL_INTENT_STEERING_PROMPT
+      : "";
 
       const variationBlock =
         buildVariationBlock(
@@ -1013,67 +997,51 @@ try {
   |
   */
 
-  const isFreeTier = !planConfig?.label || planConfig.label.toLowerCase() === "free";
+  try {
+    const classify =
+      createSemanticClassifier({
+        modelGenerate,
+      });
 
-  if (isFreeTier) {
-    // Zero-cost bypass for Free Tier. Rely entirely on V3 Router.
-    semanticShadowPromise = Promise.resolve({
-      mode: "shadow",
-      consulted: false,
-      parsed: false,
-      semanticSignals: null,
-      semanticCapabilities: [],
-      comparison: null,
-      reason: "skipped_free_tier",
-    });
-  } else {
-    // Paid Tier: Run the expensive V4 Semantic LLM
-    try {
-      const classify =
-        createSemanticClassifier({
-          modelGenerate,
-        });
+    semanticShadowPromise =
+      runSemanticShadow({
+        userMessage:
+          latestUserMessage,
 
-      semanticShadowPromise =
-        runSemanticShadow({
-          userMessage:
-            latestUserMessage,
+        v3Capabilities,
 
-          v3Capabilities,
+        languageMeta:
+          languageEnv,
 
-          languageMeta:
-            languageEnv,
-
-          classify,
-        }).catch((error) => ({
-          mode: "shadow",
-          consulted: true,
-          parsed: false,
-          semanticSignals: null,
-          semanticCapabilities: [],
-          comparison: null,
-          reason:
-            "shadow_runner_error",
-          error:
-            error?.message ||
-            String(error),
-        }));
-    } catch (error) {
-      semanticShadowPromise =
-        Promise.resolve({
-          mode: "shadow",
-          consulted: false,
-          parsed: false,
-          semanticSignals: null,
-          semanticCapabilities: [],
-          comparison: null,
-          reason:
-            "shadow_initialization_error",
-          error:
-            error?.message ||
-            String(error),
-        });
-    }
+        classify,
+      }).catch((error) => ({
+        mode: "shadow",
+        consulted: true,
+        parsed: false,
+        semanticSignals: null,
+        semanticCapabilities: [],
+        comparison: null,
+        reason:
+          "shadow_runner_error",
+        error:
+          error?.message ||
+          String(error),
+      }));
+  } catch (error) {
+    semanticShadowPromise =
+      Promise.resolve({
+        mode: "shadow",
+        consulted: false,
+        parsed: false,
+        semanticSignals: null,
+        semanticCapabilities: [],
+        comparison: null,
+        reason:
+          "shadow_initialization_error",
+        error:
+          error?.message ||
+          String(error),
+      });
   }
 
   /*
@@ -1348,16 +1316,11 @@ try {
     );
   });
 
-  const hasImage = Boolean(
-    latestUserMessage?.imageUrl || 
-    latestUserMessage?.attachment || 
-    latestUserMessage?.image
-  );
-
-  const raw = await modelGenerate({
+   const raw =
+  await modelGenerate({
     systemPrompt: prompt,
     messages: safeMessages,
-    includeImage: hasImage, 
+    includeImage: false,
   });
 
       const structuredResult =

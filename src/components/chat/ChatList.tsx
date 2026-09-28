@@ -16,6 +16,7 @@ type ChatMessage = {
   content: string;
   timestamp: number;
   isFeedbackPrompt?: boolean;
+  imageUrl?: string;
   image?: {
   id: string;
   caption: string;

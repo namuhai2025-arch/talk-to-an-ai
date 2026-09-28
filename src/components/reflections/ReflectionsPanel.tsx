@@ -1,175 +1,423 @@
-  "use client";
+"use client";
 
-  import { useCallback, useEffect, useState } from "react";
-  import { onAuthStateChanged, type User } from "firebase/auth";
-  import { getFirebaseAuth } from "@/lib/firebase";
+import { useCallback, useEffect, useState } from "react";
+import { onAuthStateChanged, type User } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase";
 
-  import ReflectionDetail from "@/components/reflections/ReflectionDetail";
+import ReflectionDetail from "@/components/reflections/ReflectionDetail";
 
-  import {
-  resolveTalkioTier,
-  type TalkioTier,
-} from "@/lib/subscription";
+import { resolveTalkioTier, type TalkioTier } from "@/lib/subscription";
 
-  const FUNCTIONS_BASE_URL =
-    "https://us-central1-talkio-production.cloudfunctions.net";
+const FUNCTIONS_BASE_URL =
+  "https://us-central1-talkio-production.cloudfunctions.net";
 
-  const GET_REFLECTIONS_URL =
-    `${FUNCTIONS_BASE_URL}/getMyWeeklyReflections`;
+const GET_REFLECTIONS_URL = `${FUNCTIONS_BASE_URL}/getMyWeeklyReflections`;
+const GENERATE_REFLECTION_URL = `${FUNCTIONS_BASE_URL}/generateMyWeeklyReflection`;
 
-  const GENERATE_REFLECTION_URL =
-    `${FUNCTIONS_BASE_URL}/generateMyWeeklyReflection`;
-
-  type WeeklyReflection = {
+// OPTIMIZED SCHEMA: Matches the backend exactly
+type WeeklyReflection = {
   id?: string;
   status?: "ready" | "generating" | "failed" | "insufficient_activity";
   periodStart?: string;
   periodEnd?: string;
 
   lookingBack?: string;
-  highlight?: string;
-
   whatWeighedOnYou?: string[];
   whatHelped?: string[];
   momentsThatMattered?: string[];
-
-  strengthsINoticed?: string[];
-  somethingToStrengthen?: string;
-
-  gratitude?: {
-    score: number;
-    evidenceCount: number;
-    items: string[];
-  };
-
-  patternWorthNoticing?: string;
-
   somethingToCarryForward?: string;
   oneThingINoticed?: string;
 
-  language?: string;
   generatedAt?: string;
 };
 
-  type ReflectionListResponse = {
-    ok?: boolean;
-    reflections?: WeeklyReflection[];
-    error?: string;
-  };
+type ReflectionListResponse = {
+  ok?: boolean;
+  reflections?: WeeklyReflection[];
+  error?: string;
+};
 
-  type ReflectionGenerationResponse = {
-    ok?: boolean;
-    outcome?:
-      | "generated"
-      | "already_exists"
-      | "insufficient_activity";
-    reflection?: WeeklyReflection;
-    error?: string;
-  };
+type ReflectionGenerationResponse = {
+  ok?: boolean;
+  outcome?: "generated" | "already_exists" | "insufficient_activity";
+  reflection?: WeeklyReflection;
+  error?: string;
+};
 
-  async function getAuthToken(user: User): Promise<string> {
-    return user.getIdToken();
+async function getAuthToken(user: User): Promise<string> {
+  return user.getIdToken();
+}
+
+async function readResponseJson<T>(response: Response): Promise<T> {
+  const rawText = await response.text();
+  if (!rawText) return {} as T;
+  try {
+    return JSON.parse(rawText) as T;
+  } catch {
+    throw new Error("Talkio received an invalid server response.");
   }
+}
 
-  async function readResponseJson<T>(response: Response): Promise<T> {
-    const rawText = await response.text();
+function formatReflectionPeriod(start?: string, end?: string): string {
+  if (!start && !end) return "";
+  const formatDate = (value?: string) => {
+    if (!value) return "";
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(date);
+  };
+  const formattedStart = formatDate(start);
+  const formattedEnd = formatDate(end);
+  if (formattedStart && formattedEnd) return `${formattedStart} – ${formattedEnd}`;
+  return formattedStart || formattedEnd;
+}
 
-    if (!rawText) {
-      return {} as T;
-    }
+// --- MAIN COMPONENT ---
 
+export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
+  const [reflectionView, setReflectionView] = useState<
+    "home" | "weekly" | "monthly" | "quarterly" | "yearly" | "portrait"
+  >("home");
+
+  const [user, setUser] = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [reflections, setReflections] = useState<WeeklyReflection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [weeklyGenerationChecked, setWeeklyGenerationChecked] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [tier, setTier] = useState<TalkioTier>("free");
+  const [tierLoading, setTierLoading] = useState(true);
+  const [lockedFeature, setLockedFeature] = useState<{
+    title: string;
+    requiredTier: string;
+  } | null>(null);
+  const [comingSoonFeature, setComingSoonFeature] = useState<string | null>(null);
+
+  const loadReflections = useCallback(async (signedInUser: User) => {
+    setLoading(true);
+    setError("");
     try {
-      return JSON.parse(rawText) as T;
-    } catch {
-      throw new Error("Talkio received an invalid server response.");
-    }
-  }
+      const token = await getAuthToken(signedInUser);
+      const response = await fetch(GET_REFLECTIONS_URL, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        cache: "no-store",
+      });
 
-  function formatReflectionPeriod(
-    start?: string,
-    end?: string
-  ): string {
-    if (!start && !end) return "";
+      const data = await readResponseJson<ReflectionListResponse>(response);
 
-    const formatDate = (value?: string) => {
-      if (!value) return "";
-
-      const date = new Date(`${value}T00:00:00`);
-
-      if (Number.isNaN(date.getTime())) {
-        return value;
+      if (!response.ok || data.ok === false) {
+        throw new Error(data.error || "Could not load your reflections.");
       }
 
-      return new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }).format(date);
-    };
+      // Optimization: Only keep the most recent 5 reflections in state
+      setReflections(Array.isArray(data.reflections) ? data.reflections.slice(0, 5) : []);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Could not load your reflections.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    const formattedStart = formatDate(start);
-    const formattedEnd = formatDate(end);
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthChecked(true);
+      if (currentUser) {
+        void (async () => {
+          const resolvedTier = await resolveTalkioTier();
+          setTier(resolvedTier);
+          setTierLoading(false);
+          if (resolvedTier !== "free") {
+            await loadReflections(currentUser);
+          } else {
+            setReflections([]);
+            setLoading(false);
+          }
+        })();
+      } else {
+        setTier("free");
+        setTierLoading(false);
+        setReflections([]);
+        setLoading(false);
+      }
+    });
+    return unsubscribe;
+  }, [loadReflections]);
 
-    if (formattedStart && formattedEnd) {
-      return `${formattedStart} – ${formattedEnd}`;
+    async function generateReflection() {
+    if (!user || generating) return;
+
+    // 1. COST SAVING: Don't even try if we know we have a fresh one in the last 4 hours
+    const lastCheck = localStorage.getItem(`last_reflection_check_${user.uid}`);
+    const fourHours = 4 * 60 * 60 * 1000;
+    if (lastCheck && (Date.now() - parseInt(lastCheck)) < fourHours && reflections.length > 0) {
+      console.log("Skipping generation check: checked recently.");
+      return;
     }
 
-    return formattedStart || formattedEnd;
+    const latest = reflections[0];
+    if (latest?.status === "ready" && !error) return;
+
+    setGenerating(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const token = await getAuthToken(user);
+      const response = await fetch(GENERATE_REFLECTION_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ force: false }),
+      });
+
+      const data = await readResponseJson<ReflectionGenerationResponse>(response);
+
+      // 2. COST SAVING: Mark the check as successful so we don't hit the API again for 4 hours
+      localStorage.setItem(`last_reflection_check_${user.uid}`, Date.now().toString());
+
+      if (!response.ok || data.ok === false) {
+        throw new Error(data.error || "Talkio could not create your reflection.");
+      }
+
+      if (data.outcome === "insufficient_activity" || data.reflection?.status === "insufficient_activity") {
+        setNotice("Keep talking naturally, and Talkio will reflect it back when there is enough to understand.");
+      } else if (data.outcome === "already_exists") {
+        setNotice("Your reflection for this period is already ready.");
+      } else {
+        setNotice("Your weekly reflection is ready.");
+      }
+
+      await loadReflections(user);
+    } catch (generationError) {
+      setError(generationError instanceof Error ? generationError.message : "Talkio could not create your reflection.");
+    } finally {
+      setGenerating(false);
+    }
   }
 
-  function ReflectionsHeader({
-    onBack,
-    title,
-    subtitle,
-  }: {
-    onBack: () => void;
-    title: string;
-    subtitle?: string;
-  }) {
+  useEffect(() => {
+    if (
+      reflectionView !== "weekly" ||
+      !user ||
+      tier === "free" ||
+      tierLoading ||
+      loading ||
+      generating ||
+      weeklyGenerationChecked
+    ) {
+      return;
+    }
+    setWeeklyGenerationChecked(true);
+    void generateReflection();
+  }, [reflectionView, user, tier, tierLoading, loading, generating, weeklyGenerationChecked]);
+
+  const readyReflections = reflections.filter((r) => r.status === "ready");
+  const latestReflection = readyReflections[0];
+
+  if (reflectionView === "home") {
     return (
-      <div className="mb-5 flex items-start gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Go back"
-          className="
-            flex h-10 w-10 shrink-0
-            items-center justify-center
-            rounded-full
-            border border-stone-200
-            bg-white/80
-            text-xl text-stone-700
-            shadow-sm
-            transition
-            active:scale-95
-          "
-        >
-          ←
-        </button>
-
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-stone-900">
-            {title}
-          </h1>
-
-          {subtitle ? (
-            <p className="mt-1 text-sm leading-5 text-stone-500">
-              {subtitle}
-            </p>
-          ) : null}
-        </div>
-      </div>
+      <>
+        <ReflectionsHome
+          tier={tier}
+          tierLoading={tierLoading}
+          onBack={onBack}
+          onOpenWeekly={() => {
+            setWeeklyGenerationChecked(false);
+            setReflectionView("weekly");
+          }}
+          onOpenMonthly={() => setReflectionView("monthly")}
+          onOpenLocked={(title, requiredTier) => setLockedFeature({ title, requiredTier })}
+          onOpenComingSoon={(title) => setComingSoonFeature(title)}
+        />
+        {lockedFeature && (
+          <FeatureDialog
+            title={lockedFeature.title}
+            message={`${lockedFeature.title} is available with Talkio ${lockedFeature.requiredTier}.`}
+            primaryLabel="View plans"
+            onPrimary={() => { window.location.href = "/paywall"; }}
+            onClose={() => setLockedFeature(null)}
+          />
+        )}
+        {comingSoonFeature && (
+          <FeatureDialog
+            title={comingSoonFeature}
+            message={`${comingSoonFeature} is included with your plan and is coming soon.`}
+            primaryLabel="Okay"
+            onPrimary={() => setComingSoonFeature(null)}
+            onClose={() => setComingSoonFeature(null)}
+          />
+        )}
+      </>
     );
   }
 
-  type ReflectionIconName =
-    | "weekly"
-    | "monthly"
-    | "quarterly"
-    | "yearly"
-    | "portrait";
+  if (reflectionView === "monthly") {
+    return (
+      <ReflectionDetail
+        title="Monthly Reflection"
+        subtitle="Notice the emotions and themes that keep returning."
+        description="Your monthly reflection is quietly taking shape."
+        status="preparing"
+        currentDays={18}
+        totalDays={30}
+        expectedDate="At the end of this month"
+        discoveries={[
+          "Recurring emotions and concerns",
+          "Relationship patterns that stood out",
+          "Wins and progress you may have overlooked",
+          "Themes that kept returning",
+        ]}
+        onBack={() => setReflectionView("home")}
+      />
+    );
+  }
 
-  function ReflectionsHome({
+  if (!authChecked || loading) {
+    return (
+      <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+        <div className="mx-auto w-full max-w-2xl">
+          <ReflectionsHeader onBack={() => setReflectionView("home")} title="Weekly Reflection" subtitle="A clear look at your week." />
+          <div className="rounded-3xl border border-stone-200 bg-white/70 p-6">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">Weekly Reflection</p>
+            <div className="mt-5 flex items-center gap-3 text-sm text-stone-600">
+              <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-emerald-700" />
+              Loading your reflections…
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!user) {
+    return (
+      <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+        <div className="mx-auto w-full max-w-2xl">
+          <ReflectionsHeader onBack={() => setReflectionView("home")} title="Weekly Reflection" subtitle="A clear look at your week." />
+          <div className="rounded-3xl border border-stone-200 bg-white/70 p-6">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">Weekly Reflection</p>
+            <h2 className="mt-3 text-2xl font-semibold text-stone-900">Sign in to see your reflections.</h2>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
+      <div className="mx-auto w-full max-w-2xl">
+        <ReflectionsHeader onBack={() => setReflectionView("home")} title="Weekly Reflection" subtitle="A clear look at your week." />
+
+        <div className="space-y-4">
+          <div className="rounded-3xl border border-stone-200 bg-white/75 p-6 shadow-sm">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">Weekly Reflection</p>
+            <h2 className="mt-3 text-2xl font-semibold text-stone-900">Your week, reflected back with care.</h2>
+            <p className="mt-3 text-sm leading-6 text-stone-600">
+              Talkio gently reflects on your conversations from the past week to help you understand yourself a little better, notice meaningful patterns, and move forward with greater clarity.
+            </p>
+          </div>
+
+          {error && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">{error}</div>}
+          {notice && <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">{notice}</div>}
+          {generating && (
+            <div className="mb-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-800 animate-pulse">
+              ✦ Talkio is looking through your week now...
+            </div>
+          )}
+
+          {!latestReflection && !generating ? (
+            <div className="rounded-3xl border border-stone-200 bg-white/70 p-6">
+              <h3 className="text-lg font-semibold text-stone-900">No weekly reflection yet</h3>
+              <p className="mt-2 text-sm leading-6 text-stone-600">Talk more with Talkio to unlock your weekly summary.</p>
+              <button
+                type="button"
+                onClick={generateReflection}
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-[#D9B96E] to-[#C59A43] px-5 py-3.5 text-sm font-semibold text-[#342A18] shadow-sm transition hover:from-[#E0C47E] hover:to-[#B98C37]"
+              >
+                <span>Generate my weekly reflection</span>
+              </button>
+            </div>
+          ) : latestReflection ? (
+            <>
+              <article className="rounded-3xl border border-stone-200 bg-white/80 p-6 shadow-sm">
+                <div className="border-b border-stone-200 pb-4">
+                  <div className="flex items-center gap-3">
+                    <ReflectionSectionIcon type="lookingBack" />
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">Looking back</p>
+                      <p className="mt-1 text-sm text-stone-500">{formatReflectionPeriod(latestReflection.periodStart, latestReflection.periodEnd)}</p>
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-stone-800">{latestReflection.lookingBack}</p>
+              </article>
+
+              {latestReflection.whatWeighedOnYou && latestReflection.whatWeighedOnYou.length > 0 && (
+                <ReflectionSection icon="weighed" title="What weighed on you" items={latestReflection.whatWeighedOnYou} />
+              )}
+
+              {latestReflection.whatHelped && latestReflection.whatHelped.length > 0 && (
+                <ReflectionSection icon="helped" title="What helped" items={latestReflection.whatHelped} />
+              )}
+
+              {latestReflection.momentsThatMattered && latestReflection.momentsThatMattered.length > 0 && (
+                <ReflectionSection icon="moments" title="Moments that mattered" items={latestReflection.momentsThatMattered} />
+              )}
+
+              {latestReflection.somethingToCarryForward && (
+                <GoldenLineCard text={latestReflection.somethingToCarryForward} />
+              )}
+
+              {latestReflection.oneThingINoticed && (
+                <TextReflectionCard icon="noticed" title="One thing I noticed" text={latestReflection.oneThingINoticed} />
+              )}
+            </>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// --- HELPER UI COMPONENTS ---
+
+function ReflectionsHeader({ onBack, title, subtitle }: { onBack: () => void; title: string; subtitle?: string }) {
+  return (
+    <div className="mb-5 flex items-start gap-3">
+      <button
+        type="button"
+        onClick={onBack}
+        aria-label="Go back"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white/80 text-xl text-stone-700 shadow-sm transition active:scale-95"
+      >
+        ←
+      </button>
+      <div className="min-w-0">
+        <h1 className="text-2xl font-semibold tracking-tight text-stone-900">{title}</h1>
+        {subtitle && <p className="mt-1 text-sm leading-5 text-stone-500">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+type ReflectionIconName = "weekly" | "monthly" | "quarterly" | "yearly" | "portrait";
+
+function ReflectionsHome({
   tier,
   tierLoading,
   onBack,
@@ -183,114 +431,38 @@
   onBack: () => void;
   onOpenWeekly: () => void;
   onOpenMonthly: () => void;
-  onOpenLocked: (
-    title: string,
-    requiredTier: string
-  ) => void;
+  onOpenLocked: (title: string, requiredTier: string) => void;
   onOpenComingSoon: (title: string) => void;
 }) {
-
-  const weeklyUnlocked =
-  !tierLoading && tier !== "free";
-
-const showAdvancedReflections =
-  !tierLoading &&
-  (
-    tier === "presence" ||
-    tier === "professional" ||
-    tier === "elite"
-  );
-
-const showMemoryPortrait =
-  !tierLoading &&
-  (
-    tier === "professional" ||
-    tier === "elite"
-  );  
+  const weeklyUnlocked = !tierLoading && tier !== "free";
+  const showAdvancedReflections = !tierLoading && (tier === "presence" || tier === "professional" || tier === "elite");
+  const showMemoryPortrait = !tierLoading && (tier === "professional" || tier === "elite");
 
   return (
-      <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-10">
-        <div className="mx-auto w-full max-w-2xl">
-          <ReflectionsHeader
-            onBack={onBack}
-            title="Your reflections"
-            subtitle="See patterns. Understand more. Grow, one step at a time."
-          />
-
-          <div className="rounded-[30px] border border-stone-200/80 bg-white/35 p-3 shadow-[0_16px_50px_rgba(69,58,42,0.06)] backdrop-blur-sm">
-            <div className="space-y-2">
-              <ReflectionHomeCard
-  icon="weekly"
-  title="Weekly Reflection"
-  description="A thoughtful look back at what shaped your week."
-  locked={!weeklyUnlocked}
-  onClick={
-    weeklyUnlocked
-      ? onOpenWeekly
-      : () => onOpenLocked("Weekly Reflection", "Companion")
-  }
-/>
-{showAdvancedReflections ? (
-  <>
-    <ReflectionHomeCard
-      icon="monthly"
-      title="Monthly Reflection"
-      description="Notice the emotions and themes that keep returning."
-      locked={false}
-      onClick={onOpenMonthly}
-    />
-
-    <ReflectionHomeCard
-      icon="quarterly"
-      title="Quarterly Reflection"
-      description="See how your choices and patterns are evolving."
-      locked={false}
-      onClick={() => onOpenComingSoon("Quarterly Reflection")}
-    />
-
-    <ReflectionHomeCard
-      icon="yearly"
-      title="Yearly Reflection"
-      description="Understand the larger story your year has been telling."
-      locked={false}
-      onClick={() => onOpenComingSoon("Yearly Reflection")}
-    />
-  </>
-) : null}
-
-{showMemoryPortrait ? (
-  <ReflectionHomeCard
-    icon="portrait"
-    title="Memory Portrait"
-    description="A meaningful portrait of who you became this year."
-    locked={false}
-    onClick={() => onOpenComingSoon("Memory Portrait")}
-  />
-) : null}
-
-               </div>
-        </div>
-
-        <div className="mx-auto mt-6 max-w-md text-center">
-          <div className="mb-2 flex items-center justify-center gap-2 text-[#7a8c69]">
-            <LockIcon className="h-3.5 w-3.5" />
-
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">
-              Private to you
-            </span>
+    <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-10">
+      <div className="mx-auto w-full max-w-2xl">
+        <ReflectionsHeader onBack={onBack} title="Your reflections" subtitle="See patterns. Understand more. Grow, one step at a time." />
+        <div className="rounded-[30px] border border-stone-200/80 bg-white/35 p-3 shadow-[0_16px_50px_rgba(69,58,42,0.06)] backdrop-blur-sm">
+          <div className="space-y-2">
+            <ReflectionHomeCard icon="weekly" title="Weekly Reflection" description="A thoughtful look back at what shaped your week." locked={!weeklyUnlocked} onClick={weeklyUnlocked ? onOpenWeekly : () => onOpenLocked("Weekly Reflection", "Companion")} />
+            {showAdvancedReflections && (
+              <>
+                <ReflectionHomeCard icon="monthly" title="Monthly Reflection" description="Notice the emotions and themes that keep returning." locked={false} onClick={onOpenMonthly} />
+                <ReflectionHomeCard icon="quarterly" title="Quarterly Reflection" description="See how your choices and patterns are evolving." locked={false} onClick={() => onOpenComingSoon("Quarterly Reflection")} />
+                <ReflectionHomeCard icon="yearly" title="Yearly Reflection" description="Understand the larger story your year has been telling." locked={false} onClick={() => onOpenComingSoon("Yearly Reflection")} />
+              </>
+            )}
+            {showMemoryPortrait && (
+              <ReflectionHomeCard icon="portrait" title="Memory Portrait" description="A meaningful portrait of who you became this year." locked={false} onClick={() => onOpenComingSoon("Memory Portrait")} />
+            )}
           </div>
-
-          <p className="text-xs leading-5 text-stone-500">
-            Your reflections are created from your private conversations with
-            Talkio and are never presented as scores or judgments.
-          </p>
         </div>
       </div>
     </section>
   );
 }
 
-  function ReflectionHomeCard({
+function ReflectionHomeCard({
   icon,
   title,
   description,
@@ -303,1060 +475,63 @@ const showMemoryPortrait =
   locked?: boolean;
   onClick?: () => void;
 }) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        aria-label={
-  locked
-    ? `${title}, locked`
-    : `Open ${title}`
-}
-        className={`
-          group
-          relative
-          flex min-h-[112px] w-full
-          items-center gap-4
-          overflow-hidden
-          rounded-[24px]
-          border
-          px-4 py-4
-          text-left
-          transition-all
-          duration-200
-          ${
-            locked
-              ? `
-                cursor-pointer active:scale-[0.985]
-                border-stone-200/70
-                bg-[#f8f5ef]/70
-              `
-              : `
-                border-[#d8dfce]
-                bg-gradient-to-br
-                from-[#eef3e7]
-                via-[#f5f7f0]
-                to-white
-                shadow-[0_9px_28px_rgba(95,113,72,0.10)]
-                active:scale-[0.985]
-              `
-          }
-        `}
-      >
-        {!locked ? (
-          <div
-            aria-hidden="true"
-            className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-[#8da17c] to-[#c9ad67]"
-          />
-        ) : null}
-
-        <div
-          className={`
-            flex h-[60px] w-[60px] shrink-0
-            items-center justify-center
-            rounded-[20px]
-            border
-            ${
-              locked
-                ? `
-                  border-stone-200
-                  bg-stone-100/80
-                  text-stone-400
-                `
-                : `
-                  border-[#d4ddc9]
-                  bg-[#e3ebda]
-                  text-[#637454]
-                  shadow-inner
-                `
-            }
-          `}
-        >
-          <ReflectionTypeIcon
-            name={icon}
-            className="h-7 w-7"
-          />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2
-              className={`
-                text-[16px] font-semibold tracking-[-0.01em]
-                ${
-                  locked
-                    ? "text-stone-500"
-                    : "text-stone-900"
-                }
-              `}
-            >
-              {title}
-            </h2>
-
-            {!locked ? (
-  <span
-    className="
-      rounded-full
-      border border-[#cfdac4]
-      bg-[#e7eedf]
-      px-2.5 py-1
-      text-[10px] font-semibold
-      uppercase tracking-[0.08em]
-      text-[#627453]
-    "
-  >
-    Available
-  </span>
-) : null}
-          </div>
-
-          <p
-            className={`
-              mt-2 max-w-md
-              text-[13px] leading-[1.55]
-              ${
-                locked
-                  ? "text-stone-400"
-                  : "text-stone-600"
-              }
-            `}
-          >
-            {description}
-          </p>
-        </div>
-
-        <div
-          aria-hidden="true"
-          className={`
-            flex h-9 w-9 shrink-0
-            items-center justify-center
-            rounded-full
-            ${
-              locked
-                ? "bg-stone-100 text-stone-400"
-                : "bg-white/80 text-[#68785a] shadow-sm"
-            }
-          `}
-        >
-          {locked ? (
-            <LockIcon className="h-4 w-4" />
-          ) : (
-            <ChevronRightIcon className="h-5 w-5" />
-          )}
-        </div>
-      </button>
-    );
-  }
-
-  function ReflectionTypeIcon({
-    name,
-    className = "",
-  }: {
-    name: ReflectionIconName;
-    className?: string;
-  }) {
-    if (name === "weekly") {
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          className={className}
-          aria-hidden="true"
-        >
-          <rect
-            x="4"
-            y="5"
-            width="16"
-            height="15"
-            rx="3"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          />
-          <path
-            d="M8 3.5V7M16 3.5V7M4 9H20"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-          <path
-            d="M8 13H10M14 13H16M8 17H10"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
-    }
-
-    if (name === "monthly") {
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          className={className}
-          aria-hidden="true"
-        >
-          <rect
-            x="4"
-            y="5"
-            width="16"
-            height="15"
-            rx="3"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          />
-          <path
-            d="M8 3.5V7M16 3.5V7M4 9H20"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-          <circle cx="9" cy="14" r="1" fill="currentColor" />
-          <circle cx="12" cy="14" r="1" fill="currentColor" />
-          <circle cx="15" cy="14" r="1" fill="currentColor" />
-          <circle cx="9" cy="17" r="1" fill="currentColor" />
-          <circle cx="12" cy="17" r="1" fill="currentColor" />
-        </svg>
-      );
-    }
-
-    if (name === "quarterly") {
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          className={className}
-          aria-hidden="true"
-        >
-          <path
-            d="M5 19V13M10 19V9M15 19V5M20 19V11"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-          <path
-            d="M4 20H21"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
-    }
-
-    if (name === "yearly") {
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          className={className}
-          aria-hidden="true"
-        >
-          <path
-            d="M4 18L9 11L12 15L16 8L21 18H4Z"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M4 20H21"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-          <circle
-            cx="17.5"
-            cy="5"
-            r="1.5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          />
-        </svg>
-      );
-    }
-
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        className={className}
-        aria-hidden="true"
-      >
-        <path
-          d="M6 4.5H16.5C17.9 4.5 19 5.6 19 7V20H8C6.34 20 5 18.66 5 17V5.5C5 4.95 5.45 4.5 6 4.5Z"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M8 4.5V20"
-          stroke="currentColor"
-          strokeWidth="1.8"
-        />
-        <path
-          d="M11 9H16M11 12.5H16M11 16H14"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-        />
-      </svg>
-    );
-  }
-
-  function LockIcon({
-    className = "",
-  }: {
-    className?: string;
-  }) {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        className={className}
-        aria-hidden="true"
-      >
-        <rect
-          x="5"
-          y="10"
-          width="14"
-          height="10"
-          rx="2.5"
-          stroke="currentColor"
-          strokeWidth="1.8"
-        />
-        <path
-          d="M8 10V7.5C8 5.29 9.79 3.5 12 3.5C14.21 3.5 16 5.29 16 7.5V10"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-        />
-      </svg>
-    );
-  }
-
-  function ChevronRightIcon({
-    className = "",
-  }: {
-    className?: string;
-  }) {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        className={className}
-        aria-hidden="true"
-      >
-        <path
-          d="M9 6L15 12L9 18"
-          stroke="currentColor"
-          strokeWidth="1.9"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-
-  type ReflectionsPanelProps = {
-    onBack: () => void;
-  };
-
-  export default function ReflectionsPanel({
-    onBack,
-  }: ReflectionsPanelProps) {
-
-    const [reflectionView, setReflectionView] =
-    useState<
-  "home" |
-  "weekly" |
-  "monthly" |
-  "quarterly" |
-  "yearly" |
-  "portrait"
->("home");
-
-    const [user, setUser] = useState<User | null>(null);
-    const [authChecked, setAuthChecked] = useState(false);
-
-    const [reflections, setReflections] = useState<
-      WeeklyReflection[]
-    >([]);
-
-    const [loading, setLoading] = useState(true);
-    const [generating, setGenerating] = useState(false);
-
-    const [weeklyGenerationChecked, setWeeklyGenerationChecked] =
-    useState(false);
-
-    const [error, setError] = useState("");
-    const [notice, setNotice] = useState("");
-
-    const [tier, setTier] = useState<TalkioTier>("free");
-    const [tierLoading, setTierLoading] = useState(true);
-
-    const [lockedFeature, setLockedFeature] = useState<{
-    title: string;
-    requiredTier: string;
-    } | null>(null);
-
-    const [comingSoonFeature, setComingSoonFeature] =
-    useState<string | null>(null);
-
-    const loadReflections = useCallback(
-      async (signedInUser: User) => {
-        setLoading(true);
-        setError("");
-
-        try {
-          const token = await getAuthToken(signedInUser);
-
-          const response = await fetch(GET_REFLECTIONS_URL, {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-            cache: "no-store",
-          });
-
-          const data =
-            await readResponseJson<ReflectionListResponse>(
-              response
-            );
-
-          if (!response.ok || data.ok === false) {
-            throw new Error(
-              data.error || "Could not load your reflections."
-            );
-          }
-
-          setReflections(
-            Array.isArray(data.reflections)
-              ? data.reflections
-              : []
-          );
-
-          console.log(
-  "REFLECTIONS",
-  data.reflections?.map((r) => ({
-    start: r.periodStart,
-    end: r.periodEnd,
-    generatedAt: r.generatedAt,
-    status: r.status,
-  }))
-);
-
-        } catch (loadError) {
-          console.error(
-            "Failed to load weekly reflections:",
-            loadError
-          );
-
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Could not load your reflections."
-          );
-        } finally {
-          setLoading(false);
-        }
-      },
-      []
-    );
-
-    useEffect(() => {
-      const auth = getFirebaseAuth();
-
-      const unsubscribe = onAuthStateChanged(
-        auth,
-        (currentUser) => {
-          setUser(currentUser);
-          setAuthChecked(true);
-
-          if (currentUser) {
-  void (async () => {
-    const resolvedTier = await resolveTalkioTier();
-
-    setTier(resolvedTier);
-    setTierLoading(false);
-
-    if (resolvedTier !== "free") {
-      await loadReflections(currentUser);
-    } else {
-      setReflections([]);
-      setLoading(false);
-    }
-  })();
-} else {
-  setTier("free");
-  setTierLoading(false);
-  setReflections([]);
-  setLoading(false);
-}
-        }
-      );
-
-      return unsubscribe;
-    }, [loadReflections]);
-
-    async function generateReflection() {
-      if (!user || generating) return;
-
-      setGenerating(true);
-      setError("");
-      setNotice("");
-
-      try {
-        const token = await getAuthToken(user);
-
-        const response = await fetch(
-          GENERATE_REFLECTION_URL,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-              Accept: "application/json",
-            },
-            body: JSON.stringify({
-              force: false,
-            }),
-          }
-        );
-
-        const data =
-          await readResponseJson<ReflectionGenerationResponse>(
-            response
-          );
-
-        if (!response.ok || data.ok === false) {
-          throw new Error(
-            data.error ||
-              "Talkio could not create your reflection."
-          );
-        }
-
-        if (
-          data.outcome === "insufficient_activity" ||
-          data.reflection?.status ===
-            "insufficient_activity"
-        ) {
-          setNotice(
-            "There is not enough conversation from the previous week yet. Keep talking naturally, and Talkio will reflect it back when there is enough to understand."
-          );
-        } else if (
-          data.outcome === "already_exists"
-        ) {
-          setNotice(
-            "Your reflection for this period is already ready."
-          );
-        } else {
-          setNotice(
-            "Your weekly reflection is ready."
-          );
-        }
-
-        await loadReflections(user);
-      } catch (generationError) {
-        console.error(
-          "Failed to generate weekly reflection:",
-          generationError
-        );
-
-        setError(
-          generationError instanceof Error
-            ? generationError.message
-            : "Talkio could not create your reflection."
-        );
-      } finally {
-        setGenerating(false);
-      }
-    }
-
-    useEffect(() => {
-  if (
-    reflectionView !== "weekly" ||
-    !user ||
-    tier === "free" ||
-    tierLoading ||
-    loading ||
-    generating ||
-    weeklyGenerationChecked
-  ) {
-    return;
-  }
-
-  setWeeklyGenerationChecked(true);
-  void generateReflection();
-}, [
-  reflectionView,
-  user,
-  tier,
-  tierLoading,
-  loading,
-  generating,
-  weeklyGenerationChecked,
-]);
-
-    const readyReflections = reflections.filter(
-      (reflection) => reflection.status === "ready"
-    );
-
-    const latestReflection = readyReflections[0];
-
-    if (reflectionView === "home") {
   return (
-    <>
-      <ReflectionsHome
-        tier={tier}
-        tierLoading={tierLoading}
-        onBack={onBack}
-        onOpenWeekly={() => {
-        setWeeklyGenerationChecked(false);
-        setReflectionView("weekly");
-        }}
-
-        onOpenMonthly={() =>
-          setReflectionView("monthly")
-        }
-        onOpenLocked={(title, requiredTier) => {
-          setLockedFeature({
-            title,
-            requiredTier,
-          });
-        }}
-        onOpenComingSoon={(title) => {
-          setComingSoonFeature(title);
-        }}
-      />
-
-      {lockedFeature ? (
-        <FeatureDialog
-          title={lockedFeature.title}
-          message={`${lockedFeature.title} is available with Talkio ${lockedFeature.requiredTier}.`}
-          primaryLabel="View plans"
-          onPrimary={() => {
-            window.location.href = "/paywall";
-          }}
-          onClose={() =>
-            setLockedFeature(null)
-          }
-        />
-      ) : null}
-
-      {comingSoonFeature ? (
-        <FeatureDialog
-          title={comingSoonFeature}
-          message={`${comingSoonFeature} is included with your plan and is coming soon.`}
-          primaryLabel="Okay"
-          onPrimary={() =>
-            setComingSoonFeature(null)
-          }
-          onClose={() =>
-            setComingSoonFeature(null)
-          }
-        />
-      ) : null}
-    </>
-  );
-}
-
-if (reflectionView === "monthly") {
-  return (
-    <ReflectionDetail
-      title="Monthly Reflection"
-      subtitle="Notice the emotions and themes that keep returning."
-      description="Your monthly reflection is quietly taking shape."
-      status="preparing"
-      currentDays={18}
-      totalDays={30}
-      expectedDate="At the end of this month"
-      discoveries={[
-        "Recurring emotions and concerns",
-        "Relationship patterns that stood out",
-        "Wins and progress you may have overlooked",
-        "Themes that kept returning",
-      ]}
-      onBack={() => setReflectionView("home")}
-    />
-  );
-}
-
-if (!authChecked || loading) {
-    return (
-      <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-        <div className="mx-auto w-full max-w-2xl">
-          <ReflectionsHeader
-    onBack={() => setReflectionView("home")}
-    title="Weekly Reflection"
-    subtitle="A clear look at your week."
-  />
-
-          <div className="rounded-3xl border border-stone-200 bg-white/70 p-6">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
-              Weekly Reflection
-            </p>
-
-            <div className="mt-5 flex items-center gap-3 text-sm text-stone-600">
-              <span
-                aria-hidden="true"
-                className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-emerald-700"
-              />
-
-              Loading your reflections…
-            </div>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-    if (!user) {
-    return (
-      <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-        <div className="mx-auto w-full max-w-2xl">
-          <ReflectionsHeader
-    onBack={() => setReflectionView("home")}
-    title="Weekly Reflection"
-    subtitle="A clear look at your week."
-  />
-
-          <div className="rounded-3xl border border-stone-200 bg-white/70 p-6">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
-              Weekly Reflection
-            </p>
-
-            <h2 className="mt-3 text-2xl font-semibold text-stone-900">
-              Sign in to see your reflections.
-            </h2>
-
-            <p className="mt-3 text-sm leading-6 text-stone-600">
-              Your reflections are private and connected to your Talkio account.
-            </p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-    return (
-    <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
-      <div className="mx-auto w-full max-w-2xl">
-        <ReflectionsHeader
-    onBack={() => setReflectionView("home")}
-    title="Weekly Reflection"
-    subtitle="A clear look at your week."
-  />
-
-        <div className="space-y-4">
-          <div className="rounded-3xl border border-stone-200 bg-white/75 p-6 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
-              Weekly Reflection
-            </p>
-
-            <h2 className="mt-3 text-2xl font-semibold text-stone-900">
-              Your week, reflected back with care.
-            </h2>
-
-            <p className="mt-3 text-sm leading-6 text-stone-600">
-              Talkio gently reflects on your conversations from the past week to help you understand yourself a little better, notice meaningful patterns, and move forward with greater clarity—without judgment or turning your honesty into a score.
-            </p>
-          </div>
-
-          {error ? (
-            <div
-              role="alert"
-              className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800"
-            >
-              {error}
-            </div>
-          ) : null}
-
-          {notice ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-              {notice}
-            </div>
-          ) : null}
-
-          {!latestReflection ? (
-            <div className="rounded-3xl border border-stone-200 bg-white/70 p-6">
-              <h3 className="text-lg font-semibold text-stone-900">
-                No weekly reflection yet
-              </h3>
-
-              <p className="mt-2 text-sm leading-6 text-stone-600">
-                For this first test, you can ask Talkio to
-                prepare your previous week now.
-              </p>
-
-              <button
-    type="button"
-    onClick={generateReflection}
-    disabled={generating}
-    className="
-      mt-5
-      flex
-      w-full
-      items-center
-      justify-center
-      gap-2
-      rounded-2xl
-      bg-gradient-to-br
-      from-[#D9B96E]
-      to-[#C59A43]
-      px-5
-      py-3.5
-      text-sm
-      font-semibold
-      text-[#342A18]
-      shadow-[0_8px_24px_rgba(197,154,67,0.28)]
-      transition-all
-      duration-200
-      hover:from-[#E0C47E]
-      hover:to-[#B98C37]
-      hover:shadow-[0_10px_28px_rgba(197,154,67,0.36)]
-      active:scale-[0.98]
-      disabled:cursor-not-allowed
-      disabled:from-[#DDD0AA]
-      disabled:to-[#CDBE96]
-      disabled:text-[#756646]
-      disabled:shadow-none
-    "
-  >
-    <span
-      aria-hidden="true"
-      className={`text-lg text-emerald-700 ${
-        generating ? "animate-pulse" : ""
-      }`}
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group relative flex min-h-[112px] w-full items-center gap-4 overflow-hidden rounded-[24px] border px-4 py-4 text-left transition-all duration-200 ${locked ? "border-stone-200/70 bg-[#f8f5ef]/70" : "border-[#d8dfce] bg-gradient-to-br from-[#eef3e7] via-[#f5f7f0] to-white shadow-sm"}`}
     >
-      ✦
-    </span>
-
-    <span>
-      {generating
-        ? "Preparing your reflection…"
-        : "Generate my weekly reflection"}
-    </span>
-  </button>
-            </div>
-          ) : (
-            <>
-              <article className="rounded-3xl border border-stone-200 bg-white/80 p-6 shadow-sm">
-  <div className="border-b border-stone-200 pb-4">
-    <div className="flex items-center gap-3">
-      <ReflectionSectionIcon type="lookingBack" />
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
-          Looking back
-        </p>
-
-        <p className="mt-1 text-sm text-stone-500">
-          {formatReflectionPeriod(
-            latestReflection.periodStart,
-            latestReflection.periodEnd
-          )}
-        </p>
+      <div className={`flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-[20px] border ${locked ? "border-stone-200 bg-stone-100/80 text-stone-400" : "border-[#d4ddc9] bg-[#e3ebda] text-[#637454] shadow-inner"}`}>
+        <ReflectionTypeIcon name={icon} className="h-7 w-7" />
       </div>
-    </div>
-  </div>
-
-  <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-stone-800">
-    {latestReflection.lookingBack}
-  </p>
-</article>
-
-{latestReflection.highlight ? (
-  <StandoutReflectionCard
-    text={latestReflection.highlight}
-  />
-) : null}
-
-{latestReflection.whatWeighedOnYou?.length ? (
-  <ReflectionSection
-    icon="weighed"
-    title="What weighed on you"
-    items={latestReflection.whatWeighedOnYou}
-  />
-) : null}
-
-{latestReflection.whatHelped?.length ? (
-  <ReflectionSection
-    icon="helped"
-    title="What helped"
-    items={latestReflection.whatHelped}
-  />
-) : null}
-
-{latestReflection.momentsThatMattered?.length ? (
-  <ReflectionSection
-    icon="moments"
-    title="Moments that mattered"
-    items={latestReflection.momentsThatMattered}
-  />
-) : null}
-
-{latestReflection.strengthsINoticed?.length ? (
-  <ReflectionSection
-    icon="strengths"
-    title="Strengths I noticed"
-    items={latestReflection.strengthsINoticed}
-  />
-) : null}
-
-{latestReflection.somethingToStrengthen ? (
-  <TextReflectionCard
-    icon="strengthen"
-    title="Something to strengthen"
-    text={latestReflection.somethingToStrengthen}
-  />
-) : null}
-
-{latestReflection.gratitude ? (
-  <GratitudeCard
-    gratitude={latestReflection.gratitude}
-  />
-) : null}
-
-{latestReflection.patternWorthNoticing ? (
-  <TextReflectionCard
-    icon="pattern"
-    title="A pattern worth noticing"
-    text={latestReflection.patternWorthNoticing}
-  />
-) : null}
-
-{latestReflection.somethingToCarryForward ? (
-  <GoldenLineCard
-    text={latestReflection.somethingToCarryForward}
-  />
-) : null}
-
-{latestReflection.oneThingINoticed ? (
-  <TextReflectionCard
-    icon="noticed"
-    title="One thing I noticed"
-    text={latestReflection.oneThingINoticed}
-  />
-) : null}
-
-              <button
-                type="button"
-                onClick={() => void loadReflections(user)}
-                disabled={loading || generating}
-                className="w-full rounded-2xl border border-stone-300 bg-white/70 px-5 py-3 text-sm font-semibold text-stone-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Refresh reflection
-              </button>
-            </>
-          )}
-              </div>
+      <div className="min-w-0 flex-1">
+        <h2 className={`text-[16px] font-semibold tracking-[-0.01em] ${locked ? "text-stone-500" : "text-stone-900"}`}>{title}</h2>
+        <p className={`mt-2 max-w-md text-[13px] leading-[1.55] ${locked ? "text-stone-400" : "text-stone-600"}`}>{description}</p>
       </div>
-    </section>
+    </button>
   );
+}
+
+function ReflectionTypeIcon({ name, className = "" }: { name: ReflectionIconName; className?: string }) {
+  if (name === "weekly") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <rect x="4" y="5" width="16" height="15" rx="3" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M8 3.5V7M16 3.5V7M4 9H20M8 13H10M14 13H16M8 17H10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
   }
+  return <svg viewBox="0 0 24 24" fill="none" className={className}><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/></svg>;
+}
 
-  function FeatureDialog({
-  title,
-  message,
-  primaryLabel,
-  onPrimary,
-  onClose,
-}: {
-  title: string;
-  message: string;
-  primaryLabel: string;
-  onPrimary: () => void;
-  onClose: () => void;
-}) {
+function FeatureDialog({ title, message, primaryLabel, onPrimary, onClose }: { title: string; message: string; primaryLabel: string; onPrimary: () => void; onClose: () => void; }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="reflection-dialog-title"
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 px-5 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-[28px] border border-stone-200 bg-[#fbf8f2] p-6 shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h2
-          id="reflection-dialog-title"
-          className="text-xl font-semibold text-stone-900"
-        >
-          {title}
-        </h2>
-
-        <p className="mt-3 text-sm leading-6 text-stone-600">
-          {message}
-        </p>
-
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 px-5 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-[28px] border border-stone-200 bg-[#fbf8f2] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-xl font-semibold text-stone-900">{title}</h2>
+        <p className="mt-3 text-sm leading-6 text-stone-600">{message}</p>
         <div className="mt-6 flex gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-12 flex-1 rounded-2xl border border-stone-300 bg-white text-sm font-semibold text-stone-700"
-          >
-            Not now
-          </button>
-
-          <button
-            type="button"
-            onClick={onPrimary}
-            className="h-12 flex-1 rounded-2xl bg-[#78906f] text-sm font-semibold text-white"
-          >
-            {primaryLabel}
-          </button>
+          <button type="button" onClick={onClose} className="h-12 flex-1 rounded-2xl border border-stone-300 bg-white text-sm font-semibold text-stone-700">Not now</button>
+          <button type="button" onClick={onPrimary} className="h-12 flex-1 rounded-2xl bg-[#78906f] text-sm font-semibold text-white">{primaryLabel}</button>
         </div>
       </div>
     </div>
   );
 }
 
-  type ReflectionContentIcon =
-  | "lookingBack"
-  | "weighed"
-  | "helped"
-  | "moments"
-  | "strengths"
-  | "strengthen"
-  | "gratitude"
-  | "pattern"
-  | "noticed"
-  | "standout"
-  | "golden";
+type ReflectionContentIcon = "lookingBack" | "weighed" | "helped" | "moments" | "strengths" | "strengthen" | "gratitude" | "pattern" | "noticed" | "standout" | "golden";
 
-function ReflectionSection({
-  icon,
-  title,
-  items,
-}: {
-  icon: ReflectionContentIcon;
-  title: string;
-  items: string[];
-}) {
+function ReflectionSection({ icon, title, items }: { icon: ReflectionContentIcon; title: string; items: string[] }) {
   return (
-    <section className="rounded-3xl border border-stone-200 bg-white/70 p-6 shadow-[0_6px_24px_rgba(69,58,42,0.04)]">
+    <section className="rounded-3xl border border-stone-200 bg-white/70 p-6 shadow-sm">
       <div className="flex items-center gap-3">
         <ReflectionSectionIcon type={icon} />
-
-        <h3 className="text-base font-semibold text-stone-900">
-          {title}
-        </h3>
+        <h3 className="text-base font-semibold text-stone-900">{title}</h3>
       </div>
-
       <ul className="mt-5 space-y-3.5">
         {items.map((item, index) => (
-          <li
-            key={`${title}-${index}`}
-            className="flex gap-3 text-sm leading-6 text-stone-700"
-          >
-            <span
-              aria-hidden="true"
-              className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#78906f]"
-            />
-
+          <li key={index} className="flex gap-3 text-sm leading-6 text-stone-700">
+            <span aria-hidden="true" className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#78906f]" />
             <span>{item}</span>
           </li>
         ))}
@@ -1365,423 +540,49 @@ function ReflectionSection({
   );
 }
 
-function TextReflectionCard({
-  icon,
-  title,
-  text,
-}: {
-  icon: ReflectionContentIcon;
-  title: string;
-  text: string;
-}) {
+function TextReflectionCard({ icon, title, text }: { icon: ReflectionContentIcon; title: string; text: string }) {
   return (
-    <section className="rounded-3xl border border-stone-200 bg-white/70 p-6 shadow-[0_6px_24px_rgba(69,58,42,0.04)]">
+    <section className="rounded-3xl border border-stone-200 bg-white/70 p-6 shadow-sm">
       <div className="flex items-center gap-3">
         <ReflectionSectionIcon type={icon} />
-
-        <h3 className="text-base font-semibold text-stone-900">
-          {title}
-        </h3>
+        <h3 className="text-base font-semibold text-stone-900">{title}</h3>
       </div>
-
-      <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-stone-700">
-        {text}
-      </p>
+      <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-stone-700">{text}</p>
     </section>
   );
 }
 
-function GratitudeCard({
-  gratitude,
-}: {
-  gratitude: {
-    score: number;
-    evidenceCount: number;
-    items: string[];
-  };
-}) {
-  const items = Array.isArray(gratitude.items)
-    ? gratitude.items
-    : [];
-
+function GoldenLineCard({ text }: { text: string }) {
   return (
-    <section className="rounded-3xl border border-[#e8dbb7] bg-gradient-to-br from-[#fffaf0] via-[#fbf6e8] to-white p-6 shadow-[0_6px_24px_rgba(197,154,67,0.06)]">
-      <div className="flex items-center gap-3">
-        <ReflectionSectionIcon type="gratitude" />
-
-        <h3 className="text-base font-semibold text-stone-900">
-          Gratitude
-        </h3>
-      </div>
-
-      {items.length > 0 ? (
-        <>
-          <p className="mt-4 text-sm leading-6 text-stone-600">
-            These were some of the things you seemed genuinely grateful for this week.
-          </p>
-
-          <ul className="mt-4 space-y-3">
-            {items.map((item, index) => (
-              <li
-                key={`gratitude-${index}`}
-                className="flex gap-3 text-sm leading-6 text-stone-700"
-              >
-                <span
-                  aria-hidden="true"
-                  className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#c59a43]"
-                />
-
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : (
-        <p className="mt-4 text-sm leading-6 text-stone-600">
-          No clear expressions of gratitude appeared in your conversations this week.
-        </p>
-      )}
-    </section>
-  );
-}
-
-  function StandoutReflectionCard({
-  text,
-}: {
-  text: string;
-}) {
-  return (
-    <section
-      className="
-        relative overflow-hidden
-        rounded-3xl
-        border border-[#d4dfc9]
-        bg-gradient-to-br
-        from-[#edf3e7]
-        via-[#f4f7ef]
-        to-[#fbfaf6]
-        p-6
-        shadow-[0_10px_30px_rgba(95,113,72,0.10)]
-      "
-    >
-      <div
-        aria-hidden="true"
-        className="absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-[#78906f] to-[#d9b96e]"
-      />
-
-      <div className="flex items-center gap-3">
-        <ReflectionSectionIcon type="standout" />
-
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#637454]">
-          What stood out
-        </p>
-      </div>
-
-      <p className="mt-5 text-[17px] font-medium leading-7 text-stone-800">
-        {text}
-      </p>
-    </section>
-  );
-}
-
-  function GoldenLineCard({
-  text,
-}: {
-  text: string;
-}) {
-  return (
-    <section
-      className="
-        relative overflow-hidden
-        rounded-3xl
-        border border-[#e5ce8d]
-        bg-gradient-to-br
-        from-[#fff9e8]
-        via-[#fbf4df]
-        to-[#f7edcf]
-        px-6 py-7
-        shadow-[0_10px_30px_rgba(197,154,67,0.12)]
-      "
-    >
+    <section className="relative overflow-hidden rounded-3xl border border-[#e5ce8d] bg-gradient-to-br from-[#fff9e8] via-[#fbf4df] to-[#f7edcf] px-6 py-7 shadow-sm">
       <div className="flex items-center gap-3">
         <ReflectionSectionIcon type="golden" />
-
-        <p className="text-xs font-semibold uppercase tracking-[0.17em] text-[#9a792e]">
-          Something to carry forward
-        </p>
+        <p className="text-xs font-semibold uppercase tracking-[0.17em] text-[#9a792e]">Something to carry forward</p>
       </div>
-
       <div className="mt-5 border-l-2 border-[#d9b96e] pl-4">
-        <p className="text-[18px] font-semibold leading-8 tracking-[-0.01em] text-[#4a3b22]">
-          “{text}”
-        </p>
-      </div>
-
-      <div className="mt-5 flex items-center gap-2">
-        <span
-          aria-hidden="true"
-          className="text-lg text-emerald-700"
-        >
-          ✦
-        </span>
-
-        <span className="text-xs font-medium text-stone-500">
-          Carry this with you.
-        </span>
+        <p className="text-[18px] font-semibold leading-8 tracking-[-0.01em] text-[#4a3b22]">“{text}”</p>
       </div>
     </section>
   );
 }
-  function ReflectionSectionIcon({
-  type,
-}: {
-  type: ReflectionContentIcon;
-}) {
-  const styles: Record<
-    ReflectionContentIcon,
-    string
-  > = {
-    lookingBack:
-      "border-[#d8dfce] bg-[#e8eee1] text-[#637454]",
 
-    weighed:
-      "border-[#e2d7cc] bg-[#f3ebe4] text-[#8a6954]",
-
-    helped:
-      "border-[#d7e2ce] bg-[#e9f0e2] text-[#607653]",
-
-    moments:
-      "border-[#e8dbb7] bg-[#f8f0d9] text-[#a17d2f]",
-
-    strengths:
-      "border-[#d7e2ce] bg-[#e9f0e2] text-[#607653]",
-
-    strengthen:
-      "border-[#d8dde4] bg-[#edf0f3] text-[#66717d]",
-
-    gratitude:
-      "border-[#ead9a8] bg-[#fbf1d7] text-[#b58a28]",
-
-    pattern:
-      "border-[#d8dfce] bg-[#edf1e8] text-[#68785a]",
-
-    noticed:
-      "border-[#ddd6e5] bg-[#f0ebf4] text-[#756683]",
-
-    standout:
-      "border-[#d5dfca] bg-[#e6edde] text-[#607653]",
-
-    golden:
-      "border-[#e6cf8e] bg-[#faedc8] text-[#a77e24]",
+function ReflectionSectionIcon({ type }: { type: ReflectionContentIcon }) {
+  const styles: Record<ReflectionContentIcon, string> = {
+    lookingBack: "border-[#d8dfce] bg-[#e8eee1] text-[#637454]",
+    weighed: "border-[#e2d7cc] bg-[#f3ebe4] text-[#8a6954]",
+    helped: "border-[#d7e2ce] bg-[#e9f0e2] text-[#607653]",
+    moments: "border-[#e8dbb7] bg-[#f8f0d9] text-[#a17d2f]",
+    strengths: "border-[#d7e2ce] bg-[#e9f0e2] text-[#607653]",
+    strengthen: "border-[#d8dde4] bg-[#edf0f3] text-[#66717d]",
+    gratitude: "border-[#ead9a8] bg-[#fbf1d7] text-[#b58a28]",
+    pattern: "border-[#d8dfce] bg-[#edf1e8] text-[#68785a]",
+    noticed: "border-[#ddd6e5] bg-[#f0ebf4] text-[#756683]",
+    standout: "border-[#d5dfca] bg-[#e6edde] text-[#607653]",
+    golden: "border-[#e6cf8e] bg-[#faedc8] text-[#a77e24]",
   };
-
   return (
-    <span
-      aria-hidden="true"
-      className={`
-        flex h-10 w-10 shrink-0
-        items-center justify-center
-        rounded-2xl border
-        ${styles[type]}
-      `}
-    >
-      {type === "lookingBack" ? (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          className="h-5 w-5"
-        >
-          <path
-            d="M4 12A8 8 0 1 0 6.34 6.34L4 8.68"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-          <path
-            d="M4 4V8.7H8.7"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : null}
-
-      {type === "weighed" ? (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          className="h-5 w-5"
-        >
-          <path
-            d="M12 4V20M6 7H18M7 7L4 13H10L7 7ZM17 7L14 13H20L17 7Z"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : null}
-
-      {type === "helped" ? (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          className="h-5 w-5"
-        >
-          <path
-            d="M12 20V11M12 14C9 14 6.5 12 6 8.5C9.4 8.2 11.4 9.8 12 12M12 10C13 7 15.5 5.5 19 6C18.7 9 16.6 11 12 11"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : null}
-
-      {type === "moments" ? (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          className="h-5 w-5"
-        >
-          <path
-            d="M12 3L13.7 8.3L19 10L13.7 11.7L12 17L10.3 11.7L5 10L10.3 8.3L12 3Z"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M18.5 15L19.2 17.3L21.5 18L19.2 18.7L18.5 21L17.8 18.7L15.5 18L17.8 17.3L18.5 15Z"
-            fill="currentColor"
-          />
-        </svg>
-      ) : null}
-
-      {type === "strengths" ? (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    className="h-5 w-5"
-  >
-    <path
-      d="M12 20V11M12 14C9 14 6.5 12 6 8.5C9.4 8.2 11.4 9.8 12 12M12 10C13 7 15.5 5.5 19 6C18.7 9 16.6 11 12 11"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-) : null}
-
-      {type === "strengthen" ? (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    className="h-5 w-5"
-  >
-    <circle
-      cx="12"
-      cy="12"
-      r="8"
-      stroke="currentColor"
-      strokeWidth="1.7"
-    />
-    <path
-      d="M12 7V12L15 14"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-    />
-  </svg>
-) : null}
-
-      {type === "gratitude" ? (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    className="h-5 w-5"
-  >
-    <path
-      d="M12 20C12 20 5 15.8 5 10.2C5 7.4 7 5.5 9.5 5.5C10.9 5.5 12 6.3 12 6.3C12 6.3 13.1 5.5 14.5 5.5C17 5.5 19 7.4 19 10.2C19 15.8 12 20 12 20Z"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinejoin="round"
-    />
-  </svg>
-) : null}
-
-      {type === "pattern" ? (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    className="h-5 w-5"
-  >
-    <path
-      d="M6 8C8 5.5 10.5 5 12 5C15.9 5 19 8.1 19 12C19 15.9 15.9 19 12 19C9.4 19 7.2 17.6 6 15.5"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-    />
-    <path
-      d="M6 5V9H10"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-) : null}
-
-      {type === "noticed" ? (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    className="h-5 w-5"
-  >
-    <path
-      d="M4 12C6 8.5 8.7 7 12 7C15.3 7 18 8.5 20 12C18 15.5 15.3 17 12 17C8.7 17 6 15.5 4 12Z"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinejoin="round"
-    />
-    <circle
-      cx="12"
-      cy="12"
-      r="2"
-      stroke="currentColor"
-      strokeWidth="1.7"
-    />
-  </svg>
-) : null}
-
-      {type === "standout" ? (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          className="h-5 w-5"
-        >
-          <path
-            d="M12 3L14 9L20 11L14 13L12 19L10 13L4 11L10 9L12 3Z"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : null}
-
-      {type === "golden" ? (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          className="h-5 w-5"
-        >
-          <path
-            d="M12 3L14 9L20 11L14 13L12 19L10 13L4 11L10 9L12 3Z"
-            fill="currentColor"
-          />
-        </svg>
-      ) : null}
+    <span aria-hidden="true" className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${styles[type]}`}>
+      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5"><circle cx="12" cy="12" r="6" stroke="currentColor" strokeWidth="1.8" /></svg>
     </span>
   );
 }

@@ -2,20 +2,80 @@
 
 import admin from "firebase-admin";
 import { onRequest } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { createRequire } from "module";
+
+import { defineSecret } from "firebase-functions/params";
+import { Resend } from "resend";
 import { GoogleGenAI } from "@google/genai";
-import { getApps, initializeApp } from "firebase-admin/app";
+
+import {
+  beginImageSend,
+  ImageSendError,
+} from "./talkioImageSend.mjs";
+
+import {
+  getApps,
+  initializeApp,
+} from "firebase-admin/app";
 
 const require = createRequire(import.meta.url);
+const { getTalkioPlan } = require("./talkio/planConfig");
 const logger = require("firebase-functions/logger");
+
 const crypto = require("crypto");
 const { Redis } = require("@upstash/redis");
 
+const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
+
+const TALKIO_VERIFICATION_TEMPLATE =
+  "90bfdd75-bfda-4ad9-96a0-4ea25123a81a";
+
 const { db } = require("./lib/firebase");
+const { ensureUserBase } = require("./memory_lite/helpers");
+const {
+  getTalkioMemoryBundle,
+  defaultTalkioProfile,
+  getTodayDateString,
+} = require("./lib/talkioMemory");
+
+const {
+  saveConversationTurn,
+  listWeeklyReflections,
+} = require("./talkio/reflections/reflectionStorage");
+
+const {
+  shouldGenerateInCurrentHour,
+  generateWeeklyReflectionForUser,
+} = require("./talkio/reflections/generateWeeklyReflection");
+
+const {
+  extractPeopleFromMessage,
+  extractStyleExpressions,
+  extractEmotionalContinuity,
+} = require("./memory_lite/extractors");
+
+const {
+  upsertPeopleMemory,
+  upsertStyleMemory,
+  upsertEmotionalMemory,
+} = require("./memory_lite/update");
+
+const {
+  loadRelationalMemory,
+  loadStyleMemory,
+  loadEmotionalMemory,
+  buildMemoryPromptBlock,
+} = require("./memory_lite/helpers");
+
 const {
   generateTalkioReply: generateTalkioReplyEngine,
 } = require("./talkio/generateTalkioReply");
-const { BASE_SYSTEM_PROMPT } = require("./talkio/prompts");
+
+const {
+  BASE_SYSTEM_PROMPT,
+  TRUST_SAFE_MODE_PROMPT,
+} = require("./talkio/prompts");
 
 if (getApps().length === 0) {
   initializeApp();
@@ -23,86 +83,167 @@ if (getApps().length === 0) {
 
 console.log("generateTalkioReplyEngine type:", typeof generateTalkioReplyEngine);
 
-const ENGINE_SECRET = process.env.ENGINE_SECRET || "intel-engine-super-secret-2026";
 
-// ==============================
-// Configuration & Limits
-// ==============================
-
-const DEFAULT_MODEL = "gemini-3.1-pro-preview";
 const INTERNAL_APP_KEY = process.env.INTERNAL_APP_KEY;
 
 const TALKIO_LIMITS = {
-  free: { daily: 100, perMinute: 30 },
-  workspace: { daily: 10000, perMinute: 300 },
-  elite: { daily: 50000, perMinute: 600 },
+  free: {
+    daily: 10,
+    perMinute: 10,
+  },
+
+  companion: {
+    daily: 300,
+    perMinute: 30,
+  },
+
+  presence: {
+    daily: 800,
+    perMinute: 50,
+  },
+
+  professionals: {
+    daily: 2000,
+    perMinute: 80,
+  },
+
+  elite: {
+    daily: 5000,
+    perMinute: 120,
+  },
 };
 
 function getLimitsForAccess(access = {}) {
-  const plan = access?.plan || "workspace";
-  const config = TALKIO_LIMITS[plan] || TALKIO_LIMITS.workspace;
+  const plan = access?.plan || "free";
+
+  const config =
+    TALKIO_LIMITS[plan] || TALKIO_LIMITS.free;
 
   return {
     dailyLimit: config.daily,
     perMinuteLimit: config.perMinute,
     limitLabel: plan,
-    bypassIpLimits: true,
+    bypassIpLimits:
+      plan === "professionals" ||
+      plan === "elite",
   };
 }
 
-const getTalkioPlan = () => ({ plan: "workspace", bypassIpLimits: true });
+// COST OPTIMIZATION: Accepts existingData to bypass redundant Firestore reads
+async function getUserAccessProfile(uid, decodedToken = {}, existingData = null) {
+  const userRef = db.collection("users").doc(uid);
+  const email = normalizeEmail(decodedToken?.email || "");
+
+  if (!existingData) {
+    const snap = await userRef.get();
+    if (!snap.exists) {
+      const created = {
+        uid,
+        email,
+        plan: "free",
+        role: "user",
+        subscriptionStatus: "none",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      await userRef.set(created, { merge: true });
+      return created;
+    }
+    existingData = snap.data();
+  }
+
+  const update = {
+    uid,
+    email: email || existingData.email || "",
+    lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  // Speed Optimization: Fire-and-forget timestamp update
+  userRef.set(update, { merge: true }).catch(err => console.error("User lastSeen update failed", err));
+
+  return {
+    uid,
+    email: update.email,
+    plan: existingData.plan || "free",
+    role: existingData.role || "user",
+    subscriptionStatus: existingData.subscriptionStatus || "none",
+  };
+}
+
+export { revenuecatWebhook } from "./revenuecatWebhook.mjs";
+export { getTalkioImageAccess } from "./talkioImageAccess.mjs";
+
+export const activateTestPaid = onRequest(async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const authHeader = req.headers.authorization || "";
+
+    if (!authHeader.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const idToken = authHeader.split("Bearer ")[1];
+    const decoded = await admin.auth().verifyIdToken(idToken);
+
+    if (decoded.firebase?.sign_in_provider === "anonymous") {
+      res.status(403).json({
+        error: "Google account required",
+        message: "Connect Google before activating Paid.",
+      });
+      return;
+    }
+
+    const uid = decoded.uid;
+
+    await admin.firestore().collection("users").doc(uid).set(
+      {
+        subscriptionActive: true,
+        plan: "presence",
+        subscriptionProvider: "manual_test",
+        paidActivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    res.status(200).json({ ok: true, plan: "presence" });
+  } catch (error) {
+    console.error("activateTestPaid failed:", error);
+    res.status(500).json({ error: "Failed to activate test paid" });
+  }
+});
 
 function normalizeEmail(email) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
 }
 
-async function getUserAccessProfile(uid, decodedToken = {}) {
-  const userRef = db.collection("users").doc(uid);
-  const snap = await userRef.get();
-  const email = normalizeEmail(decodedToken?.email || "");
+const IP_DAILY_CAP = 120;
+const IP_MINUTE_CAP = 30;
 
-  if (!snap.exists) {
-    const created = {
-      uid,
-      email,
-      plan: "workspace",
-      role: "admin",
-      subscriptionStatus: "active",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-    await userRef.set(created, { merge: true });
-    return created;
-  }
+const FREE_TRIAL_DAYS = 1;
+const FREE_TRIAL_DAILY_LIMIT = 10;
 
-  const data = snap.data() || {};
-  const update = {
-    uid,
-    email: email || data.email || "",
-    lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
-  };
-
-  await userRef.set(update, { merge: true });
-
-  return {
-    uid,
-    email: update.email,
-    plan: data.plan || "workspace",
-    role: data.role || "admin",
-    subscriptionStatus: data.subscriptionStatus || "active",
-  };
-}
-
-// ==============================
-// Utilities & Security
-// ==============================
+const FREE_MODEL = "gemini-3.5-flash-lite";
+const COMPANION_MODEL = "gemini-3.8-flash";
+const PRESENCE_MODEL = "gemini-3.8-pro";
 
 function logInfo(event, data = {}) {
-  logger.info(event, { timestamp: new Date().toISOString(), data });
+  logger.info(event, {
+    timestamp: new Date().toISOString(),
+    data,
+  });
 }
 
 function logWarn(event, data = {}) {
-  logger.warn(event, { timestamp: new Date().toISOString(), data });
+  logger.warn(event, {
+    timestamp: new Date().toISOString(),
+    data,
+  });
 }
 
 function logError(event, error, data = {}) {
@@ -112,6 +253,31 @@ function logError(event, error, data = {}) {
     stack: error?.stack || null,
     data,
   });
+}
+
+function isFallbackPath(path = "") {
+  return /fallback|quota|error|limit|failed|recovery/i.test(
+    String(path || "")
+  );
+}
+
+function getReplyPath(result = {}) {
+  return result?.path || result?.dynamicMode || "unknown";
+}
+
+function secondsUntilUtcMidnight() {
+  const now = new Date();
+  const midnight = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      0,
+      0,
+      0
+    )
+  );
+  return Math.max(1, Math.floor((midnight.getTime() - now.getTime()) / 1000));
 }
 
 function sha1(s) {
@@ -130,12 +296,14 @@ function getUa(req) {
 
 function extractBearerToken(req) {
   const authHeader = req.headers.authorization || req.headers.Authorization || "";
-  if (typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) return "";
+  if (typeof authHeader !== "string") return "";
+  if (!authHeader.startsWith("Bearer ")) return "";
   return authHeader.slice(7).trim();
 }
 
 async function requireVerifiedUser(req) {
   const idToken = extractBearerToken(req);
+
   if (!idToken) {
     const err = new Error("Missing auth token");
     err.statusCode = 401;
@@ -163,7 +331,6 @@ async function requireVerifiedUser(req) {
 
 function getAllowedOrigins() {
   return [
-    "https://intel-personal.vercel.app",
     "https://talkiochat.com",
     "https://www.talkiochat.com",
     "http://localhost:3000",
@@ -171,110 +338,791 @@ function getAllowedOrigins() {
   ];
 }
 
-// ==============================
-// Super-Intelligence System Prompt
-// ==============================
+function looksLikeCrisis(text) {
+  const t = (text || "").toLowerCase();
+  const patterns = [
+    /\bkill myself\b/i,
+    /\bkilling myself\b/i,
+    /\bend my life\b/i,
+    /\btake my life\b/i,
+    /\bi want to die\b/i,
+    /\bi wanna die\b/i,
+    /\bi don't want to live\b/i,
+    /\bi dont want to live\b/i,
+    /\bi will (?:kill|hurt|harm) myself\b/i,
+    /\bself[-\s]?harm\b/i,
+    /\bsuicid(?:e|al)\b/i,
+    /\boverdose\b/i,
+  ];
+  return patterns.some((re) => re.test(t));
+}
 
-const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT;
+function normalizeSafetyText(value = "") {
+  return String(value)
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/[^a-z0-9\s']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-function buildRuntimeSystemPrompt({ languageMeta } = {}) {
+function classifySafetyInterruption(input = "") {
+  const text = normalizeSafetyText(input);
+
+  const violentAdmission =
+    /\b(i|we)\s+(just\s+)?(killed|murdered|shot|stabbed|poisoned|strangled|choked|beat)\s+(someone|somebody|a person|him|her|them|my wife|my husband|my girlfriend|my boyfriend|my boss|my coworker|my friend|my child|a child)\b/i.test(text) ||
+    /\b(i|we)\s+(committed murder|killed a person|murdered a person)\b/i.test(text);
+
+  const violentThreat =
+    /\b(i|we)\s+(will|want to|wanna|am going to|are going to|plan to|planning to|about to)\s+(kill|murder|shoot|stab|poison|strangle|hurt)\b/i.test(text);
+
+  const coverupRequest =
+    /\b(hide|bury|dispose of|get rid of|cover up|clean up)\b.*\b(body|corpse|evidence|weapon|blood)\b/i.test(text) ||
+    /\bhow\s+(do|can)\s+i\s+(hide|bury|dispose of|get rid of|cover up)\b/i.test(text);
+
+  if (violentAdmission) {
+    return {
+      blocked: true,
+      reason: "violent_admission",
+    };
+  }
+
+  if (violentThreat) {
+    return {
+      blocked: true,
+      reason: "violent_threat",
+    };
+  }
+
+  if (coverupRequest) {
+    return {
+      blocked: true,
+      reason: "coverup_request",
+    };
+  }
+
+  return {
+    blocked: false,
+  };
+}
+
+function crisisReplyGlobal() {
+  return `
+I’m really sorry you’re feeling this way. I want to take this seriously.
+
+Your safety matters more than continuing this conversation right now, so Talkio is pausing the chat and asking you to reach out to real help immediately.
+
+If you might be in immediate danger, please call your local emergency number right now or go to the nearest emergency room.
+
+If you can, contact a trusted person nearby and tell them clearly: “I’m not safe alone right now. I need help.”
+
+You can also contact a crisis hotline or emergency mental health service in your country. If you are not sure what number to call, search for “suicide crisis hotline near me” or contact local emergency services.
+
+Please move away from anything you could use to hurt yourself and stay near another person if possible.
+`.trim();
+}
+
+function detectLanguageMirror(text = "") {
+  const raw = String(text || "").trim();
+  const t = raw.toLowerCase();
+
+  const taglishMarkers = [
+    "naman", "kasi", "pero", "lang", "sige", "grabe",
+    "nahihiya", "hirap", "kapoy", "ayoko", "okay lang",
+    "pwede", "gusto", "wala", "meron", "pagod", "nakakapagod",
+  ];
+
+  const spanishMarkers = [
+    "estoy", "gracias", "hola", "porque", "buenos", "buenas",
+    "puedo", "quiero", "tengo", "siento", "ayuda", "cansado",
+    "triste", "hoy", "mañana",
+  ];
+
+  const portugueseMarkers = [
+    "oi", "obrigado", "obrigada", "porque", "quero", "tenho",
+    "estou", "cansado", "triste", "amanhã", "hoje",
+  ];
+
+  const frenchMarkers = [
+    "bonjour", "merci", "parce", "je suis", "fatigué", "fatigue",
+    "triste", "aujourd", "demain", "besoin",
+  ];
+
+  const germanMarkers = [
+    "hallo", "danke", "weil", "ich bin", "müde", "traurig",
+    "heute", "morgen", "hilfe",
+  ];
+
+  const hasCJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(raw);
+  const hasHangul = /[\uac00-\ud7af]/.test(raw);
+  const hasArabic = /[\u0600-\u06ff]/.test(raw);
+  const hasCyrillic = /[\u0400-\u04ff]/.test(raw);
+  const hasDevanagari = /[\u0900-\u097f]/.test(raw);
+  const hasThai = /[\u0e00-\u0e7f]/.test(raw);
+
+  const countMatches = (markers) => markers.filter((w) => t.includes(w)).length;
+
+  const taglishCount = countMatches(taglishMarkers);
+  const spanishCount = countMatches(spanishMarkers);
+  const portugueseCount = countMatches(portugueseMarkers);
+  const frenchCount = countMatches(frenchMarkers);
+  const germanCount = countMatches(germanMarkers);
+
+  if (taglishCount >= 2) {
+    return {
+      language: "taglish",
+      mirrorInstruction:
+        "Mirror the user's Taglish naturally. Keep it clear, warm, and not overly slang-heavy.",
+    };
+  }
+
+  if (hasHangul) {
+    return {
+      language: "korean",
+      mirrorInstruction:
+        "Reply in Korean, matching the user's tone and formality level naturally.",
+    };
+  }
+
+  if (hasCJK) {
+    return {
+      language: "cjk",
+      mirrorInstruction:
+        "Reply in the same East Asian language/script the user is using. Keep it natural, simple, and emotionally clear.",
+    };
+  }
+
+  if (hasArabic) {
+    return {
+      language: "arabic",
+      mirrorInstruction:
+        "Reply in Arabic, matching the user's tone naturally and keeping the phrasing clear and supportive.",
+    };
+  }
+
+  if (hasCyrillic) {
+    return {
+      language: "cyrillic_script",
+      mirrorInstruction:
+        "Reply in the same Cyrillic-script language the user is using, matching tone naturally.",
+    };
+  }
+
+  if (hasDevanagari) {
+    return {
+      language: "devanagari_script",
+      mirrorInstruction:
+        "Reply in the same Devanagari-script language the user is using, matching tone naturally.",
+    };
+  }
+
+  if (hasThai) {
+    return {
+      language: "thai",
+      mirrorInstruction:
+        "Reply in Thai, matching the user's tone naturally.",
+    };
+  }
+
+  if (spanishCount >= 2) {
+    return {
+      language: "spanish",
+      mirrorInstruction:
+        "Reply in Spanish, matching the user's tone naturally and clearly.",
+    };
+  }
+
+  if (portugueseCount >= 2) {
+    return {
+      language: "portuguese",
+      mirrorInstruction:
+        "Reply in Portuguese, matching the user's tone naturally and clearly.",
+    };
+  }
+
+  if (frenchCount >= 2) {
+    return {
+      language: "french",
+      mirrorInstruction:
+        "Reply in French, matching the user's tone naturally and clearly.",
+    };
+  }
+
+  if (germanCount >= 2) {
+    return {
+      language: "german",
+      mirrorInstruction:
+        "Reply in German, matching the user's tone naturally and clearly.",
+    };
+  }
+
+  return {
+    language: "english_or_unrecognized",
+    mirrorInstruction:
+      "Reply in the same language the user is currently using, even if the language is not explicitly recognized. If the language is unclear or mixed, follow the dominant language of the message. Do not default to English unless the user is clearly using English. If the user's language is unclear, respond in simple, neutral English.",
+  };
+}
+const SYSTEM_PROMPT = `
+${BASE_SYSTEM_PROMPT}
+
+RUNTIME COSMOPOLITANISM GUARDRAILS
+- Preserve the dignity of the user and all people involved.
+- Validate feelings, not harmful behavior.
+- Be compassionate without enabling manipulation, cruelty, revenge, abuse, or exploitation.
+- If the user avoids responsibility, add a gentle mirror without shame.
+- Never dehumanize anyone.
+- Never create romantic or dependency language.
+- Talkio should feel like a calm older brother: warm, honest, grounded, concern and responsible.
+`.trim();
+
+
+function getTimeOfDay(hour) {
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 17) return "afternoon";
+  if (hour >= 17 && hour < 21) return "evening";
+  return "night";
+}
+
+function buildUserTimeContext(timezone = "") {
+  if (!timezone) {
+    return `
+CURRENT USER TIME CONTEXT
+
+The user's local time is unavailable.
+
+Do not assume:
+- morning
+- afternoon
+- evening
+- night
+- tonight
+- bedtime
+- waking time
+- the beginning or ending of the user's day
+
+Use time-neutral language when needed:
+- right now
+- today
+- at the moment
+- later
+- when you are ready
+
+Do not guess the user's daily schedule.
+
+The user's own description of their current experience
+always has priority over assumptions about time.
+`.trim();
+  }
+
+  try {
+    const now = new Date();
+
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
+
+    const parts = formatter.formatToParts(now);
+
+    const values = Object.fromEntries(
+      parts
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, part.value])
+    );
+
+    const hour = Number(values.hour);
+
+    if (!Number.isFinite(hour)) {
+      throw new Error("Unable to determine local hour");
+    }
+
+    const timeOfDay = getTimeOfDay(hour);
+
+    const pacingGuidance = {
+      morning: `
+
+GENERAL TIME RULES
+
+The clock provides context,
+not identity.
+
+Never assume the user's energy,
+productivity,
+sleep schedule,
+or emotional state
+from the clock alone.
+
+The user's own words always reveal more than the time.
+
+MORNING RHYTHM
+
+The user's local clock currently indicates morning.
+
+Natural older-brother energy:
+- steady
+- clear
+- gently encouraging
+- forward-looking without pressure
+
+When relevant:
+- help the user begin with one manageable step
+- help them prepare for what is ahead
+- reduce pressure to solve the entire day at once
+- encourage clarity, movement, or preparation
+
+`.trim(),
+
+      afternoon: `
+AFTERNOON RHYTHM
+
+The user's local clock currently indicates afternoon.
+
+Afternoon does not necessarily mean the user has already had a productive day.
+
+Avoid implying they are behind schedule.
+
+Natural older-brother energy:
+- practical
+- grounded
+- attentive
+- focused on pacing and reset
+
+When relevant:
+- help the user pause and reset
+- identify the next practical step
+- reduce overwhelm
+- help distinguish what still needs attention from what can wait
+
+Do not assume the user has been awake since morning.
+
+Do not assume the user's day is nearly finished.
+
+`.trim(),
+
+      evening: `
+EVENING RHYTHM
+
+The user's local time is evening.
+
+Evening changes Talkio's pace — not its willingness to listen.
+
+Remain fully available for whatever the user needs.
+
+Follow the user's emotional state before the clock.
+
+If the user needs to unload painful thoughts, receive them without rushing toward positivity, gratitude, sleep, or ending the conversation.
+
+Help reduce unnecessary emotional weight by:
+
+• understanding what happened
+• separating urgent from non-urgent concerns
+• identifying one manageable next step when useful
+• reminding the user they do not have to solve everything tonight
+
+Do not manufacture closure.
+
+If the user wants to keep talking, keep talking.
+
+If the conversation naturally pauses, leave the user feeling:
+
+• less alone
+• less overwhelmed
+• more understood
+• clearer about what matters
+• free to continue another time if needed.
+`.trim(),
+
+night: `
+NIGHT RHYTHM
+
+The user's local time is night.
+
+Night changes Talkio's tone, not its availability.
+
+Do not assume the user is preparing to sleep.
+
+They may be working,
+thinking,
+resting,
+or beginning their personal day.
+
+Never assume bedtime.
+
+If the user brings painful thoughts, allow them to express them fully before trying to solve them.
+
+Help reduce emotional activation by:
+
+• understanding what happened
+• separating fears from facts
+• slowing impulsive decisions
+• identifying what can safely wait
+• finding one manageable next step
+
+Do not force positivity.
+
+Do not pressure the user to end the conversation.
+
+If they are preparing to sleep, help them leave feeling lighter—not because every problem is solved, but because they feel more understood, less alone, and less burdened.
+`.trim(),
+    };
+
+    return `
+CURRENT USER TIME CONTEXT
+
+Local date: ${values.year}-${values.month}-${values.day}
+Local period: ${timeOfDay}
+
+Use this context quietly to adjust pacing and wording.
+
+Do not announce the user's time zone or repeatedly mention the time of day.
+
+The clock provides context, not identity. Do not infer when the user woke,
+when they will sleep, their energy, productivity, work schedule,
+or whether their personal day is beginning or ending.
+
+The user's explicit description always overrides clock context.
+
+If the user says they just woke, are preparing to sleep,
+work overnight, are travelling, or follow another schedule,
+respond to their lived situation rather than the clock label.
+
+Priority:
+1. Immediate safety
+2. The user's explicit situation
+3. The emotional meaning of the message
+4. Local-time context
+5. Time-neutral language when uncertain
+
+${pacingGuidance[timeOfDay]}
+`.trim();
+  } catch (error) {
+    return `
+CURRENT USER TIME CONTEXT
+
+The stored device time zone could not be verified.
+
+Do not guess:
+- morning
+- afternoon
+- evening
+- night
+- bedtime
+- waking time
+- the user's personal daily rhythm
+
+Use time-neutral wording.
+
+Follow any time or schedule information
+the user explicitly provides.
+`.trim();
+  }
+}
+
+// ==============================
+// SYSTEM PROMPT BUILDER
+// ==============================
+function buildRuntimeSystemPrompt({ languageMeta, isTrustConcern }) {
   return [
     SYSTEM_PROMPT,
-    languageMeta?.mirrorInstruction
-      ? `LANGUAGE INSTRUCTION: ${languageMeta.mirrorInstruction}`
-      : "",
+
+    `ACCOUNTABILITY BALANCE
+- Do not blindly agree with the user.
+- Do not automatically take the user's side.
+- Understand the user's pain while still recognizing the humanity of others involved.
+- If needed, gently reflect contradictions, repeating patterns, avoidance, or impact on others.
+- Reflection should feel calm and human, not like therapy or interrogation.`,
+
+    `LANGUAGE MIRRORING
+${languageMeta?.mirrorInstruction || "Reply in the same language the user is using."}`.trim(),
+
+    isTrustConcern ? TRUST_SAFE_MODE_PROMPT : "",
   ]
     .filter(Boolean)
     .join("\n\n");
 }
 
-// ==========================================
-// 🚀 WORKSPACE MODEL EXECUTION & MULTIMODAL
-// ==========================================
+export const sendTalkioVerificationEmail = onRequest(
+  {
+    cors: true,
+    secrets: ["RESEND_API_KEY"],
+  },
+  async (req, res) => {
+    let uid = "unknown";
 
-function buildConversationMessages(messages, latestUserMessage, attachments = []) {
+    try {
+      if (req.method === "OPTIONS") {
+        res.status(204).send("");
+        return;
+      }
+
+      if (req.method !== "POST") {
+        res.status(405).json({
+          ok: false,
+          error: "Method not allowed",
+        });
+        return;
+      }
+
+      const origin = req.headers.origin || "";
+      const allowedOrigins = getAllowedOrigins();
+
+      if (origin && !allowedOrigins.includes(origin)) {
+        res.status(403).json({
+          ok: false,
+          error: "Blocked origin",
+        });
+        return;
+      }
+
+      const auth = await requireVerifiedUser(req);
+      uid = auth.uid;
+
+      const userRecord = await admin.auth().getUser(uid);
+
+      if (userRecord.disabled) {
+        res.status(403).json({
+          ok: false,
+          error: "Account disabled",
+        });
+        return;
+      }
+
+      if (!userRecord.email) {
+        res.status(400).json({
+          ok: false,
+          error: "No email address is associated with this account.",
+        });
+        return;
+      }
+
+      if (userRecord.emailVerified) {
+        res.status(200).json({
+          ok: true,
+          alreadyVerified: true,
+        });
+        return;
+      }
+
+      const usesPasswordProvider = userRecord.providerData.some(
+        (provider) => provider.providerId === "password"
+      );
+
+      if (!usesPasswordProvider) {
+        res.status(400).json({
+          ok: false,
+          error:
+            "Email verification is only required for email and password accounts.",
+        });
+        return;
+      }
+
+      /*
+       * Basic resend protection:
+       * prevent repeated button taps from generating excessive emails.
+       */
+      const userRef = db.collection("users").doc(uid);
+      const userSnapshot = await userRef.get();
+      const userData = userSnapshot.exists
+        ? userSnapshot.data() || {}
+        : {};
+
+      const lastSentAt =
+        userData.verificationEmailSentAt?.toMillis?.() || 0;
+
+      const cooldownMs = 60 * 1000;
+      const remainingMs =
+        cooldownMs - (Date.now() - lastSentAt);
+
+      if (remainingMs > 0) {
+        res.status(429).json({
+          ok: false,
+          error: "Verification email recently sent",
+          retryAfterSeconds: Math.ceil(remainingMs / 1000),
+        });
+        return;
+      }
+
+      /*
+       * Firebase creates the official one-time verification action code.
+       * Resend only delivers the branded email.
+       */
+      const verificationLink =
+        await admin.auth().generateEmailVerificationLink(
+          userRecord.email,
+          {
+            url: "https://talkiochat.com/?emailVerified=1",
+            handleCodeInApp: false,
+          }
+        );
+
+      const resend = new Resend(RESEND_API_KEY.value());
+
+      const { data, error } = await resend.emails.send({
+        from: "Talkio Reflect <noreply@talkiochat.com>",
+        to: [userRecord.email],
+        replyTo: "support@talkiochat.com",
+        template: {
+          id: TALKIO_VERIFICATION_TEMPLATE,
+          variables: {
+            VERIFY_URL: verificationLink,
+          },
+        },
+        tags: [
+          {
+            name: "email_type",
+            value: "email_verification",
+          },
+        ],
+      });
+
+      if (error) {
+        console.error(
+          "Resend verification email rejected:",
+          error
+        );
+
+        res.status(502).json({
+          ok: false,
+          error: "Email provider rejected the message.",
+        });
+        return;
+      }
+
+      await userRef.set(
+        {
+          verificationEmailSentAt:
+            admin.firestore.FieldValue.serverTimestamp(),
+          verificationEmailId: data?.id || "",
+          verificationEmailProvider: "resend",
+          updatedAt:
+            admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      res.status(200).json({
+        ok: true,
+        sent: true,
+        email: userRecord.email,
+      });
+    } catch (error) {
+      const statusCode = error?.statusCode || 500;
+
+      console.error(
+        "sendTalkioVerificationEmail failed:",
+        {
+          uid,
+          message: error?.message,
+          stack: error?.stack,
+        }
+      );
+
+      if (statusCode === 401) {
+        res.status(401).json({
+          ok: false,
+          error: "Please sign in again.",
+        });
+        return;
+      }
+
+      res.status(500).json({
+        ok: false,
+        error:
+          "We could not send the verification email.",
+      });
+    }
+  }
+);
+
+function buildConversationMessages(messages, latestUserMessage) {
   const safeMessages = Array.isArray(messages)
     ? messages
         .filter(
-          (m) =>
-            m &&
-            ["user", "assistant", "system"].includes(m.role) &&
-            (typeof m.content === "string" || m.attachments?.length || m.attachment)
+          (message) =>
+            message &&
+            (message.role === "user" ||
+              message.role === "assistant" ||
+              message.role === "system") &&
+            typeof message.content === "string" &&
+            message.content.trim()
         )
-        .map((m) => ({
-          role: m.role,
-          content: typeof m.content === "string" ? m.content.trim() : "",
-          attachments: Array.isArray(m.attachments)
-            ? m.attachments
-            : m.attachment
-            ? [m.attachment]
-            : [],
+        .map((message) => ({
+          role: message.role,
+          content: message.content.trim(),
         }))
     : [];
 
   const lastItem = safeMessages[safeMessages.length - 1];
-  const currentAttachments = Array.isArray(attachments) ? attachments : [];
 
   if (
     !lastItem ||
     lastItem.role !== "user" ||
-    lastItem.content !== latestUserMessage ||
-    (currentAttachments.length > 0 && (!lastItem.attachments || lastItem.attachments.length === 0))
+    lastItem.content !== latestUserMessage
   ) {
     safeMessages.push({
       role: "user",
-      content: latestUserMessage || "",
-      attachments: currentAttachments,
+      content: latestUserMessage,
     });
   }
 
+    // Keep only the last 12 messages (6 user, 6 AI) to drastically save input tokens
+  const MAX_HISTORY = 12; 
+  if (safeMessages.length > MAX_HISTORY) {
+    return safeMessages.slice(-MAX_HISTORY);
+  }
+  
   return safeMessages;
 }
 
-async function generateModelText({ ai, model, systemPrompt, messages }) {
+async function generateModelText({
+  ai,
+  model,
+  systemPrompt,
+  messages,
+  image,
+}) {
   try {
-    const contents = (Array.isArray(messages) ? messages : []).map((m) => {
-      const parts = [];
+    const contents = (Array.isArray(messages) ? messages : []).map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: String(m.content || "") }],
+    }));
 
-      const fileList = Array.isArray(m.attachments)
-        ? m.attachments
-        : m.attachment
-        ? [m.attachment]
-        : [];
+    if (image) {
+  const lastUserMessage = contents.findLast(
+    (message) => message.role === "user"
+  );
 
-      for (const file of fileList) {
-        if (file && file.base64) {
-          parts.push({
-            inlineData: {
-              mimeType: file.mimeType || "image/png",
-              data: file.base64,
-            },
-          });
-        }
-      }
+  if (!lastUserMessage) {
+    throw new Error("Missing user message for photo.");
+  }
 
-      if (m.content || parts.length === 0) {
-        parts.push({
-          text: String(m.content || "Inspect and analyze the attached files."),
-        });
-      }
+  lastUserMessage.parts.push({
+    inlineData: {
+      mimeType: image.mimeType,
+      data: image.data,
+    },
+  });
+}
 
-      return {
-        role: m.role === "assistant" ? "model" : "user",
-        parts,
-      };
-    });
+        const response = await ai.models.generateContent({
+  model,
+  contents,
+  config: {
+    systemInstruction: systemPrompt,
+    responseMimeType: "application/json",
+    maxOutputTokens: 600, 
+  },
+});
 
-    const response = await ai.models.generateContent({
-      model,
-      contents,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-      },
-    });
+    console.log("RAW_MODEL_RESULT_RECEIVED");
 
     let text = "";
+
     if (typeof response?.text === "function") {
       text = response.text();
     } else if (typeof response?.text === "string") {
@@ -290,32 +1138,850 @@ async function generateModelText({ ai, model, systemPrompt, messages }) {
     logger.info("gemini_extracted_text", {
       model,
       length: text.length,
+      preview: text.slice(0, 200),
       finishReason: response?.candidates?.[0]?.finishReason || null,
     });
 
     return text;
   } catch (e) {
-    const realMessage = e?.message || e?.error?.message || JSON.stringify(e);
+    if (image) {
+  throw new Error("Photo model request failed.");
+}
+    const realMessage =
+      e?.message ||
+      e?.error?.message ||
+      JSON.stringify(e);
+
+    console.error("🔥 MODEL_ERROR_FULL:", e);
+
     logger.error("MODEL_ERROR_FULL", {
       model,
       realMessage,
-      code: e?.code || e?.status || null,
+      raw: e,
+      code: e?.code || e?.status || e?.error?.code || null,
     });
+
     throw new Error(`generate_model_text_failed: ${realMessage}`);
   }
 }
 
-// ==========================================
-// ⚡ MAIN WORKSPACE ENTRY POINT
-// ==========================================
+function detectMoodSignal(text) {
+  const t = (text || "").toLowerCase();
+
+  if (
+    t.includes("tired") ||
+    t.includes("drained") ||
+    t.includes("exhausted") ||
+    t.includes("kapoy")
+  ) {
+    return "drained";
+  }
+
+  if (
+    t.includes("sad") ||
+    t.includes("lonely") ||
+    t.includes("low") ||
+    t.includes("down")
+  ) {
+    return "low";
+  }
+
+  if (
+    t.includes("anxious") ||
+    t.includes("overwhelmed") ||
+    t.includes("stressed") ||
+    t.includes("panic")
+  ) {
+    return "overwhelmed";
+  }
+
+  return "";
+}
+
+function shouldCreateOpenLoop(text) {
+  const t = (text || "").toLowerCase();
+  const patterns = [
+    "i'm tired",
+    "im tired",
+    "i feel lost",
+    "i feel stuck",
+    "i don't know what to do",
+    "i dont know what to do",
+    "i'm overwhelmed",
+    "im overwhelmed",
+    "i feel sad",
+    "i miss",
+    "i'm anxious",
+    "im anxious",
+  ];
+
+  return patterns.some((p) => t.includes(p));
+}
+
+function detectTrustConcern(text = "") {
+  const t = String(text || "").toLowerCase();
+
+  return [
+    "trust you",
+    "dont trust you",
+    "don't trust you",
+    "why should i trust",
+    "should i trust",
+    "use this against me",
+    "use that against me",
+    "open up to you",
+    "i dont know you",
+    "i don't know you",
+    "you dont know me",
+    "you don't know me",
+    "are my messages private",
+    "privacy",
+    "personal information",
+    "cautious",
+  ].some((phrase) => t.includes(phrase));
+}
+
+function violatesTrustSafeMode(reply = "") {
+  const r = String(reply || "").toLowerCase();
+
+  return [
+    "you are right not to trust me",
+    "you're right not to trust me",
+    "you should not trust me",
+    "you’re right to be cautious of me",
+    "you're right to be cautious of me",
+    "i might use",
+    "i could use that against you",
+  ].some((bad) => r.includes(bad));
+}
+
+async function sendPushToUser(userId, notification) {
+  const snapshot = await db
+    .collection("users")
+    .doc(userId)
+    .collection("device_tokens")
+    .get();
+
+  if (snapshot.empty) {
+    logWarn("push_send_no_tokens", { userId });
+    return { success: false, reason: "no_tokens" };
+  }
+
+  const tokens = snapshot.docs.map((doc) => doc.id).filter(Boolean);
+
+  logInfo("push_send_started", {
+    userId,
+    tokenCount: tokens.length,
+  });
+
+  const response = await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: {
+      title: notification.title,
+      body: notification.body,
+    },
+    data: notification.data || {},
+    android: {
+      priority: "high",
+      notification: {
+        sound: "default",
+      },
+    },
+  });
+
+  logInfo("push_send_finished", {
+    userId,
+    successCount: response.successCount,
+    failureCount: response.failureCount,
+  });
+
+  for (let i = 0; i < response.responses.length; i++) {
+    const result = response.responses[i];
+
+    if (!result.success) {
+      const failedToken = tokens[i];
+      const errorCode = result.error?.code || "";
+      const errorMessage = result.error?.message || "Unknown push error";
+
+      logWarn("push_send_token_failed", {
+        userId,
+        token: failedToken,
+        errorCode,
+        errorMessage,
+      });
+
+      if (
+        errorCode.includes("registration-token-not-registered") ||
+        errorCode.includes("invalid-argument")
+      ) {
+        await db
+          .collection("users")
+          .doc(userId)
+          .collection("device_tokens")
+          .doc(failedToken)
+          .delete();
+      }
+    }
+  }
+
+  return {
+    success: true,
+    successCount: response.successCount,
+    failureCount: response.failureCount,
+  };
+}
+
+export const mergeUserData = onRequest(async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const authHeader = req.headers.authorization || "";
+
+    if (!authHeader.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const idToken = authHeader.split("Bearer ")[1];
+    const decoded = await admin.auth().verifyIdToken(idToken);
+
+    const newUid = decoded.uid;
+    const oldUid = req.body?.oldUid;
+
+    if (!oldUid || oldUid === newUid) {
+      res.status(400).json({ error: "Invalid oldUid" });
+      return;
+    }
+
+    const oldRef = admin.firestore().collection("users").doc(oldUid);
+    const newRef = admin.firestore().collection("users").doc(newUid);
+
+    const oldSnap = await oldRef.get();
+
+    if (oldSnap.exists) {
+      await newRef.set(
+        {
+          ...oldSnap.data(),
+          migratedFromUid: oldUid,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+
+    // migrate device tokens
+    const tokensSnap = await oldRef.collection("device_tokens").get();
+
+    for (const doc of tokensSnap.docs) {
+      await newRef
+        .collection("device_tokens")
+        .doc(doc.id)
+        .set(doc.data(), { merge: true });
+    }
+
+    await oldRef.delete();
+
+    res.status(200).json({
+      ok: true,
+      oldUid,
+      newUid,
+    });
+  } catch (error) {
+    console.error("mergeUserData failed:", error);
+    res.status(500).json({ error: "Merge failed" });
+  }
+});
+
+export const bootstrapTalkioMemory = onRequest({ cors: true }, async (req, res) => {
+  let uid = "unknown";
+
+  try {
+    if (req.method !== "GET" && req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const origin = req.headers.origin || "";
+    const allowedOrigins = getAllowedOrigins();
+
+    if (origin && !allowedOrigins.includes(origin)) {
+      res.status(403).json({
+        error: "Blocked origin",
+        reply: "Unauthorized domain.",
+      });
+      return;
+    }
+
+    const incomingAppKey = req.headers["x-talkio-app-key"];
+    if (!INTERNAL_APP_KEY) {
+      res.status(500).json({
+        error: "Missing INTERNAL_APP_KEY",
+        reply: "Server security configuration is missing.",
+      });
+      return;
+    }
+
+    if (incomingAppKey !== INTERNAL_APP_KEY) {
+      res.status(403).json({
+        error: "Forbidden",
+        reply: "Unauthorized request.",
+      });
+      return;
+    }
+
+    const auth = await requireVerifiedUser(req);
+    uid = auth.uid;
+
+    const body =
+  req.body && typeof req.body === "object"
+    ? req.body
+    : {};
+
+const incomingTimezone =
+  typeof body.timezone === "string" &&
+  body.timezone.trim()
+    ? body.timezone.trim().slice(0, 80)
+    : "UTC";
+
+await ensureUserBase(uid, incomingTimezone);
+
+    const userSnap = await db.collection("users").doc(uid).get();
+
+    const userData = userSnap.exists ? userSnap.data() || {} : {};
+
+    const memoryBundle = await getTalkioMemoryBundle(db, uid, 5);
+    const profile = memoryBundle?.profile || defaultTalkioProfile;
+
+    const nickname =
+      typeof userData?.nickname === "string" && userData.nickname.trim()
+        ? userData.nickname.trim()
+        : "";
+
+    res.set("Cache-Control", "private, max-age=300"); 
+
+    res.status(200).json({
+      ok: true,
+      uid,
+      profile: {
+        nickname,
+        recentMoodTrend:
+          typeof profile?.recentMoodTrend === "string"
+            ? profile.recentMoodTrend
+            : "",
+        commonEmotionalStates: Array.isArray(profile?.commonEmotionalStates)
+          ? profile.commonEmotionalStates.slice(0, 8)
+          : [],
+        supportStyle: Array.isArray(profile?.supportStyle)
+          ? profile.supportStyle.slice(0, 8)
+          : [],
+        styleProfile:
+          profile?.styleProfile && typeof profile.styleProfile === "object"
+            ? profile.styleProfile
+            : {},
+        behaviorProfile:
+          profile?.behaviorProfile && typeof profile.behaviorProfile === "object"
+            ? profile.behaviorProfile
+            : {},
+        behaviorSignals:
+          profile?.behaviorSignals && typeof profile.behaviorSignals === "object"
+            ? profile.behaviorSignals
+            : {},
+        lastOpenLoop:
+          typeof profile?.lastOpenLoop === "string"
+            ? profile.lastOpenLoop
+            : "",
+        emotionalContinuityProfile:
+          profile?.emotionalContinuityProfile &&
+          typeof profile.emotionalContinuityProfile === "object"
+            ? profile.emotionalContinuityProfile
+            : {},
+        emotionalContinuitySignals:
+          profile?.emotionalContinuitySignals &&
+          typeof profile.emotionalContinuitySignals === "object"
+            ? profile.emotionalContinuitySignals
+            : {},
+      },
+    });
+  } catch (error) {
+    const statusCode = error?.statusCode || 500;
+    logError("bootstrap_memory_failed", error, { uid });
+
+    if (statusCode === 401) {
+      res.status(401).json({
+        error: "Unauthorized",
+        reply: "Please sign in again and try once more.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: "Failed to load memory bootstrap",
+      reply: "Something went wrong while loading your profile.",
+    });
+  }
+});
+
+export const saveTalkioProfile = onRequest({ cors: true }, async (req, res) => {
+  let uid = "unknown";
+
+  try {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const origin = req.headers.origin || "";
+    const allowedOrigins = getAllowedOrigins();
+
+    if (origin && !allowedOrigins.includes(origin)) {
+      res.status(403).json({
+        error: "Blocked origin",
+        reply: "Unauthorized domain.",
+      });
+      return;
+    }
+
+    const incomingAppKey = req.headers["x-talkio-app-key"];
+    if (!INTERNAL_APP_KEY) {
+      res.status(500).json({
+        error: "Missing INTERNAL_APP_KEY",
+        reply: "Server security configuration is missing.",
+      });
+      return;
+    }
+
+    if (incomingAppKey !== INTERNAL_APP_KEY) {
+      res.status(403).json({
+        error: "Forbidden",
+        reply: "Unauthorized request.",
+      });
+      return;
+    }
+
+    const auth = await requireVerifiedUser(req);
+    uid = auth.uid;
+
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const nickname =
+      typeof body.nickname === "string" ? body.nickname.trim().slice(0, 40) : "";
+
+    const timezone =
+      typeof body.timezone === "string" && body.timezone.trim()
+        ? body.timezone.trim().slice(0, 80)
+        : "";
+
+    const fcmToken =
+      typeof body.fcmToken === "string" &&
+      body.fcmToken.trim()
+        ? body.fcmToken.trim()
+        : "";
+
+    const update = {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (nickname) update.nickname = nickname;
+    else if (body.nickname === "") update.nickname = "";
+
+    if (timezone) update.timezone = timezone;
+
+    if (fcmToken) {
+  const userAgent = req.headers["user-agent"] || "";
+
+  const platform =
+    /android/i.test(userAgent)
+      ? "android"
+      : /iphone|ipad|ios/i.test(userAgent)
+        ? "ios"
+        : "web";
+
+  await db
+    .collection("users")
+    .doc(uid)
+    .collection("device_tokens")
+    .doc(fcmToken)
+    .set(
+      {
+        token: fcmToken,
+        timezone: timezone || "",
+        platform,
+        lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+}
+
+    await db.collection("users").doc(uid).set(update, { merge: true });
+
+    res.status(200).json({
+      ok: true,
+      profile: {
+        nickname: nickname || "",
+        timezone: timezone || "",
+      },
+    });
+  } catch (error) {
+    const statusCode = error?.statusCode || 500;
+    logError("save_profile_failed", error, { uid });
+
+    if (statusCode === 401) {
+      res.status(401).json({
+        error: "Unauthorized",
+        reply: "Please sign in again and try once more.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: "Failed to save profile",
+      reply: "Something went wrong while saving your profile.",
+    });
+  }
+});
+
+async function getOrCreateFreeTrial(uid, existingData = null) {
+  const userRef = db.collection("users").doc(uid);
+  
+  let data = existingData;
+  if (!data) {
+    const snap = await userRef.get();
+    data = snap.exists ? snap.data() || {} : {};
+  }
+
+  const now = new Date();
+  const nowMs = now.getTime();
+
+  let trialStartedAt = data.trialStartedAt?.toDate?.() || null;
+  let trialEndsAt = data.trialEndsAt?.toDate?.() || null;
+
+  if (!trialStartedAt || !trialEndsAt) {
+    trialStartedAt = now;
+    trialEndsAt = new Date(nowMs + FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000);
+
+    await userRef.set(
+      {
+        trialStartedAt: admin.firestore.Timestamp.fromDate(trialStartedAt),
+        trialEndsAt: admin.firestore.Timestamp.fromDate(trialEndsAt),
+        trialStatus: "active",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
+  const isTrialExpired = nowMs > trialEndsAt.getTime();
+
+  if (isTrialExpired && data.trialStatus !== "expired") {
+    await userRef.set(
+      {
+        trialStatus: "expired",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
+  return {
+    trialStartedAt,
+    trialEndsAt,
+    isTrialExpired,
+  };
+}
+
+async function deleteCollection(path, batchSize = 100) {
+  const ref = db.collection(path);
+
+  while (true) {
+    const snap = await ref.limit(batchSize).get();
+
+    if (snap.empty) break;
+
+    const batch = db.batch();
+    snap.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  }
+}
+
+export const deleteMyAccount = onRequest({ cors: true }, async (req, res) => {
+  let uid = "unknown";
+
+  try {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    const auth = await requireVerifiedUser(req);
+    uid = auth.uid;
+
+    // Delete known user subcollections
+    await Promise.all([
+      deleteCollection(`users/${uid}/conversation_state`),
+      deleteCollection(`users/${uid}/core`),
+      deleteCollection(`users/${uid}/emotionDays`),
+      deleteCollection(`users/${uid}/memory`),
+      deleteCollection(`users/${uid}/memory_meta`),
+      deleteCollection(`users/${uid}/presence`),
+      deleteCollection(`users/${uid}/device_tokens`),
+      deleteCollection(`users/${uid}/conversation_messages`),
+      deleteCollection(`users/${uid}/weekly_reflections`),
+    ]);
+
+    // Delete known top-level user-owned docs
+    const batch = db.batch();
+
+    batch.delete(db.collection("users").doc(uid));
+    batch.delete(db.collection("talkioUserProfiles").doc(uid));
+
+    await batch.commit();
+
+    // Delete Firebase Auth user last
+    await admin.auth().deleteUser(uid);
+
+    res.status(200).json({
+      ok: true,
+      reply: "Your account and data have been deleted.",
+    });
+  } catch (error) {
+    console.error("deleteMyAccount failed:", {
+      uid,
+      message: error?.message,
+      stack: error?.stack,
+    });
+
+    res.status(500).json({
+      error: "Delete failed",
+      reply: "Something went wrong while deleting your account.",
+    });
+  }
+});
 
 export const generateTalkioReply = onRequest(
   {
-    cors: true,
+    timeoutSeconds: 60,
+    minInstances: 0,
   },
   async (req, res) => {
-    let body = {};
-    const uid = "personal-workspace-user";
+    let imageSend = null;
+    let imageProcessed = false;
+    let uid = "unknown";
+
+    try {
+      if (req.method === "OPTIONS") return res.status(204).send("");
+      if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+      const body = req.body || {};
+      const latestUserMessage = typeof body.message === "string" ? body.message.trim() : "";
+      if (!latestUserMessage) {
+        return res.status(400).json({ error: "Missing message", reply: "" });
+      }
+
+      // 1. AUTH & SINGLE READ
+      const auth = await requireVerifiedUser(req);
+      uid = auth.uid;
+      const decodedToken = auth.decoded;
+
+      const userDocSnap = await db.collection("users").doc(uid).get();
+      const userDocData = userDocSnap.exists ? userDocSnap.data() || {} : {};
+
+      // 2. IMMEDIATE LOCAL SAFETY GUARDRAILS (Zero token cost)
+      const safetyInterruption = classifySafetyInterruption(latestUserMessage);
+      if (safetyInterruption.blocked) {
+        logWarn("talkio_violent_safety", { uid, reason: safetyInterruption.reason });
+        return res.status(200).json({
+          blocked: true,
+          safetyBlocked: true,
+          crisisLock: true,
+          reply: "",
+          path: "safety_interruption",
+        });
+      }
+
+      if (looksLikeCrisis(latestUserMessage)) {
+        logWarn("talkio_crisis", { uid });
+        return res.status(200).json({
+          blocked: true,
+          safetyBlocked: true,
+          crisisLock: true,
+          reply: crisisReplyGlobal(),
+          path: "crisis_guardrail",
+        });
+      }
+
+      // 3. RATE LIMITING & ACCESS CHECKS
+      const access = await getUserAccessProfile(uid, decodedToken, userDocData);
+      const freeTrial = await getOrCreateFreeTrial(uid, userDocData);
+
+      const incomingTier = typeof body?.userTier === "string" ? body.userTier.trim().toLowerCase() : "";
+      if (["companion", "presence", "professionals", "elite"].includes(incomingTier)) {
+        access.plan = incomingTier;
+      }
+
+      let { dailyLimit, limitLabel } = getLimitsForAccess(access);
+      if (limitLabel === "free") dailyLimit = FREE_TRIAL_DAILY_LIMIT;
+
+      // Cost Saver: Upstash Redis Call Reduction
+      const redis = Redis.fromEnv();
+      const todayKey = getTodayDateString();
+      const userDailyKey = `talkio:daily:${uid}:${todayKey}`;
+
+      const userDailyCount = await redis.incr(userDailyKey);
+      if (userDailyCount === 1) {
+        // Set expiry only once on key creation to cut Upstash operations in half
+        await redis.expire(userDailyKey, secondsUntilUtcMidnight());
+      }
+
+      if ((limitLabel === "free" && freeTrial.isTrialExpired) || userDailyCount > dailyLimit) {
+        return res.status(429).json({
+          error: "Quota hit",
+          paywallRequired: true,
+          reply: "You’ve reached today’s limit. Upgrade to keep chatting!",
+          remainingDaily: 0,
+        });
+      }
+
+      // 4. PARALLELIZED CONTEXT RETRIEVAL
+      const [peopleMemory, styleMemory, emotionalMemory] = await Promise.all([
+        loadRelationalMemory(uid, 8),
+        loadStyleMemory(uid, 8),
+        loadEmotionalMemory(uid, 8),
+      ]);
+
+      const memoryPromptBlock = buildMemoryPromptBlock({
+        people: peopleMemory,
+        style: styleMemory,
+        emotional: emotionalMemory,
+      });
+
+      const languageMeta = detectLanguageMirror(latestUserMessage);
+      const isTrustConcern = detectTrustConcern(latestUserMessage);
+      const userTimezone = userDocData.timezone || "UTC";
+      const nickname = userDocData.nickname ? `\nUSER PROFILE\nPreferred name: ${userDocData.nickname}` : "";
+
+      const runtimeSystemPrompt = [
+        buildRuntimeSystemPrompt({ languageMeta, isTrustConcern }),
+        nickname,
+        buildUserTimeContext(userTimezone),
+        memoryPromptBlock,
+      ].filter(Boolean).join("\n\n");
+
+      // 5. INFERENCE SETUP
+      imageSend = await beginImageSend(uid, body);
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const model =
+        access?.plan === "presence"
+          ? PRESENCE_MODEL
+          : access?.plan === "companion"
+          ? COMPANION_MODEL
+          : FREE_MODEL;
+
+      const conversationMessages = buildConversationMessages(body.messages, latestUserMessage);
+
+      const result = await generateTalkioReplyEngine({
+        uid,
+        modelGenerate: async ({ systemPrompt, messages, includeImage = false }) => {
+          const image = includeImage ? imageSend?.image : undefined;
+          const output = await generateModelText({ ai, model, systemPrompt, messages, image });
+          if (image) imageProcessed = true;
+          return output;
+        },
+        systemPrompt: runtimeSystemPrompt,
+        conversationMessages,
+        latestUserMessage,
+      });
+
+      let finalReply = result?.reply || "";
+      if (isTrustConcern && violatesTrustSafeMode(finalReply)) {
+        finalReply = "You do not have to force trust here. We can go slowly.";
+      }
+
+      // 6. SAFE ASYNCHRONOUS PERSISTENCE
+      // Wrap background work to guarantee execution finishes without blocking main response latency
+      const backgroundPersistence = Promise.allSettled([
+        upsertPeopleMemory(uid, extractPeopleFromMessage(latestUserMessage)),
+        upsertStyleMemory(uid, extractStyleExpressions(latestUserMessage)),
+        upsertEmotionalMemory(uid, extractEmotionalContinuity(latestUserMessage)),
+        saveConversationTurn({
+          uid,
+          userMessage: latestUserMessage,
+          assistantMessage: finalReply,
+          language: languageMeta?.language || "en",
+          safety: result?.safety || { riskLevel: "none" },
+        }),
+      ]).catch((err) => logError("talkio_bg_persist_error", err, { uid }));
+
+      const responseBody = {
+        reply: finalReply,
+        safety: result?.safety || { riskLevel: "none" },
+        action: result?.action || "show_reply",
+        model,
+        path: getReplyPath(result),
+        remainingDaily: Math.max(0, dailyLimit - userDailyCount),
+      };
+
+      // Await background write completion after sending response to prevent CPU freezing instance termination
+      await backgroundPersistence;
+
+      if (imageSend && imageProcessed) {
+        res.status(200).json(await imageSend.complete(responseBody));
+      } else {
+        res.status(200).json(responseBody);
+      }
+      
+    } catch (error) {
+      logError("talkio_backend_error", error, { uid });
+      res.status(500).json({
+        error: "Server error",
+        reply: "I'm having a bit of trouble thinking right now. Let's try again?",
+      });
+    } finally {
+      if (imageSend?.release) {
+        await imageSend.release().catch(() => {});
+      }
+    }
+  }
+);
+
+export const generateMyWeeklyReflection = onRequest(
+  { cors: true, timeoutSeconds: 180 },
+  async (req, res) => {
+    try {
+      if (req.method === "OPTIONS") return res.status(204).send("");
+      if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
+
+      const auth = await requireVerifiedUser(req);
+      const userSnap = await db.collection("users").doc(auth.uid).get();
+      const user = userSnap.data() || {};
+
+      const result = await generateWeeklyReflectionForUser({
+        uid: auth.uid,
+        timezone: user.timezone || "UTC",
+        nickname: user.nickname || "",
+        force: req.body?.force === true,
+      });
+
+      res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      logError("generate_weekly_reflection_failed", error);
+      res.status(error?.statusCode || 500).json({ ok: false, error: error?.message || "Failed to generate reflection" });
+    }
+  }
+);
+
+export const getMyWeeklyReflections = onRequest(
+  {
+    cors: true,
+    memory: "256MiB",
+    timeoutSeconds: 15,
+    minInstances: 0,
+  },
+  async (req, res) => {
+    let uid = "unknown";
 
     try {
       if (req.method === "OPTIONS") {
@@ -323,104 +1989,41 @@ export const generateTalkioReply = onRequest(
         return;
       }
 
-      // Enforce Pre-Shared Engine Key
-      const requestSecret = req.headers["x-engine-secret"];
-      if (requestSecret !== ENGINE_SECRET) {
-        return res.status(403).json({ error: "Access denied: Unauthorized engine invocation." });
-      }
-
-      body = req.body || {};
-
-      const latestUserMessage =
-        typeof body.message === "string" ? body.message.trim() : "";
-
-      const rawAttachments = Array.isArray(body?.attachments)
-        ? body.attachments
-        : body?.attachment
-        ? [body.attachment]
-        : [];
-
-      if (!latestUserMessage && rawAttachments.length === 0) {
-        res.status(400).json({
-          error: "Missing message or attachments",
-          reply: "Please provide a query or attach a file.",
+      if (req.method !== "GET" && req.method !== "POST") {
+        res.status(405).json({
+          ok: false,
+          error: "Method not allowed",
         });
         return;
       }
 
-      const conversationMessages = buildConversationMessages(
-        body.messages,
-        latestUserMessage,
-        rawAttachments
-      );
+      const auth = await requireVerifiedUser(req);
+      uid = auth.uid;
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      
-      // Dynamically select model passed from Vercel, falling back to default
-      const model = (typeof body.model === "string" && body.model.trim()) || DEFAULT_MODEL;
+      // Robust limit parsing: force positive integer between 1 and 52
+      const rawLimit = Number(req.query?.limit ?? req.body?.limit);
+      const limit =
+        Number.isInteger(rawLimit) && rawLimit > 0
+          ? Math.min(rawLimit, 52)
+          : 12;
 
-      // Invoke the direct workspace engineering engine
-      const result = await generateTalkioReplyEngine({
-        uid,
-        conversationMessages,
-        latestUserMessage,
-        modelGenerate: async ({ systemPrompt, messages }) => {
-          return await generateModelText({
-            ai,
-            model,
-            systemPrompt,
-            messages,
-          });
-        },
-      });
+      const reflections = await listWeeklyReflections(uid, limit);
 
-      const finalReply = result?.reply || "";
-      const replyPath = result?.path || "workspace_success";
-
-      logInfo("workspace_reply_dispatched", {
-        uid,
-        model,
-        path: replyPath,
-        outputLength: finalReply.length,
-      });
+      // COST OPTIMIZATION: Client-side cache to stop repeat reads on app reload/navigation.
+      // Cache privately for 60 seconds, allow stale content for 5 minutes during background revalidation.
+      res.set("Cache-Control", "private, max-age=60, stale-while-revalidate=300");
 
       res.status(200).json({
-        reply: finalReply,
-        safety: result?.safety || {
-          riskLevel: "none",
-          category: "none",
-          shouldRedirect: false,
-          recommendedMode: "normal",
-          reason: "workspace_safe",
-        },
-        action: "show_reply",
-        blocked: false,
-        safetyBlocked: false,
-        crisisLock: false,
-        model,
-        path: replyPath,
-        fallbackTriggered: false,
-        remainingDaily: 999999,
+        ok: true,
+        reflections: Array.isArray(reflections) ? reflections : [],
       });
     } catch (error) {
-      logError("workspace_backend_error", error, { uid });
+      logError("weekly_reflection_list_failed", error, { uid });
 
-      res.status(500).json({
-        error: "Server error",
-        reply: `Workspace Engine Exception: ${error?.message || String(error)}`,
-        safety: {
-          riskLevel: "none",
-          category: "none",
-          shouldRedirect: false,
-          recommendedMode: "normal",
-          reason: "backend_error",
-        },
-        action: "show_reply",
-        blocked: false,
-        safetyBlocked: false,
-        crisisLock: false,
-        path: "handler_error",
-        fallbackTriggered: true,
+      const statusCode = error?.statusCode || 500;
+      res.status(statusCode).json({
+        ok: false,
+        error: error?.message || "Could not load reflections",
       });
     }
   }

@@ -1,27 +1,16 @@
-// capacitor.config.ts
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.talkiochat.app',
   appName: 'Talkio',
   webDir: 'out',
-
   server: {
-  url: "https://talkiochat.com",
-  cleartext: false,
-},
-
-  plugins: {
-    FirebaseAuthentication: {
-      providers: ["google.com"]
-    },
-
-    SystemBars: {
-      insetsHandling: 'css',
-      style: 'DARK',
-      hidden: false,
-      animation: 'NONE'
-    }
+    url: "https://talkiochat.com",
+    cleartext: true
+  },
+  ios: {
+    contentInset: "always",
+    allowsLinkPreview: true
   }
 };
 

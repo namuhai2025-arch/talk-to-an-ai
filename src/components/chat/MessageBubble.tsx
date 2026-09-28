@@ -9,12 +9,13 @@ type ChatMessage = {
   content: string;
   timestamp: number;
   isFeedbackPrompt?: boolean;
+  imageUrl?: string;
   image?: {
-  id: string;
-  caption: string;
-  width: number;
-  height: number;
-};
+    id: string;
+    caption: string;
+    width: number;
+    height: number;
+  };
 };
 
 type MessageBubbleProps = {
@@ -38,19 +39,12 @@ function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
 
-  const longPressTimer =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const touchStartPosition = useRef({
-    x: 0,
-    y: 0,
-  });
-
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartPosition = useRef({ x: 0, y: 0 });
   const didLongPress = useRef(false);
 
   const formattedTime = useMemo(() => {
     if (!showTimestamp) return "";
-
     return new Date(message.timestamp).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
@@ -58,22 +52,19 @@ function MessageBubble({
   }, [message.timestamp, showTimestamp]);
 
   const wrapperClassName = isUser
-    ? "relative flex flex-col items-end"
-    : "relative flex flex-col items-start";
+    ? "relative flex flex-col items-end w-full"
+    : "relative flex flex-col items-start w-full";
 
   const bubbleClassName = [
     "whitespace-pre-wrap break-words px-4 py-3 text-[16.5px] leading-5.5",
-    "select-none",
-    "transition-all duration-150",
+    "select-none transition-all duration-150",
     copyMenuOpen ? "ring-2 ring-stone-400/50" : "",
     isUser
       ? "mr-4 max-w-[74%] bg-[#dfe8d2] text-stone-900"
       : "ml-4 max-w-[74%] bg-white text-stone-800 shadow-sm",
     sameAsPrev ? "mt-0.5" : "mt-2",
     sameAsNext ? "mb-0" : "mb-0.5",
-    isUser
-      ? "rounded-[28px] rounded-br-md"
-      : "rounded-[28px] rounded-bl-md",
+    isUser ? "rounded-[24px] rounded-br-md" : "rounded-[24px] rounded-bl-md",
   ].join(" ");
 
   const timestampClassName = [
@@ -88,76 +79,30 @@ function MessageBubble({
     }
   };
 
-  const startLongPress = (
-    event: React.TouchEvent<HTMLDivElement>,
-  ) => {
+  const startLongPress = (event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.touches[0];
-
-    touchStartPosition.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-    };
-
+    touchStartPosition.current = { x: touch.clientX, y: touch.clientY };
     didLongPress.current = false;
-
     clearLongPressTimer();
-
     longPressTimer.current = setTimeout(() => {
-  didLongPress.current = true;
-  onOpenCopyMenu();
-}, 450);
+      didLongPress.current = true;
+      onOpenCopyMenu();
+    }, 450);
   };
 
-  const handleTouchMove = (
-    event: React.TouchEvent<HTMLDivElement>,
-  ) => {
+  const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.touches[0];
-
-    const deltaX = Math.abs(
-      touch.clientX - touchStartPosition.current.x,
-    );
-
-    const deltaY = Math.abs(
-      touch.clientY - touchStartPosition.current.y,
-    );
-
-    /*
-     * Cancel the long press only when the user
-     * is clearly scrolling.
-     */
-    if (deltaX > 12 || deltaY > 12) {
-      clearLongPressTimer();
-    }
+    const deltaX = Math.abs(touch.clientX - touchStartPosition.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartPosition.current.y);
+    if (deltaX > 12 || deltaY > 12) clearLongPressTimer();
   };
 
-  const handleTouchEnd = () => {
-    clearLongPressTimer();
-  };
+  const handleTouchEnd = () => clearLongPressTimer();
 
   const copyMessage = async () => {
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(message.content);
-      } else {
-        const textarea = document.createElement("textarea");
-
-        textarea.value = message.content;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-
-        document.body.appendChild(textarea);
-
-        textarea.focus();
-        textarea.select();
-
-        document.execCommand("copy");
-
-        document.body.removeChild(textarea);
-      }
-
+      await navigator.clipboard.writeText(message.content);
       onCloseCopyMenu();
-
-      console.log("Message copied");
     } catch (error) {
       console.error("Failed to copy message:", error);
     }
@@ -177,10 +122,22 @@ function MessageBubble({
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
         onContextMenu={(event) => {
-  event.preventDefault();
-  onOpenCopyMenu();
-}}
+          event.preventDefault();
+          onOpenCopyMenu();
+        }}
       >
+        {/* IMAGE DISPLAY SECTION */}
+        {message.imageUrl && (
+          <div className="mb-2 -mx-1 overflow-hidden rounded-xl border border-black/5">
+            <img 
+              src={message.imageUrl} 
+              alt="Visual attachment" 
+              className="w-full h-auto block max-h-[300px] object-cover"
+            />
+          </div>
+        )}
+
+        {/* MESSAGE TEXT */}
         {message.content}
       </div>
 
@@ -200,9 +157,7 @@ function MessageBubble({
       )}
 
       {showTimestamp && (
-        <div className={timestampClassName}>
-          {formattedTime}
-        </div>
+        <div className={timestampClassName}>{formattedTime}</div>
       )}
     </div>
   );
@@ -216,8 +171,8 @@ function areMessageBubblePropsEqual(
     previous.message.role === next.message.role &&
     previous.message.content === next.message.content &&
     previous.message.timestamp === next.message.timestamp &&
-    previous.message.isFeedbackPrompt ===
-      next.message.isFeedbackPrompt &&
+    previous.message.imageUrl === next.message.imageUrl && // ADDED THIS
+    previous.message.isFeedbackPrompt === next.message.isFeedbackPrompt &&
     previous.sameAsPrev === next.sameAsPrev &&
     previous.sameAsNext === next.sameAsNext &&
     previous.showTimestamp === next.showTimestamp &&
@@ -225,7 +180,4 @@ function areMessageBubblePropsEqual(
   );
 }
 
-export default React.memo(
-  MessageBubble,
-  areMessageBubblePropsEqual,
-);
+export default React.memo(MessageBubble, areMessageBubblePropsEqual);

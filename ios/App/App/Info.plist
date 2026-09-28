@@ -63,6 +63,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Talkio uses your camera to take a photo you choose to attach to your conversation.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Talkio needs access to your photo library so you can choose an image to attach to your conversation.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Talkio needs access to save photos to your library.</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>Talkio uses your device identifier to measure app installs and improve the relevance of advertisements while respecting your privacy.</string>
 	<key>TikTokAppSecret</key>

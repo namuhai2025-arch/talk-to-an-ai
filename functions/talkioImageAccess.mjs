@@ -5,7 +5,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { createHash } from "node:crypto";
 
-const revenueCatKey = { value: () => "" };
+const revenueCatKey = defineSecret("REVENUE_CAT_KEY");
 
 const digest = (text) =>
   createHash("sha256").update(text).digest("hex");
@@ -186,7 +186,7 @@ export async function fetchImageAccess(
         Authorization: `Bearer ${secret}`,
         Accept: "application/json",
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(3000),
     },
   );
 
@@ -210,7 +210,7 @@ export const getTalkioImageAccess = onRequest(
       "capacitor://localhost",
       "ionic://localhost",
     ],
-    secrets: [revenueCatKey],
+    secrets: ["REVENUE_CAT_KEY"], 
   },
   async (req, res) => {
     res.set("Cache-Control", "no-store");
@@ -242,6 +242,19 @@ export const getTalkioImageAccess = onRequest(
       );
 
       uid = decoded.uid;
+          // DEVELOPER BYPASS: Give your specific UID full access automatically
+    // You can find your UID in the Firebase Auth console
+    if (uid === "YOUR_FIREBASE_UID_HERE") { 
+      return res.status(200).json({
+        verifiedTier: "companion",
+        eligible: true,
+        limit: 99,
+        remaining: 99,
+        canAttach: true,
+        reason: null,
+        used: 0
+      });
+    }
     } catch {
       return res.status(401).json({
         error: "Please sign in again.",

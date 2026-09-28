@@ -179,18 +179,7 @@ function ChatComposer({
     onAttachmentChange(file);
   };
 
-      // Helper: safely convert base64 to Blob without relying on WKWebView's fetch()
-  const base64ToBlob = (base64: string, mimeType: string) => {
-    const byteCharacters = atob(base64);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    return new Blob([byteArray], { type: mimeType });
-  };
-
-    // Helper: safely convert base64 to Blob without relying on iOS fetch()
+  // Helper: safely convert base64 to Blob without relying on iOS/WKWebView fetch()
   const base64ToBlob = (base64: string, mimeType: string) => {
     const byteCharacters = atob(base64);
     const byteNumbers = new Array(byteCharacters.length);
@@ -462,4 +451,4 @@ function ChatComposer({
   );
 }
 
-export default React.memo(ChatComposer);  
+export default React.memo(ChatComposer);

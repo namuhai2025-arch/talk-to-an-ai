@@ -179,22 +179,54 @@ function ChatComposer({
     onAttachmentChange(file);
   };
 
+      // Helper: safely convert base64 to Blob without relying on WKWebView's fetch()
+  const base64ToBlob = (base64: string, mimeType: string) => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
+  };
+
+    // Helper: safely convert base64 to Blob without relying on iOS fetch()
+  const base64ToBlob = (base64: string, mimeType: string) => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
+  };
+
   const handleAttachment = async () => {
     try {
       const image = await Camera.getPhoto({
-        quality: 80, // Prevents giant files
+        quality: 60,
+        width: 1200, // Forces a smaller size so the backend/AI processes it instantly
         allowEditing: false,
-        resultType: CameraResultType.Base64, // Bypasses iOS file restrictions
+        resultType: CameraResultType.Base64,
         source: CameraSource.Prompt,
       });
 
       if (image.base64String) {
-        const format = image.format || 'jpeg';
-        const base64Response = await fetch(`data:image/${format};base64,${image.base64String}`);
-        const blob = await base64Response.blob();
+        // Normalize format so the backend doesn't complain about weird extensions
+        const rawFormat = (image.format || 'jpeg').toLowerCase();
+        const mimeType = rawFormat === 'png' ? 'image/png' : 'image/jpeg';
+        const fileExt = rawFormat === 'png' ? 'png' : 'jpg';
 
-        const file = new File([blob], `photo_${Date.now()}.${format}`, {
-          type: `image/${format}`,
+        // Create the blob directly using our helper function (Bypasses iOS bug)
+        const blob = base64ToBlob(image.base64String, mimeType);
+
+        if (blob.size === 0) {
+          setFileError("Unable to capture image. Please try again.");
+          return;
+        }
+
+        const file = new File([blob], `photo_${Date.now()}.${fileExt}`, {
+          type: mimeType,
         });
 
         if (onAttachmentChange) {
@@ -202,7 +234,6 @@ function ChatComposer({
         }
       }
     } catch (error) {
-      // If user cancels the camera, just ignore it
       console.log("Camera modal closed or error:", error);
     }
   };
@@ -431,4 +462,4 @@ function ChatComposer({
   );
 }
 
-export default React.memo(ChatComposer);
+export default React.memo(ChatComposer);  

@@ -60,10 +60,10 @@
     return String(reply || "").trim();
   }
 
-  // Add this near your other helper functions (e.g., near normalizeReply)
 function getLocalSafetyHeuristic(text = "") {
-  const lowerText = text.toLowerCase();
-  // Add keywords that suggest immediate crisis/harm
+  // Use String() to prevent a crash if text is undefined, null, or an object
+  const lowerText = String(text || "").toLowerCase();
+  
   const crisisKeywords = [
     "suicide", "kill myself", "end my life", "hurt myself", 
     "cut myself", "want to die", "ending it all"
@@ -102,7 +102,7 @@ function getLocalSafetyHeuristic(text = "") {
 
     const text = reply.trim();
 
-    if (text.length < 20) return false;
+    if (text.length < 8) return false;
 
     if (/^\W+$/.test(text)) return false;
 
@@ -340,20 +340,24 @@ function getLocalSafetyHeuristic(text = "") {
   `.trim();
   }
 
-  function sanitizeConversationMessages(messages) {
+    function sanitizeConversationMessages(messages) {
     if (!Array.isArray(messages)) return [];
 
-    return messages.filter(
-      (message) =>
-        message &&
-        [
-          "user",
-          "assistant",
-          "system",
-        ].includes(message.role) &&
-        typeof message.content === "string" &&
-        message.content.trim()
-    );
+    return messages.filter((message) => {
+      if (!message || !["user", "assistant", "system"].includes(message.role)) return false;
+      
+      // If it's standard text, make sure it's not empty
+      if (typeof message.content === "string") {
+        return message.content.trim().length > 0;
+      }
+      
+      // If it's an array (Image/Multimodal format), allow it!
+      if (Array.isArray(message.content)) {
+        return message.content.length > 0;
+      }
+
+      return false;
+    });
   }
 
   function buildLanguageControlBlock() {

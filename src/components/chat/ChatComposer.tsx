@@ -182,18 +182,19 @@ function ChatComposer({
   const handleAttachment = async () => {
     try {
       const image = await Camera.getPhoto({
-        quality: 90,
+        quality: 80, // Prevents giant files
         allowEditing: false,
-        resultType: CameraResultType.Uri,
+        resultType: CameraResultType.Base64, // Bypasses iOS file restrictions
         source: CameraSource.Prompt,
       });
 
-      if (image.webPath) {
-        const response = await fetch(image.webPath);
-        const blob = await response.blob();
+      if (image.base64String) {
+        const format = image.format || 'jpeg';
+        const base64Response = await fetch(`data:image/${format};base64,${image.base64String}`);
+        const blob = await base64Response.blob();
 
-        const file = new File([blob], `photo_${Date.now()}.jpg`, {
-          type: "image/jpeg",
+        const file = new File([blob], `photo_${Date.now()}.${format}`, {
+          type: `image/${format}`,
         });
 
         if (onAttachmentChange) {
@@ -201,7 +202,8 @@ function ChatComposer({
         }
       }
     } catch (error) {
-      console.error("Camera error:", error);
+      // If user cancels the camera, just ignore it
+      console.log("Camera modal closed or error:", error);
     }
   };
 
@@ -237,7 +239,6 @@ function ChatComposer({
           "
         >
           {preview?.file === attachment && (
-            // Local preview only; this does not upload the file.
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={preview.url}

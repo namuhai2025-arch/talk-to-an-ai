@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
 
 import ReflectionDetail from "@/components/reflections/ReflectionDetail";
-
 import { resolveTalkioTier, type TalkioTier } from "@/lib/subscription";
 
 const FUNCTIONS_BASE_URL =
@@ -14,17 +14,24 @@ const FUNCTIONS_BASE_URL =
 const GET_REFLECTIONS_URL = `${FUNCTIONS_BASE_URL}/getMyWeeklyReflections`;
 const GENERATE_REFLECTION_URL = `${FUNCTIONS_BASE_URL}/generateMyWeeklyReflection`;
 
-// OPTIMIZED SCHEMA: Matches the backend exactly
-type WeeklyReflection = {
+export type ReflectionItem = {
+  text: string;
+  sessionId?: string;
+  messageId?: string;
+  date?: string;
+};
+
+// COMPATIBLE SCHEMA: Supports both legacy string arrays and new rich object arrays
+export type WeeklyReflection = {
   id?: string;
   status?: "ready" | "generating" | "failed" | "insufficient_activity";
   periodStart?: string;
   periodEnd?: string;
 
   lookingBack?: string;
-  whatWeighedOnYou?: string[];
-  whatHelped?: string[];
-  momentsThatMattered?: string[];
+  whatWeighedOnYou?: (string | ReflectionItem)[];
+  whatHelped?: (string | ReflectionItem)[];
+  momentsThatMattered?: (string | ReflectionItem)[];
   somethingToCarryForward?: string;
   oneThingINoticed?: string;
 
@@ -79,6 +86,8 @@ function formatReflectionPeriod(start?: string, end?: string): string {
 // --- MAIN COMPONENT ---
 
 export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
+  const router = useRouter();
+
   const [reflectionView, setReflectionView] = useState<
     "home" | "weekly" | "monthly" | "quarterly" | "yearly" | "portrait"
   >("home");
@@ -98,6 +107,14 @@ export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
     requiredTier: string;
   } | null>(null);
   const [comingSoonFeature, setComingSoonFeature] = useState<string | null>(null);
+
+  const handleNavigateToChat = (item: ReflectionItem) => {
+    if (item.sessionId) {
+      router.push(`/chat?session=${item.sessionId}`);
+    } else if (item.date) {
+      router.push(`/chat?date=${item.date}`);
+    }
+  };
 
   const loadReflections = useCallback(async (signedInUser: User) => {
     setLoading(true);
@@ -119,7 +136,6 @@ export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
         throw new Error(data.error || "Could not load your reflections.");
       }
 
-      // Optimization: Only keep the most recent 5 reflections in state
       setReflections(Array.isArray(data.reflections) ? data.reflections.slice(0, 5) : []);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load your reflections.");
@@ -155,19 +171,16 @@ export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
     return unsubscribe;
   }, [loadReflections]);
 
-    async function generateReflection() {
+  async function generateReflection(force: boolean = false) {
     if (!user || generating) return;
 
-    // 1. COST SAVING: Don't even try if we know we have a fresh one in the last 4 hours
-    const lastCheck = localStorage.getItem(`last_reflection_check_${user.uid}`);
-    const fourHours = 4 * 60 * 60 * 1000;
-    if (lastCheck && (Date.now() - parseInt(lastCheck)) < fourHours && reflections.length > 0) {
-      console.log("Skipping generation check: checked recently.");
-      return;
+    if (!force) {
+      const lastCheck = localStorage.getItem(`last_reflection_check_${user.uid}`);
+      const fourHours = 4 * 60 * 60 * 1000;
+      if (lastCheck && Date.now() - parseInt(lastCheck, 10) < fourHours && reflections.length > 0) {
+        return;
+      }
     }
-
-    const latest = reflections[0];
-    if (latest?.status === "ready" && !error) return;
 
     setGenerating(true);
     setError("");
@@ -182,12 +195,11 @@ export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({ force: false }),
+        body: JSON.stringify({ force }),
       });
 
       const data = await readResponseJson<ReflectionGenerationResponse>(response);
 
-      // 2. COST SAVING: Mark the check as successful so we don't hit the API again for 4 hours
       localStorage.setItem(`last_reflection_check_${user.uid}`, Date.now().toString());
 
       if (!response.ok || data.ok === false) {
@@ -195,11 +207,11 @@ export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
       }
 
       if (data.outcome === "insufficient_activity" || data.reflection?.status === "insufficient_activity") {
-        setNotice("Keep talking naturally, and Talkio will reflect it back when there is enough to understand.");
+        setNotice("Keep talking naturally, and Talkio will reflect it back when there is enough activity for this week.");
       } else if (data.outcome === "already_exists") {
-        setNotice("Your reflection for this period is already ready.");
+        setNotice("You are all caught up! Your reflection for the latest period is already displayed.");
       } else {
-        setNotice("Your weekly reflection is ready.");
+        setNotice("Your latest reflection has been updated.");
       }
 
       await loadReflections(user);
@@ -321,32 +333,82 @@ export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
   return (
     <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
       <div className="mx-auto w-full max-w-2xl">
-        <ReflectionsHeader onBack={() => setReflectionView("home")} title="Weekly Reflection" subtitle="A clear look at your week." />
+        <ReflectionsHeader
+          onBack={() => setReflectionView("home")}
+          title="Weekly Reflection"
+          subtitle="A clear look at your week."
+        />
 
         <div className="space-y-4">
           <div className="rounded-3xl border border-stone-200 bg-white/75 p-6 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">Weekly Reflection</p>
-            <h2 className="mt-3 text-2xl font-semibold text-stone-900">Your week, reflected back with care.</h2>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                  Weekly Reflection
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-stone-900">
+                  Your week, reflected back with care.
+                </h2>
+              </div>
+              <button
+                type="button"
+                disabled={generating}
+                onClick={() => void generateReflection(true)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 disabled:opacity-50"
+              >
+                <svg
+                  className={`h-3.5 w-3.5 ${generating ? "animate-spin" : ""}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                {generating ? "Updating..." : "Update"}
+              </button>
+            </div>
             <p className="mt-3 text-sm leading-6 text-stone-600">
               Talkio gently reflects on your conversations from the past week to help you understand yourself a little better, notice meaningful patterns, and move forward with greater clarity.
             </p>
           </div>
 
-          {error && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">{error}</div>}
-          {notice && <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">{notice}</div>}
+          {error && (
+            <div
+              role="alert"
+              className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800"
+            >
+              {error}
+            </div>
+          )}
+
+          {notice && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+              {notice}
+            </div>
+          )}
+
           {generating && (
-            <div className="mb-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-800 animate-pulse">
+            <div className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-800 animate-pulse">
               ✦ Talkio is looking through your week now...
             </div>
           )}
 
           {!latestReflection && !generating ? (
             <div className="rounded-3xl border border-stone-200 bg-white/70 p-6">
-              <h3 className="text-lg font-semibold text-stone-900">No weekly reflection yet</h3>
-              <p className="mt-2 text-sm leading-6 text-stone-600">Talk more with Talkio to unlock your weekly summary.</p>
+              <h3 className="text-lg font-semibold text-stone-900">
+                No weekly reflection yet
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-stone-600">
+                Talk more with Talkio to unlock your weekly summary.
+              </p>
               <button
                 type="button"
-                onClick={generateReflection}
+                onClick={() => void generateReflection(true)}
                 className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-[#D9B96E] to-[#C59A43] px-5 py-3.5 text-sm font-semibold text-[#342A18] shadow-sm transition hover:from-[#E0C47E] hover:to-[#B98C37]"
               >
                 <span>Generate my weekly reflection</span>
@@ -359,32 +421,65 @@ export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
                   <div className="flex items-center gap-3">
                     <ReflectionSectionIcon type="lookingBack" />
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">Looking back</p>
-                      <p className="mt-1 text-sm text-stone-500">{formatReflectionPeriod(latestReflection.periodStart, latestReflection.periodEnd)}</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
+                        Looking back
+                      </p>
+                      <p className="mt-1 text-sm text-stone-500">
+                        {formatReflectionPeriod(
+                          latestReflection.periodStart,
+                          latestReflection.periodEnd
+                        )}
+                      </p>
                     </div>
                   </div>
                 </div>
-                <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-stone-800">{latestReflection.lookingBack}</p>
+                <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-stone-800">
+                  {latestReflection.lookingBack}
+                </p>
               </article>
 
-              {latestReflection.whatWeighedOnYou && latestReflection.whatWeighedOnYou.length > 0 && (
-                <ReflectionSection icon="weighed" title="What weighed on you" items={latestReflection.whatWeighedOnYou} />
-              )}
+              {latestReflection.whatWeighedOnYou &&
+                latestReflection.whatWeighedOnYou.length > 0 && (
+                  <ReflectionSection
+                    icon="weighed"
+                    title="What weighed on you"
+                    items={latestReflection.whatWeighedOnYou}
+                    onNavigateToChat={handleNavigateToChat}
+                  />
+                )}
 
-              {latestReflection.whatHelped && latestReflection.whatHelped.length > 0 && (
-                <ReflectionSection icon="helped" title="What helped" items={latestReflection.whatHelped} />
-              )}
+              {latestReflection.whatHelped &&
+                latestReflection.whatHelped.length > 0 && (
+                  <ReflectionSection
+                    icon="helped"
+                    title="What helped"
+                    items={latestReflection.whatHelped}
+                    onNavigateToChat={handleNavigateToChat}
+                  />
+                )}
 
-              {latestReflection.momentsThatMattered && latestReflection.momentsThatMattered.length > 0 && (
-                <ReflectionSection icon="moments" title="Moments that mattered" items={latestReflection.momentsThatMattered} />
-              )}
+              {latestReflection.momentsThatMattered &&
+                latestReflection.momentsThatMattered.length > 0 && (
+                  <ReflectionSection
+                    icon="moments"
+                    title="Moments that mattered"
+                    items={latestReflection.momentsThatMattered}
+                    onNavigateToChat={handleNavigateToChat}
+                  />
+                )}
 
               {latestReflection.somethingToCarryForward && (
-                <GoldenLineCard text={latestReflection.somethingToCarryForward} />
+                <GoldenLineCard
+                  text={latestReflection.somethingToCarryForward}
+                />
               )}
 
               {latestReflection.oneThingINoticed && (
-                <TextReflectionCard icon="noticed" title="One thing I noticed" text={latestReflection.oneThingINoticed} />
+                <TextReflectionCard
+                  icon="noticed"
+                  title="One thing I noticed"
+                  text={latestReflection.oneThingINoticed}
+                />
               )}
             </>
           ) : null}
@@ -521,20 +616,68 @@ function FeatureDialog({ title, message, primaryLabel, onPrimary, onClose }: { t
 
 type ReflectionContentIcon = "lookingBack" | "weighed" | "helped" | "moments" | "strengths" | "strengthen" | "gratitude" | "pattern" | "noticed" | "standout" | "golden";
 
-function ReflectionSection({ icon, title, items }: { icon: ReflectionContentIcon; title: string; items: string[] }) {
+function normalizeItem(item: string | ReflectionItem): ReflectionItem {
+  if (typeof item === "string") {
+    return { text: item };
+  }
+  return item;
+}
+
+function ReflectionSection({
+  icon,
+  title,
+  items,
+  onNavigateToChat,
+}: {
+  icon: ReflectionContentIcon;
+  title: string;
+  items: (string | ReflectionItem)[];
+  onNavigateToChat?: (item: ReflectionItem) => void;
+}) {
   return (
     <section className="rounded-3xl border border-stone-200 bg-white/70 p-6 shadow-sm">
       <div className="flex items-center gap-3">
         <ReflectionSectionIcon type={icon} />
         <h3 className="text-base font-semibold text-stone-900">{title}</h3>
       </div>
-      <ul className="mt-5 space-y-3.5">
-        {items.map((item, index) => (
-          <li key={index} className="flex gap-3 text-sm leading-6 text-stone-700">
-            <span aria-hidden="true" className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#78906f]" />
-            <span>{item}</span>
-          </li>
-        ))}
+      <ul className="mt-5 space-y-2">
+        {items.map((rawItem, index) => {
+          const item = normalizeItem(rawItem);
+          const hasLink = Boolean(item.sessionId || item.date);
+
+          return (
+            <li key={index}>
+              {hasLink ? (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToChat?.(item)}
+                  className="group flex w-full items-start gap-3 rounded-2xl p-2.5 text-left transition hover:bg-stone-100/80 active:scale-[0.99]"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#78906f] group-hover:scale-125 transition-transform"
+                  />
+                  <div className="flex-1">
+                    <span className="text-sm leading-6 text-stone-800 font-normal">
+                      {item.text}
+                    </span>
+                    <span className="mt-0.5 block text-xs font-medium text-emerald-700 opacity-90">
+                      View conversation {item.date ? `from ${item.date}` : ""} →
+                    </span>
+                  </div>
+                </button>
+              ) : (
+                <div className="flex gap-3 px-2.5 py-1 text-sm leading-6 text-stone-700">
+                  <span
+                    aria-hidden="true"
+                    className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#78906f]"
+                  />
+                  <span>{item.text}</span>
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

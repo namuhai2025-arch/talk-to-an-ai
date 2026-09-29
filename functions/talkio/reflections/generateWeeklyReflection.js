@@ -11,7 +11,6 @@ const {
   saveWeeklyReflection,
 } = require("./reflectionStorage");
 
-// FIXED: Changed to the actual Google model name so it doesn't crash
 const DEFAULT_MODEL = "gemini-3.8-flash"; 
 
 function datePartsInTimeZone(date, timeZone) {
@@ -111,21 +110,33 @@ function clampString(value, maxLength) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
-function clampStringArray(value, maxItems, maxLength) {
-  return Array.isArray(value)
-    ? value
-        .filter((item) => typeof item === "string" && item.trim())
-        .slice(0, maxItems)
-        .map((item) => item.trim().slice(0, maxLength))
-    : [];
+// SUPPORT BOTH: plain strings AND objects with { text, date }
+function clampItemArray(value, maxItems, maxLength) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .slice(0, maxItems)
+    .map((item) => {
+      if (typeof item === "string" && item.trim()) {
+        return { text: item.trim().slice(0, maxLength) };
+      }
+      if (item && typeof item === "object" && typeof item.text === "string" && item.text.trim()) {
+        return {
+          text: item.text.trim().slice(0, maxLength),
+          date: typeof item.date === "string" ? item.date.trim().slice(0, 10) : undefined,
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
 }
 
 function validateReflectionPayload(payload) {
   const reflection = {
     lookingBack: clampString(payload?.lookingBack, 1800),
-    whatWeighedOnYou: clampStringArray(payload?.whatWeighedOnYou, 4, 180),
-    whatHelped: clampStringArray(payload?.whatHelped, 4, 220),
-    momentsThatMattered: clampStringArray(payload?.momentsThatMattered, 3, 240),
+    whatWeighedOnYou: clampItemArray(payload?.whatWeighedOnYou, 4, 250),
+    whatHelped: clampItemArray(payload?.whatHelped, 4, 250),
+    momentsThatMattered: clampItemArray(payload?.momentsThatMattered, 3, 250),
     somethingToCarryForward: clampString(payload?.somethingToCarryForward, 500),
     oneThingINoticed: clampString(payload?.oneThingINoticed, 500),
     language: clampString(payload?.language, 40) || "unknown",
@@ -142,6 +153,17 @@ function validateReflectionPayload(payload) {
   return reflection;
 }
 
+// We append the singular second-person rule here safely so you don't even have to hunt for reflectionPrompt.js
+const ENFORCED_SYSTEM_PROMPT = `
+${WEEKLY_REFLECTION_SYSTEM_PROMPT}
+
+CRITICAL PERSONA & PERSPECTIVE RULES:
+- Address the user strictly in the intimate singular second-person ("you", "your").
+- NEVER use collective or group phrases such as "Many of you", "Some of you", "As humans, we often", or "Our community".
+- Write directly to this specific human being as an observant, empathetic companion reviewing their personal journal and conversations.
+- For each item in "whatWeighedOnYou", "whatHelped", and "momentsThatMattered", output an object with "text" and "date" (e.g. { "text": "...", "date": "YYYY-MM-DD" }).
+`.trim();
+
 async function callReflectionModel({ model, prompt }) {
   const { GoogleGenAI } = await import("@google/genai");
 
@@ -153,10 +175,10 @@ async function callReflectionModel({ model, prompt }) {
     model,
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
-      systemInstruction: WEEKLY_REFLECTION_SYSTEM_PROMPT,
+      systemInstruction: ENFORCED_SYSTEM_PROMPT,
       responseMimeType: "application/json",
       temperature: 0.35,
-      maxOutputTokens: 800, // PERFECT: This limits the cost perfectly.
+      maxOutputTokens: 1200,
     },
   });
 
@@ -203,7 +225,6 @@ async function generateWeeklyReflectionForUser({
     endUtc: bounds.endUtc,
   });
 
-  // 1. FIRST, initialize 'prepared'
   const prepared = prepareWeeklyConversation(messages);
 
   if (!prepared.eligible) {
@@ -238,11 +259,9 @@ async function generateWeeklyReflectionForUser({
   });
 
   try {
-    // 2. THEN, create the prompt using the initialized 'prepared' variable with the SLICE
     const prompt = buildWeeklyReflectionUserPrompt({
       periodStart: bounds.periodStart,
       periodEnd: bounds.periodEnd,
-      // FIXED: Limit history to the most recent ~15,000 characters to keep costs low
       conversationText: prepared.conversationText.slice(-15000), 
       nickname,
     });

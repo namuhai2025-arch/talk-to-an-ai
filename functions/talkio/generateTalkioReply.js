@@ -1,56 +1,55 @@
   "use strict";
 
-  const { buildEmotionalGuidanceBlock } = require("./emotionalDetectionLayer");
+  const { buildEmotionalGuidanceBlock } = require('../emotionalDetectionLayer');
+const {
+  loadContinuityMemory,
+  buildContinuityBlock,
+  buildNativeExpressionBlock,
+} = require('../memoryLiteV2');
 
-  const {
-    loadContinuityMemory,
-    buildContinuityBlock,
-    buildNativeExpressionBlock,
-  } = require("./memoryLiteV2");
+const {
+  detectLanguageEnvironment,
+} = require('../languageDetection');
 
-  const {
-    detectLanguageEnvironment,
-  } = require("./languageDetection");
+const { analyzeBehavioralSafety } = require('../behavioralSafety');
 
-  const { analyzeBehavioralSafety } = require("./behavioralSafety");
-
-  const {
+const {
   HARMFUL_INTENT_STEERING_PROMPT,
   HUMAN_EXPERIENCE_LAYER,
-  } = require("./prompts");
+} = require('../prompts');
 
-  const {
-    applySafetyGuard,
-  } = require("./localSafetyGuard");
+const {
+  applySafetyGuard,
+} = require('../localSafetyGuard');
 
-  const {
-    incrementMetric,
-    logResponseMode,
-    logFallback,
-    logLatency,
-    logDailyUser,
-  } = require("../logging/metrics");
+const {
+  incrementMetric,
+  logResponseMode,
+  logFallback,
+  logLatency,
+  logDailyUser,
+} = require('../../logging/metrics');
 
-  const { debugLog } = require("./debugMonitor");
+const { debugLog } = require('../debugMonitor');
 
-  const { detectCapabilities } = require("./router");
-  const { buildPrompt } = require("./builder");
+const { detectCapabilities } = require('../router');
+const { buildPrompt } = require('../builder');
 
-  const {
-    createSemanticClassifier,
-  } = require("./semanticClassifier");
+const {
+  createSemanticClassifier,
+} = require('../semanticClassifier');
 
-  const {
-    runSemanticShadow,
-  } = require("./semanticShadowRunner");
+const {
+  runSemanticShadow,
+} = require('../semanticShadowRunner');
 
   const {
   mergeSemanticCapabilities,
-} = require("./semanticCapabilityMerger");
+} = require("../semanticCapabilityMerger");
 
   const {
     recordSemanticShadowMetrics,
-  } = require("../logging/semanticMetrics");
+  } = require("../../logging/semanticMetrics");
 
   // ==============================
   // Helpers
@@ -228,50 +227,69 @@
   }
 
   function parseTalkioStructuredResponse(raw) {
-    const rawText = stripJsonCodeFence(
-      extractModelText(raw)
-    );
+  const rawText = stripJsonCodeFence(
+    extractModelText(raw)
+  );
 
-    if (!rawText) return null;
+  if (!rawText) return null;
 
-    let parsed;
+  let parsed = null;
 
-    try {
-      parsed = JSON.parse(rawText);
-    } catch {
-      return null;
+  // 1. Standard JSON parse attempt
+  try {
+    parsed = JSON.parse(rawText);
+  } catch (primaryError) {
+    // 2. Recovery: find the outermost { ... } boundary
+    const startIndex = rawText.indexOf("{");
+    const endIndex = rawText.lastIndexOf("}");
+
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      try {
+        const extracted = rawText.slice(startIndex, endIndex + 1);
+        parsed = JSON.parse(extracted);
+      } catch (recoveryError) {
+        // Failed rescue
+      }
     }
+  }
 
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
-      return null;
-    }
-
-    const reply = normalizeReply(parsed.reply);
-
-    const safety = normalizeStructuredSafety(
-      parsed.safety
-    );
-
-    const action = ALLOWED_ACTIONS.has(
-      parsed.action
-    )
-      ? parsed.action
-      : "show_reply";
-
-    if (reply == null || !safety) {
-      return null;
-    }
-
-    return {
-      reply,
-      safety,
-      action,
+  // 3. Fallback: If the model returned plain conversational text instead of JSON
+  if (
+    (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) &&
+    !rawText.trim().startsWith("{")
+  ) {
+    parsed = {
+      reply: rawText.trim(),
+      action: "show_reply",
+      safety: null,
     };
   }
+
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed)
+  ) {
+    return null;
+  }
+
+  const reply = normalizeReply(parsed.reply);
+  const safety = normalizeStructuredSafety(parsed.safety);
+
+  const action = ALLOWED_ACTIONS.has(parsed.action)
+    ? parsed.action
+    : "show_reply";
+
+  if (reply == null || !safety) {
+    return null;
+  }
+
+  return {
+    reply,
+    safety,
+    action,
+  };
+}
 
   function shouldShowSafetyBlock({
     action,
@@ -323,20 +341,20 @@
   `.trim();
   }
 
-  function sanitizeConversationMessages(messages) {
+    function sanitizeConversationMessages(messages, maxTurns = 12) {
     if (!Array.isArray(messages)) return [];
 
-    return messages.filter(
+    // Filter valid roles and content
+    const sanitized = messages.filter(
       (message) =>
         message &&
-        [
-          "user",
-          "assistant",
-          "system",
-        ].includes(message.role) &&
+        ["user", "assistant", "system"].includes(message.role) &&
         typeof message.content === "string" &&
         message.content.trim()
     );
+
+    // Keep only the most recent N turns to maintain context while slashing costs
+    return sanitized.slice(-maxTurns);
   }
 
   function buildLanguageControlBlock() {
@@ -626,20 +644,18 @@ Runtime rules:
 }) {
 
     return [
-      buildLanguageControlBlock(),
+      buildHumanNaturalityBlock(),
 
+      buildLanguageControlBlock(),
       languageInstruction,
 
       systemPrompt,
 
       timeContextBlock,
-
       nicknameBlock,
-
       memoryPromptBlock,
 
       buildHumanNaturalityBlock(),
-
   `
   PLAN
 
@@ -651,45 +667,22 @@ Runtime rules:
   Never mention the user's plan in conversation.
   `.trim(),
 
-       `
-EMOTIONAL PRESENCE AND DEPTH
+  `
+  LENGTH
 
-When someone shares something significant, respond to the whole concern,
-not just its emotional tone. Notice the important details and constraints
-they have given you. Speak fully when the moment calls for it; do not
-compress a complex life situation into reassurance and a quick question.
-
-Be warm, and direct. Recognize what the person is carrying before offering
-grounding or advice. Help them see a meaningful pattern or choice when
-the facts support it, while distinguishing what they said from what you
-are inferring.
-
-Do not assume another person's motives, declare that only one person is
-trying, or turn a family member into a referee. Avoid sweeping sayings
-that sound wise but overlook the person's practical reality.
-
-When isolation, limited mobility, dependence, or feeling unsafe affects
-their options, acknowledge that reality gently. Explore what support is
-actually available without telling them what decision to make.
-
-There is no required length, closing question, or number of points.
-Say what matters, then stop. Ask a question only when it opens a useful
-next part of the conversation.
-    `.trim(),
-
+  Match reply length to the moment.
+  Simple messages can be short.
+  Meaningful or emotional messages should be long enough
+  to feel present, clear, and complete.
+  Do not pad replies or compress important moments.
+  `.trim(),
 
       checkinModeBlock,
-
       continuityBlock,
-
       nativeExpressionBlock,
-
       emotionalGuidanceBlock,
-
       humanExperienceBlock,
-
       harmfulIntentBlock,
-
       variationBlock,
 
       buildStructuredOutputBlock(),
@@ -735,8 +728,6 @@ next part of the conversation.
   Avoid:
 
   - sounding clinical
-  - sounding motivational
-  - sounding like therapy
   - over-validating every emotion
   - explaining emotions too formally
   - repetitive empathy phrases
@@ -854,10 +845,7 @@ next part of the conversation.
       };
     }
 
-    const safeMessages =
-      sanitizeConversationMessages(
-        conversationMessages
-      );
+    const safeMessages = sanitizeConversationMessages(conversationMessages, 18);
 
     const languageEnv =
       detectLanguageEnvironment(
@@ -932,7 +920,6 @@ next part of the conversation.
       try {
         localSafetyFallback =
           await analyzeBehavioralSafety({
-            modelGenerate,
             latestUserMessage,
           });
       } catch (error) {

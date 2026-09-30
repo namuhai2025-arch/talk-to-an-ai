@@ -1,26 +1,26 @@
-  "use strict";
+"use strict";
 
-  const { buildEmotionalGuidanceBlock } = require('../emotionalDetectionLayer');
+const { buildEmotionalGuidanceBlock } = require('./emotionalDetectionLayer');
 const {
   loadContinuityMemory,
   buildContinuityBlock,
   buildNativeExpressionBlock,
-} = require('../memoryLiteV2');
+} = require('./memoryLiteV2');
 
 const {
   detectLanguageEnvironment,
-} = require('../languageDetection');
+} = require('./languageDetection');
 
-const { analyzeBehavioralSafety } = require('../behavioralSafety');
+const { analyzeBehavioralSafety } = require('./behavioralSafety');
 
 const {
   HARMFUL_INTENT_STEERING_PROMPT,
   HUMAN_EXPERIENCE_LAYER,
-} = require('../prompts');
+} = require('./prompts');
 
 const {
   applySafetyGuard,
-} = require('../localSafetyGuard');
+} = require('./localSafetyGuard');
 
 const {
   incrementMetric,
@@ -28,28 +28,28 @@ const {
   logFallback,
   logLatency,
   logDailyUser,
-} = require('../../logging/metrics');
+} = require('../logging/metrics');
 
-const { debugLog } = require('../debugMonitor');
+const { debugLog } = require('./debugMonitor');
 
-const { detectCapabilities } = require('../router');
-const { buildPrompt } = require('../builder');
+const { detectCapabilities } = require('./router');
+const { buildPrompt } = require('./builder');
 
 const {
   createSemanticClassifier,
-} = require('../semanticClassifier');
+} = require('./semanticClassifier');
 
 const {
   runSemanticShadow,
-} = require('../semanticShadowRunner');
+} = require('./semanticShadowRunner');
 
-  const {
+const {
   mergeSemanticCapabilities,
-} = require("../semanticCapabilityMerger");
+} = require("./semanticCapabilityMerger");
 
-  const {
-    recordSemanticShadowMetrics,
-  } = require("../../logging/semanticMetrics");
+const {
+  recordSemanticShadowMetrics,
+} = require("../logging/semanticMetrics");
 
   // ==============================
   // Helpers

@@ -1954,7 +1954,7 @@ export const generateTalkioReply = onRequest(
 );
 
 export const generateMyWeeklyReflection = onRequest(
-  { cors: true, timeoutSeconds: 180 },
+  { cors: true, timeoutSeconds: 180, secrets: ["GEMINI_API_KEY"] },
   async (req, res) => {
     try {
       if (req.method === "OPTIONS") return res.status(204).send("");

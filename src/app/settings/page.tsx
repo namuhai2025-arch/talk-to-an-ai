@@ -10,90 +10,89 @@ import { onAuthStateChanged } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
 
 export default function SettingsPage() {
-  const [planName, setPlanName] = useState("Free Plan");
-
-  useEffect(() => {
-  const auth = getFirebaseAuth();
-
-  setPlanName("Free Plan");
-
-  const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    try {
-      if (!user?.uid || user.isAnonymous) {
-  localStorage.removeItem("talkio_cached_plan");
-  setPlanName("Free Plan");
-  return;
-}
-
-console.log("Firebase UID:", user.uid);
-console.log("Firebase email:", user.email);
-console.log("Firebase anonymous:", user.isAnonymous);
-console.log("Firebase providers:", user.providerData);
-
-await configureRevenueCat(user.uid);
-
-// Give RevenueCat a short moment to switch/fetch the current user cleanly
-await new Promise((resolve) => setTimeout(resolve, 800));
-
-const result = await getTalkioCustomerInfo();
-
-console.log("RevenueCat full customerInfo:", result?.customerInfo);
-
-      if (!result?.customerInfo) {
-  localStorage.removeItem("talkio_cached_plan");
-  setPlanName("Free Plan");
-  return;
-}
-
-const active = result.customerInfo.entitlements.active || {};
-const activeSubscriptions = result.customerInfo.activeSubscriptions || [];
-
-console.log("RevenueCat active entitlements:", active);
-console.log("RevenueCat active subscriptions:", activeSubscriptions);
-console.log("RevenueCat app user:", user.uid);
-
-      if (
-  active["Talkio Presence"] ||
-  active["presence"] ||
-  activeSubscriptions.includes("talkio_presence_monthly_v2")
-) {
-  localStorage.setItem("talkio_cached_plan", "Talkio Presence");
-  setPlanName("Talkio Presence");
-} else if (
-  active["Talkio Companion"] ||
-  active["companion"] ||
-  activeSubscriptions.includes("talkio_companion_monthly")
-) {
-  localStorage.setItem("talkio_cached_plan", "Talkio Companion");
-  setPlanName("Talkio Companion");
-
-} else {
-  localStorage.removeItem("talkio_cached_plan");
-  setPlanName("Free Plan");
-}
-
-    } catch (err) {
-  console.log("Failed to load plan:", err);
-  localStorage.removeItem("talkio_cached_plan");
-  setPlanName("Free Plan");
-}
+  // 1. Synchronously initialize from cache to prevent the Free Plan flicker
+  const [planName, setPlanName] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("talkio_cached_plan") || "Free Plan";
+    }
+    return "Free Plan";
   });
 
-  return () => unsubscribe();
-}, []);
+  const [isLoadingPlan, setIsLoadingPlan] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return !localStorage.getItem("talkio_cached_plan");
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      try {
+        if (!user?.uid || user.isAnonymous) {
+          localStorage.removeItem("talkio_cached_plan");
+          setPlanName("Free Plan");
+          setIsLoadingPlan(false);
+          return;
+        }
+
+        // Configure RevenueCat with the verified Firebase UID
+        await configureRevenueCat(user.uid);
+
+        const result = await getTalkioCustomerInfo();
+
+        if (!result?.customerInfo) {
+          localStorage.removeItem("talkio_cached_plan");
+          setPlanName("Free Plan");
+          setIsLoadingPlan(false);
+          return;
+        }
+
+        const active = result.customerInfo.entitlements.active || {};
+        const activeSubscriptions =
+          result.customerInfo.activeSubscriptions || [];
+
+        if (
+          active["Talkio Presence"] ||
+          active["presence"] ||
+          activeSubscriptions.includes("talkio_presence_monthly_v2")
+        ) {
+          localStorage.setItem("talkio_cached_plan", "Talkio Presence");
+          setPlanName("Talkio Presence");
+        } else if (
+          active["Talkio Companion"] ||
+          active["companion"] ||
+          activeSubscriptions.includes("talkio_companion_monthly")
+        ) {
+          localStorage.setItem("talkio_cached_plan", "Talkio Companion");
+          setPlanName("Talkio Companion");
+        } else {
+          localStorage.removeItem("talkio_cached_plan");
+          setPlanName("Free Plan");
+        }
+      } catch (err) {
+        console.error("Failed to load plan:", err);
+      } finally {
+        setIsLoadingPlan(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   async function shareTalkio() {
-  try {
-    await Share.share({
-      title: "Talkio",
-      text: "A calm AI space to think, breathe, and talk things through.",
-      url: "https://talkiochat.com/download",
-      dialogTitle: "Share Talkio",
-    });
-  } catch (err) {
-    console.error("Share failed:", err);
+    try {
+      await Share.share({
+        title: "Talkio",
+        text: "A calm AI space to think, breathe, and talk things through.",
+        url: "https://talkiochat.com/download",
+        dialogTitle: "Share Talkio",
+      });
+    } catch (err) {
+      console.error("Share failed:", err);
+    }
   }
-}
 
   const isFree = planName === "Free Plan";
   const isCompanion = planName === "Talkio Companion";
@@ -114,7 +113,6 @@ console.log("RevenueCat app user:", user.uid);
   return (
     <main className="min-h-screen bg-stone-50 px-5 pb-6 pt-[calc(env(safe-area-inset-top)+3.5rem)]">
       <div className="mx-auto max-w-md">
-        
         <button
           type="button"
           onClick={() => (window.location.href = "/")}
@@ -131,48 +129,60 @@ console.log("RevenueCat app user:", user.uid);
           Control your account and conversation experience.
         </p>
 
+        {/* Plan Section */}
         <section className="mt-8 rounded-3xl bg-white p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
             Plan
           </p>
 
-          <div className="mt-2 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-stone-900">
-              {planName}
-            </h2>
-
-            <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-700">
-              Current
-            </span>
-          </div>
-
-          <p className="mt-1 text-sm font-medium text-emerald-600">
-            {planSubtitle}
-          </p>
-
-          <p className="mt-2 text-sm leading-6 text-stone-500">
-            {planDescription}
-          </p>
-
-          {(isFree || isCompanion) && (
-            <button
-              type="button"
-              onClick={() => (window.location.href = "/paywall")}
-              className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-600 hover:shadow-lg"
-            >
-              {isCompanion
-                ? "Upgrade to Talkio Presence"
-                : "Upgrade to Talkio Companion"}
-            </button>
-          )}
-
-          {isPresence && (
-            <div className="mt-5 rounded-2xl bg-emerald-100 px-4 py-3 text-center text-sm font-semibold text-emerald-700">
-              Current Highest Plan
+          {isLoadingPlan ? (
+            <div className="mt-3 animate-pulse space-y-3">
+              <div className="h-6 w-36 rounded-lg bg-stone-200" />
+              <div className="h-4 w-48 rounded bg-stone-100" />
+              <div className="h-10 w-full rounded-2xl bg-stone-100" />
             </div>
+          ) : (
+            <>
+              <div className="mt-2 flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-stone-900">
+                  {planName}
+                </h2>
+
+                <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-700">
+                  Current
+                </span>
+              </div>
+
+              <p className="mt-1 text-sm font-medium text-emerald-600">
+                {planSubtitle}
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-stone-500">
+                {planDescription}
+              </p>
+
+              {(isFree || isCompanion) && (
+                <button
+                  type="button"
+                  onClick={() => (window.location.href = "/paywall")}
+                  className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-emerald-600 hover:shadow-lg"
+                >
+                  {isCompanion
+                    ? "Upgrade to Talkio Presence"
+                    : "Upgrade to Talkio Companion"}
+                </button>
+              )}
+
+              {isPresence && (
+                <div className="mt-5 rounded-2xl bg-emerald-100 px-4 py-3 text-center text-sm font-semibold text-emerald-700">
+                  Current Highest Plan
+                </div>
+              )}
+            </>
           )}
         </section>
 
+        {/* Settings Options */}
         <section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-sm">
           <button
             type="button"
@@ -193,35 +203,35 @@ console.log("RevenueCat app user:", user.uid);
 
           <div className="mx-5 border-t border-stone-100" />
 
-<button
-  type="button"
-  onClick={() => (window.location.href = "/settings/account")}
-  className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
->
-  <div>
-    <p className="font-medium text-stone-900">Account</p>
-    <p className="mt-1 text-sm text-stone-500">
-      Sign in, switch account, or delete account data.
-    </p>
-  </div>
-  <span className="text-stone-400">›</span>
-</button>
+          <button
+            type="button"
+            onClick={() => (window.location.href = "/settings/account")}
+            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+          >
+            <div>
+              <p className="font-medium text-stone-900">Account</p>
+              <p className="mt-1 text-sm text-stone-500">
+                Sign in, switch account, or delete account data.
+              </p>
+            </div>
+            <span className="text-stone-400">›</span>
+          </button>
 
-<div className="mx-5 border-t border-stone-100" />
+          <div className="mx-5 border-t border-stone-100" />
 
-<button
-  type="button"
-  onClick={() => (window.location.href = "/settings/privacy")}
-  className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
->
-  <div>
-    <p className="font-medium text-stone-900">Privacy Lock</p>
-    <p className="mt-1 text-sm text-stone-500">
-      Require a PIN before opening Talkio.
-    </p>
-  </div>
-  <span className="text-stone-400">›</span>
-</button>
+          <button
+            type="button"
+            onClick={() => (window.location.href = "/settings/privacy")}
+            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+          >
+            <div>
+              <p className="font-medium text-stone-900">Privacy Lock</p>
+              <p className="mt-1 text-sm text-stone-500">
+                Require a PIN before opening Talkio.
+              </p>
+            </div>
+            <span className="text-stone-400">›</span>
+          </button>
 
           <div className="mx-5 border-t border-stone-100" />
 
@@ -240,19 +250,19 @@ console.log("RevenueCat app user:", user.uid);
           </button>
         </section>
 
+        {/* Share Section */}
         <section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-sm">
           <button
-  type="button"
-  onClick={shareTalkio}
-  className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
->
+            type="button"
+            onClick={shareTalkio}
+            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50"
+          >
             <div>
               <p className="font-medium text-stone-900">Share Talkio</p>
               <p className="mt-1 text-sm text-stone-500">
                 Send Talkio to someone who could use a calm space to talk.
               </p>
             </div>
-
             <span className="text-stone-400">↗</span>
           </button>
         </section>
@@ -261,15 +271,11 @@ console.log("RevenueCat app user:", user.uid);
           <a href="/support" className="text-emerald-700 underline">
             Support
           </a>
-
           <span className="mx-2 text-stone-300">•</span>
-
           <a href="/privacy" className="text-emerald-700 underline">
             Privacy Policy
           </a>
-
           <span className="mx-2 text-stone-300">•</span>
-
           <a href="/terms" className="text-emerald-700 underline">
             Terms of Use
           </a>

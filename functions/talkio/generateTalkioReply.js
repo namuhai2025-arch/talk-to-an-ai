@@ -24,7 +24,7 @@ const {
 
 const {
   incrementMetric,
-  logResponseMode,
+  logResponseMode,  
   logFallback,
   logLatency,
   logDailyUser,
@@ -32,24 +32,7 @@ const {
 
 const { debugLog } = require('./debugMonitor');
 
-const { detectCapabilities } = require('./router');
-const { buildPrompt } = require('./builder');
-
-const {
-  createSemanticClassifier,
-} = require('./semanticClassifier');
-
-const {
-  runSemanticShadow,
-} = require('./semanticShadowRunner');
-
-const {
-  mergeSemanticCapabilities,
-} = require("./semanticCapabilityMerger");
-
-const {
-  recordSemanticShadowMetrics,
-} = require("../logging/semanticMetrics");
+const { buildSystemPrompt } = require('./prompts'); 
 
   // ==============================
   // Helpers
@@ -654,8 +637,6 @@ Runtime rules:
       timeContextBlock,
       nicknameBlock,
       memoryPromptBlock,
-
-      buildHumanNaturalityBlock(),
   `
   PLAN
 
@@ -944,202 +925,34 @@ Runtime rules:
           source
         );
 
-      let v3Capabilities;
-let finalCapabilities;
-let activeSystemPrompt;
-let capabilityMerge;
+      // ==============================
+      // Unified System Prompt Assembly
+      // ==============================
+      let activeSystemPrompt;
+      let promptRoutingMode = "unified";
 
-let promptRoutingMode =
-  "dynamic";
+      try {
+        activeSystemPrompt = buildSystemPrompt({
+          behavioralSafety: localSafetyFallback,
+        });
 
-let semanticShadowResult = {
-  mode: "shadow",
-  consulted: false,
-  parsed: false,
-  semanticSignals: null,
-  semanticCapabilities: [],
-  comparison: null,
-  reason: "not_started",
-};
+        if (!activeSystemPrompt) {
+          throw new Error("Unified system prompt builder returned empty.");
+        }
+      } catch (error) {
+        promptRoutingMode = "legacy_fallback";
+        console.error("unified_prompt_assembly_failed", {
+          uid,
+          message: error?.message || String(error),
+        });
 
-let semanticShadowPromise =
-  Promise.resolve(
-    semanticShadowResult
-  );
+        activeSystemPrompt = String(systemPrompt || "").trim();
 
-try {
-  /*
-   * V3 remains the primary router.
-   */
-  v3Capabilities =
-    detectCapabilities({
-      userMessage:
-        latestUserMessage,
-      conversation:
-        safeMessages,
-      memory:
-        continuityMemory,
-    });
+        if (!activeSystemPrompt) {
+          throw new Error("Both unified and legacy fallback prompts are unavailable.");
+        }
+      }
 
-  /*
-  |--------------------------------------------------------------------------
-  | V4 Semantic Assistant — Live Advisory Mode
-  |--------------------------------------------------------------------------
-  |
-  | The semantic gate decides whether consultation is useful.
-  |
-  | When consulted, V4 may recommend approved capabilities.
-  | The capability merger remains authoritative:
-  |
-  | - confidence must be at least 0.95
-  | - only approved capabilities may be added
-  | - no V3 capability may be removed
-  | - invalid or uncertain results preserve V3 unchanged
-  |
-  */
-
-  try {
-    const classify =
-      createSemanticClassifier({
-        modelGenerate,
-      });
-
-    semanticShadowPromise =
-      runSemanticShadow({
-        userMessage:
-          latestUserMessage,
-
-        v3Capabilities,
-
-        languageMeta:
-          languageEnv,
-
-        classify,
-      }).catch((error) => ({
-        mode: "shadow",
-        consulted: true,
-        parsed: false,
-        semanticSignals: null,
-        semanticCapabilities: [],
-        comparison: null,
-        reason:
-          "shadow_runner_error",
-        error:
-          error?.message ||
-          String(error),
-      }));
-  } catch (error) {
-    semanticShadowPromise =
-      Promise.resolve({
-        mode: "shadow",
-        consulted: false,
-        parsed: false,
-        semanticSignals: null,
-        semanticCapabilities: [],
-        comparison: null,
-        reason:
-          "shadow_initialization_error",
-        error:
-          error?.message ||
-          String(error),
-      });
-  }
-
-  /*
-   * This await is intentional.
-   *
-   * Skipped messages resolve locally without a
-   * semantic model call. Consulted messages wait
-   * for V4 so an approved recommendation can affect
-   * the production prompt.
-   */
-  semanticShadowResult =
-    await semanticShadowPromise;
-
-  capabilityMerge =
-    mergeSemanticCapabilities({
-      v3Capabilities,
-      semanticResult:
-        semanticShadowResult,
-    });
-
-  finalCapabilities =
-    capabilityMerge
-      .finalCapabilities;
-
-  activeSystemPrompt =
-    buildPrompt(
-      finalCapabilities
-    );
-
-  if (!activeSystemPrompt) {
-    throw new Error(
-      "Dynamic prompt builder returned an empty prompt"
-    );
-  }
-} catch (error) {
-  promptRoutingMode =
-    "legacy_fallback";
-
-  console.error(
-    "dynamic_prompt_routing_failed",
-    {
-      uid,
-      message:
-        error?.message ||
-        String(error),
-    }
-  );
-
-  /*
-   * Keep the previous system prompt only as an
-   * emergency fallback.
-   */
-  activeSystemPrompt =
-    String(
-      systemPrompt || ""
-    ).trim();
-
-  if (!activeSystemPrompt) {
-    throw new Error(
-      "Both dynamic and legacy system prompts are unavailable"
-    );
-  }
-
-  v3Capabilities = [
-    "legacyFallback",
-  ];
-
-  finalCapabilities = [
-    "legacyFallback",
-  ];
-
-  capabilityMerge = {
-    finalCapabilities,
-    v3Capabilities,
-    semanticCapabilities: [],
-    addedCapabilities: [],
-    promoted: false,
-    reason:
-      "legacy_fallback_active",
-  };
-
-  semanticShadowResult = {
-    mode: "shadow",
-    consulted: false,
-    parsed: false,
-    semanticSignals: null,
-    semanticCapabilities: [],
-    comparison: null,
-    reason:
-      "legacy_fallback_active",
-  };
-
-  semanticShadowPromise =
-    Promise.resolve(
-      semanticShadowResult
-    );
-}
 
   const prompt = buildBrainPrompt({
     systemPrompt: activeSystemPrompt,
@@ -1173,149 +986,20 @@ try {
    });
 
       debugLog(
-    "TALKIO_PIPELINE_DEBUG",
-    {
-      uid,
-      responseMode,
-      emotionResult,
-      source,
+        "TALKIO_PIPELINE_DEBUG",
+        {
+          uid,
+          responseMode,
+          emotionResult,
+          source,
+          
+          apiCallsPlanned: 1, // Only 1 call now!
+          promptRoutingMode,
 
-      apiCallsPlanned:
-  semanticShadowResult
-    ?.consulted === true
-    ? 2
-    : 1,
-
-      promptRoutingMode,
-      v3Capabilities,
-      finalCapabilities,
-
-      semanticPromoted:
-      capabilityMerge
-      ?.promoted === true,
-
-      semanticPromotionReason:
-      capabilityMerge
-      ?.reason ||
-      null,
-
-      semanticAddedCapabilities:
-      capabilityMerge
-      ?.addedCapabilities ||
-  [],
-
-      routedCapabilityCount:
-      finalCapabilities.length,
-
-    routedPromptCharacters:
-      activeSystemPrompt.length,
-
-    finalPromptCharacters:
-      prompt.length,
-  }
-);
-
-      /*
- * Semantic advisory logging.
- *
- * The semantic result has already resolved above.
- * This block records the result without changing
- * the completed routing decision.
- */
-
-  semanticShadowPromise
-  .then((semanticShadowResult) => {
-    debugLog(
-      "TALKIO_SEMANTIC_SHADOW",
-      {
-        uid,
-
-        consulted:
-          semanticShadowResult
-            ?.consulted === true,
-
-        gateReason:
-          semanticShadowResult
-            ?.gate?.reason ||
-          null,
-
-        resultReason:
-          semanticShadowResult
-            ?.reason ||
-          null,
-
-        parsed:
-          semanticShadowResult
-            ?.parsed === true,
-
-        detectedLanguage:
-          semanticShadowResult
-            ?.semanticSignals
-            ?.detectedLanguage ||
-          null,
-
-        isMixedLanguage:
-          semanticShadowResult
-            ?.semanticSignals
-            ?.isMixedLanguage ??
-          null,
-
-        semanticConfidence:
-          semanticShadowResult
-            ?.semanticSignals
-            ?.confidence ??
-          null,
-
-        v3Capabilities,
-
-        semanticCapabilities:
-          semanticShadowResult
-            ?.semanticCapabilities ||
-          [],
-
-        agrees:
-          semanticShadowResult
-            ?.comparison?.agrees ??
-          null,
-
-        addedBySemantic:
-          semanticShadowResult
-            ?.comparison
-            ?.addedBySemantic ||
-          [],
-
-        missingFromSemantic:
-          semanticShadowResult
-            ?.comparison
-            ?.missingFromSemantic ||
-          [],
-      }
-    );
-
-    recordSemanticShadowMetrics(
-      semanticShadowResult
-    ).catch((error) => {
-      console.error(
-        "semantic_metrics_failed",
-        error?.message || error
+          routedPromptCharacters: activeSystemPrompt.length,
+          finalPromptCharacters: prompt.length,
+        }
       );
-    });
-  })
-  .catch((error) => {
-    debugLog(
-      "TALKIO_SEMANTIC_SHADOW",
-      {
-        uid,
-        consulted: true,
-        parsed: false,
-        resultReason:
-          "shadow_logging_error",
-        error:
-          error?.message ||
-          String(error),
-      }
-    );
-  });
 
    const raw =
   await modelGenerate({

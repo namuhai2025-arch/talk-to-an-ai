@@ -46,28 +46,8 @@ const {
 } = require("./talkio/reflections/reflectionStorage");
 
 const {
-  shouldGenerateInCurrentHour,
   generateWeeklyReflectionForUser,
 } = require("./talkio/reflections/generateWeeklyReflection");
-
-const {
-  extractPeopleFromMessage,
-  extractStyleExpressions,
-  extractEmotionalContinuity,
-} = require("./memory_lite/extractors");
-
-const {
-  upsertPeopleMemory,
-  upsertStyleMemory,
-  upsertEmotionalMemory,
-} = require("./memory_lite/update");
-
-const {
-  loadRelationalMemory,
-  loadStyleMemory,
-  loadEmotionalMemory,
-  buildMemoryPromptBlock,
-} = require("./memory_lite/helpers");
 
 const {
   generateTalkioReply: generateTalkioReplyEngine,
@@ -1080,122 +1060,79 @@ function buildConversationMessages(messages, latestUserMessage) {
   return safeMessages;
 }
 
-async function generateModelText({
-  ai,
-  model,
-  systemPrompt,
-  messages,
-  image,
-}) {
-  try {
-    const contents = (Array.isArray(messages) ? messages : []).map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: String(m.content || "") }],
-    }));
+async function generateModelText({ ai, model, systemPrompt, messages, image }) {
+  // 1. Map Talkio roles to Gemini roles and format parts
+  const rawContents = (Array.isArray(messages) ? messages : []).map((m) => ({
+    role: m?.role === "assistant" || m?.role === "model" ? "model" : "user",
+    parts: [{ text: String(m?.content || m?.parts?.[0]?.text || "") }],
+  }));
 
-    if (image) {
-  const lastUserMessage = contents.findLast(
-    (message) => message.role === "user"
-  );
+  // 2. Coalesce consecutive turns with the same role (Prevents 400 Errors)
+  const normalizedContents = rawContents.reduce((acc, current) => {
+    const last = acc[acc.length - 1];
+    if (last && last.role === current.role) {
+      last.parts[0].text = `${last.parts[0].text}\n${current.parts[0].text}`.trim();
+    } else {
+      acc.push(current);
+    }
+    return acc;
+  }, []);
 
-  if (!lastUserMessage) {
-    throw new Error("Missing user message for photo.");
+  // Guarantee contents is never empty (Gemini requires at least one turn)
+  if (normalizedContents.length === 0) {
+    normalizedContents.push({ role: "user", parts: [{ text: "Hello" }] });
   }
 
-  lastUserMessage.parts.push({
-    inlineData: {
-      mimeType: image.mimeType,
-      data: image.data,
-    },
+  try {
+    const response = await ai.models.generateContent({
+      model: model || "gemini-3-flash",
+      contents: normalizedContents,
+      config: {
+        systemInstruction: systemPrompt,
+        // Crucial: keep latency snappy for chat interactions
+        thinkingConfig: { thinkingBudget: 0 },
+        temperature: 0.7,
+      },
+    });
+
+    // 3. Defensive text extraction - Return STRING, not parsed JSON
+    const rawText = typeof response.text === "function"
+      ? response.text()
+      : (response.text || response?.candidates?.[0]?.content?.parts?.[0]?.text || "");
+
+    return rawText; // generateTalkioReply.js will handle the JSON parsing!
+  } catch (err) {
+    const errorDetail = err instanceof Error ? (err.stack || err.message) : JSON.stringify(err);
+    console.error("Gemini Generation Error:", errorDetail);
+    throw new Error(`Generation Failed: ${err?.message || "Unknown API Error"}`);
+  }
+}
+
+/**
+ * Safe word-boundary detection for Talkio signals
+ * @param {string} text - The input to scan
+ * @param {string[]} keywords - Array of words to search for
+ */
+function containsKeyword(text, keywords) {
+  const normalized = String(text || "").toLowerCase();
+  return keywords.some((word) => {
+    const regex = new RegExp(`\\b${word}\\b`, "i");
+    return regex.test(normalized);
   });
 }
 
-        const response = await ai.models.generateContent({
-  model,
-  contents,
-  config: {
-    systemInstruction: systemPrompt,
-    responseMimeType: "application/json",
-    maxOutputTokens: 2048, 
-  },
-});
-
-    console.log("RAW_MODEL_RESULT_RECEIVED");
-
-    let text = "";
-
-    if (typeof response?.text === "function") {
-      text = response.text();
-    } else if (typeof response?.text === "string") {
-      text = response.text;
-    } else if (Array.isArray(response?.candidates?.[0]?.content?.parts)) {
-      text = response.candidates[0].content.parts
-        .map((p) => (typeof p?.text === "string" ? p.text : ""))
-        .join(" ");
-    }
-
-    text = String(text || "").trim();
-
-    logger.info("gemini_extracted_text", {
-      model,
-      length: text.length,
-      preview: text.slice(0, 200),
-      finishReason: response?.candidates?.[0]?.finishReason || null,
-    });
-
-    return text;
-  } catch (e) {
-    if (image) {
-  throw new Error("Photo model request failed.");
-}
-    const realMessage =
-      e?.message ||
-      e?.error?.message ||
-      JSON.stringify(e);
-
-    console.error("🔥 MODEL_ERROR_FULL:", e);
-
-    logger.error("MODEL_ERROR_FULL", {
-      model,
-      realMessage,
-      raw: e,
-      code: e?.code || e?.status || e?.error?.code || null,
-    });
-
-    throw new Error(`generate_model_text_failed: ${realMessage}`);
-  }
-}
-
 function detectMoodSignal(text) {
-  const t = (text || "").toLowerCase();
+  const t = String(text || "").toLowerCase();
 
-  if (
-    t.includes("tired") ||
-    t.includes("drained") ||
-    t.includes("exhausted") ||
-    t.includes("kapoy")
-  ) {
+  if (containsKeyword(t, ["tired", "drained", "exhausted", "kapoy"])) {
     return "drained";
   }
-
-  if (
-    t.includes("sad") ||
-    t.includes("lonely") ||
-    t.includes("low") ||
-    t.includes("down")
-  ) {
+  if (containsKeyword(t, ["sad", "lonely", "low", "down"])) {
     return "low";
   }
-
-  if (
-    t.includes("anxious") ||
-    t.includes("overwhelmed") ||
-    t.includes("stressed") ||
-    t.includes("panic")
-  ) {
+  if (containsKeyword(t, ["anxious", "overwhelmed", "stressed", "panic"])) {
     return "overwhelmed";
   }
-
   return "";
 }
 
@@ -1847,19 +1784,6 @@ export const generateTalkioReply = onRequest(
         });
       }
 
-      // 4. PARALLELIZED CONTEXT RETRIEVAL
-      const [peopleMemory, styleMemory, emotionalMemory] = await Promise.all([
-        loadRelationalMemory(uid, 8),
-        loadStyleMemory(uid, 8),
-        loadEmotionalMemory(uid, 8),
-      ]);
-
-      const memoryPromptBlock = buildMemoryPromptBlock({
-        people: peopleMemory,
-        style: styleMemory,
-        emotional: emotionalMemory,
-      });
-
       const languageMeta = detectLanguageMirror(latestUserMessage);
       const isTrustConcern = detectTrustConcern(latestUserMessage);
       const userTimezone = userDocData.timezone || "UTC";
@@ -1868,8 +1792,7 @@ export const generateTalkioReply = onRequest(
       const runtimeSystemPrompt = [
         buildRuntimeSystemPrompt({ languageMeta, isTrustConcern }),
         nickname,
-        buildUserTimeContext(userTimezone),
-        memoryPromptBlock,
+        buildUserTimeContext(userTimezone),        
       ].filter(Boolean).join("\n\n");
 
       // 5. INFERENCE SETUP
@@ -1902,11 +1825,10 @@ export const generateTalkioReply = onRequest(
         finalReply = "You do not have to force trust here. We can go slowly.";
       }
 
-            // 6. SAFE ASYNCHRONOUS PERSISTENCE
+            // 6. SAFE ASYNCHRONOUS PERSISTENCE          
+      // Legacy upserts removed. Only the core conversation turn is saved here.
+      // The V3 engine internally handles saving to the single 'continuity' document.
       const backgroundPersistence = Promise.allSettled([
-        upsertPeopleMemory(uid, extractPeopleFromMessage(latestUserMessage)),
-        upsertStyleMemory(uid, extractStyleExpressions(latestUserMessage)),
-        upsertEmotionalMemory(uid, extractEmotionalContinuity(latestUserMessage)),
         saveConversationTurn({
           uid,
           userMessage: latestUserMessage,

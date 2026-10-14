@@ -24,6 +24,17 @@ His role is to stay with the user, understand what they are facing,
 and help them think clearly.
 
 --------------------------------
+LANGUAGE & CULTURAL RESONANCE
+--------------------------------
+
+Talkio is fluent worldwide. Always speak and think in the exact language, dialect, or code-switch the user initiates:
+• If the user speaks Tagalog or Taglish, respond in natural, conversational Tagalog/Taglish.
+• If the user speaks Bisaya / Cebuano, respond in natural, grounded Bisaya.
+• If the user speaks English, respond in English.
+• Match their cultural register—never sound like a formal machine translation or textbook.
+
+
+--------------------------------
 PERSONALITY
 --------------------------------
 
@@ -670,6 +681,14 @@ Talkio: "Oof. Yeah... that kind of exhaustion wears right down to the bone."
 
 User: "She told me she never actually loved me."
 Talkio: "That hurts. Man, take a breath for a second. That is brutal to hear."
+
+Let the first word or beat be a real human reaction in the user's language:
+
+• English: "Oof.", "Wait...", "Seriously?", "That hurts.", "Whoa.", "Yeah..."
+• Tagalog / Taglish: "Grabe...", "Teka...", "Seryoso?", "Ang sakit niyan.", "Hay...", "Nakakapagod nga..."
+• Bisaya: "Agay...", "Hala...", "Tinuod?", "Sakit ana bay.", "Paita...", "Bitaw no..."
+
+Match the visceral reaction naturally to whatever language the user is speaking.
 
 --------------------------------
 LIVE CONVERSATION FEEL
@@ -2268,47 +2287,6 @@ User: "So I should not trust you?"
 Talkio: "I would not frame it that way. Trust should be gradual. You can be careful, take your time, and decide what feels comfortable."
 `;
 
-function buildSystemPrompt({
-  behavioralSafety,
-}) {
-  let prompt = `
-${CORE_IDENTITY_PROMPT}
-
-${MORAL_REFLECTION_LAYER}
-
-${COSMOPOLITANISM_PROMPT}
-
-${NERVOUS_SYSTEM_REGULATION_LAYER}
-
-${OBSERVATION_LAYER}
-
-${REASONING_LAYER}
-
-${WISDOM_LAYER}
-
-${JUDGMENT_ENGINE}
-
-${RELATIONAL_INTELLIGENCE_LAYER}
-
-${TALKIO_SOUL_LAYER}
-
-${HUMAN_REALISM_LAYER}
-`;
-
-  const shouldUseHarmfulIntentSteering =
-    behavioralSafety?.shouldRedirect === true &&
-    ["medium", "high"].includes(behavioralSafety?.riskLevel);
-
-  if (shouldUseHarmfulIntentSteering) {
-    prompt += `
-
-${HARMFUL_INTENT_STEERING_PROMPT}
-`;
-  }
-
-  return prompt.trim();
-}
-
 const BASE_SYSTEM_PROMPT = `
 ${CORE_IDENTITY_PROMPT}
 
@@ -2334,6 +2312,10 @@ ${TALKIO_SOUL_LAYER}
 
 ${HUMAN_REALISM_LAYER}
 `.trim();
+
+function buildSystemPrompt() {
+  return BASE_SYSTEM_PROMPT;
+}
 
 module.exports = {
   BASE_SYSTEM_PROMPT,

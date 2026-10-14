@@ -11,7 +11,7 @@ const {
   saveWeeklyReflection,
 } = require("./reflectionStorage");
 
-const DEFAULT_MODEL = "gemini-2.5-flash"; // Or your preferred model
+const DEFAULT_MODEL = "gemini-3.5-flash-lite"; // Or your preferred model
 
 function datePartsInTimeZone(date, timeZone) {
   const formatter = new Intl.DateTimeFormat("en-CA", {

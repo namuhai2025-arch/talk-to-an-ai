@@ -11,7 +11,7 @@ const {
   saveWeeklyReflection,
 } = require("./reflectionStorage");
 
-const DEFAULT_MODEL = "gemini-3.5-flash-lite"; // Or your preferred model
+const DEFAULT_MODEL = "gemini-2.5-flash";
 
 function datePartsInTimeZone(date, timeZone) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -137,6 +137,80 @@ function clampStringArray(value, maxItems, maxLength) {
     : [];
 }
 
+const reflectionSchema = {
+  type: "object",
+  properties: {
+    lookingBack: {
+      type: "string",
+      description: "Comprehensive reflection on the user's week",
+    },
+    highlight: {
+      type: "string",
+      description: "The single most notable highlight or breakthrough",
+    },
+    whatWeighedOnYou: {
+      type: "array",
+      items: { type: "string" },
+      description: "List of struggles, stressors, or burdens mentioned",
+    },
+    whatHelped: {
+      type: "array",
+      items: { type: "string" },
+      description: "Coping mechanisms, mindsets, or actions that brought relief",
+    },
+    momentsThatMattered: {
+      type: "array",
+      items: { type: "string" },
+      description: "Key moments or turning points from the week",
+    },
+    strengthsINoticed: {
+      type: "array",
+      items: { type: "string" },
+      description: "Personal strengths the user demonstrated",
+    },
+    somethingToStrengthen: {
+      type: "string",
+      description: "An area for gentle growth or awareness",
+    },
+    gratitudeItems: {
+      type: "array",
+      items: { type: "string" },
+      minItems: 1,
+      description: "At least one specific thing the user expressed gratitude for, or quiet effort/blessing from the week",
+    },
+    patternWorthNoticing: {
+      type: "string",
+      description: "Recurring emotional or behavioral themes",
+    },
+    somethingToCarryForward: {
+      type: "string",
+      description: "An encouraging takeaway for next week",
+    },
+    oneThingINoticed: {
+      type: "string",
+      description: "A unique, thoughtful personal observation",
+    },
+    language: {
+      type: "string",
+      description: "Primary language used (e.g. English, Tagalog, Bisaya, Taglish)",
+    },
+  },
+  required: [
+    "lookingBack",
+    "highlight",
+    "whatWeighedOnYou",
+    "whatHelped",
+    "momentsThatMattered",
+    "strengthsINoticed",
+    "somethingToStrengthen",
+    "gratitudeItems",
+    "patternWorthNoticing",
+    "somethingToCarryForward",
+    "oneThingINoticed",
+    "language",
+  ],
+};
+
 function validateReflectionPayload(payload) {
   const reflection = {
     lookingBack: clampString(payload?.lookingBack, 1800),
@@ -156,7 +230,8 @@ function validateReflectionPayload(payload) {
   if (
     !reflection.lookingBack ||
     !reflection.somethingToCarryForward ||
-    !reflection.oneThingINoticed
+    !reflection.oneThingINoticed ||
+    reflection.gratitudeItems.length === 0
   ) {
     throw new Error("Reflection model output is missing required fields");
   }
@@ -181,12 +256,14 @@ async function callReflectionModel({ model, prompt }) {
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
   const ai = new GoogleGenAI({ apiKey });
+
   const response = await ai.models.generateContent({
     model,
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       systemInstruction: WEEKLY_REFLECTION_SYSTEM_PROMPT,
       responseMimeType: "application/json",
+      responseSchema: reflectionSchema,
       temperature: 0.35,
     },
   });

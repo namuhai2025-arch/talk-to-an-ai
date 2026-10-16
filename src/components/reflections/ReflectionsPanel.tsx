@@ -4,8 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
-
-import ReflectionDetail from "@/components/reflections/ReflectionDetail";
 import { resolveTalkioTier, type TalkioTier } from "@/lib/subscription";
 
 const FUNCTIONS_BASE_URL =
@@ -21,7 +19,6 @@ export type ReflectionItem = {
   date?: string;
 };
 
-// COMPATIBLE SCHEMA: Supports both legacy string arrays and new rich object arrays
 export type WeeklyReflection = {
   id?: string;
   status?: "ready" | "generating" | "failed" | "insufficient_activity";
@@ -29,12 +26,21 @@ export type WeeklyReflection = {
   periodEnd?: string;
 
   lookingBack?: string;
+  highlight?: string;
   whatWeighedOnYou?: (string | ReflectionItem)[];
   whatHelped?: (string | ReflectionItem)[];
   momentsThatMattered?: (string | ReflectionItem)[];
+  strengthsINoticed?: (string | ReflectionItem)[];
+  somethingToStrengthen?: string;
+  gratitude?: {
+    score: number;
+    evidenceCount: number;
+    items: string[];
+  };
+  patternWorthNoticing?: string;
   somethingToCarryForward?: string;
   oneThingINoticed?: string;
-
+  language?: string;
   generatedAt?: string;
 };
 
@@ -88,9 +94,7 @@ function formatReflectionPeriod(start?: string, end?: string): string {
 export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
   const router = useRouter();
 
-  const [reflectionView, setReflectionView] = useState<
-    "home" | "weekly" | "monthly" | "quarterly" | "yearly" | "portrait"
-  >("home");
+  const [reflectionView, setReflectionView] = useState<"home" | "weekly">("home");
 
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -252,7 +256,6 @@ export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
             setWeeklyGenerationChecked(false);
             setReflectionView("weekly");
           }}
-          onOpenMonthly={() => setReflectionView("monthly")}
           onOpenLocked={(title, requiredTier) => setLockedFeature({ title, requiredTier })}
           onOpenComingSoon={(title) => setComingSoonFeature(title)}
         />
@@ -275,27 +278,6 @@ export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
           />
         )}
       </>
-    );
-  }
-
-  if (reflectionView === "monthly") {
-    return (
-      <ReflectionDetail
-        title="Monthly Reflection"
-        subtitle="Notice the emotions and themes that keep returning."
-        description="Your monthly reflection is quietly taking shape."
-        status="preparing"
-        currentDays={18}
-        totalDays={30}
-        expectedDate="At the end of this month"
-        discoveries={[
-          "Recurring emotions and concerns",
-          "Relationship patterns that stood out",
-          "Wins and progress you may have overlooked",
-          "Themes that kept returning",
-        ]}
-        onBack={() => setReflectionView("home")}
-      />
     );
   }
 
@@ -438,6 +420,14 @@ export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
                 </p>
               </article>
 
+              {latestReflection.highlight && (
+                <TextReflectionCard
+                  icon="standout"
+                  title="Highlight of the week"
+                  text={latestReflection.highlight}
+                />
+              )}
+
               {latestReflection.whatWeighedOnYou &&
                 latestReflection.whatWeighedOnYou.length > 0 && (
                   <ReflectionSection
@@ -467,6 +457,41 @@ export default function ReflectionsPanel({ onBack }: { onBack: () => void }) {
                     onNavigateToChat={handleNavigateToChat}
                   />
                 )}
+
+              {latestReflection.strengthsINoticed &&
+                latestReflection.strengthsINoticed.length > 0 && (
+                  <ReflectionSection
+                    icon="strengths"
+                    title="Strengths I noticed"
+                    items={latestReflection.strengthsINoticed}
+                    onNavigateToChat={handleNavigateToChat}
+                  />
+                )}
+
+              {latestReflection.somethingToStrengthen && (
+                <TextReflectionCard
+                  icon="strengthen"
+                  title="Something to strengthen"
+                  text={latestReflection.somethingToStrengthen}
+                />
+              )}
+
+              {latestReflection.gratitude?.items &&
+                latestReflection.gratitude.items.length > 0 && (
+                  <ReflectionSection
+                    icon="gratitude"
+                    title="Gratitude"
+                    items={latestReflection.gratitude.items}
+                  />
+                )}
+
+              {latestReflection.patternWorthNoticing && (
+                <TextReflectionCard
+                  icon="pattern"
+                  title="Pattern worth noticing"
+                  text={latestReflection.patternWorthNoticing}
+                />
+              )}
 
               {latestReflection.somethingToCarryForward && (
                 <GoldenLineCard
@@ -517,7 +542,6 @@ function ReflectionsHome({
   tierLoading,
   onBack,
   onOpenWeekly,
-  onOpenMonthly,
   onOpenLocked,
   onOpenComingSoon,
 }: {
@@ -525,7 +549,6 @@ function ReflectionsHome({
   tierLoading: boolean;
   onBack: () => void;
   onOpenWeekly: () => void;
-  onOpenMonthly: () => void;
   onOpenLocked: (title: string, requiredTier: string) => void;
   onOpenComingSoon: (title: string) => void;
 }) {
@@ -542,7 +565,7 @@ function ReflectionsHome({
             <ReflectionHomeCard icon="weekly" title="Weekly Reflection" description="A thoughtful look back at what shaped your week." locked={!weeklyUnlocked} onClick={weeklyUnlocked ? onOpenWeekly : () => onOpenLocked("Weekly Reflection", "Companion")} />
             {showAdvancedReflections && (
               <>
-                <ReflectionHomeCard icon="monthly" title="Monthly Reflection" description="Notice the emotions and themes that keep returning." locked={false} onClick={onOpenMonthly} />
+                <ReflectionHomeCard icon="monthly" title="Monthly Reflection" description="Notice the emotions and themes that keep returning." locked={false} onClick={() => onOpenComingSoon("Monthly Reflection")} />
                 <ReflectionHomeCard icon="quarterly" title="Quarterly Reflection" description="See how your choices and patterns are evolving." locked={false} onClick={() => onOpenComingSoon("Quarterly Reflection")} />
                 <ReflectionHomeCard icon="yearly" title="Yearly Reflection" description="Understand the larger story your year has been telling." locked={false} onClick={() => onOpenComingSoon("Yearly Reflection")} />
               </>

@@ -56,20 +56,21 @@ function MessageBubble({
     : "relative flex flex-col items-start w-full";
 
   const bubbleClassName = [
-    "whitespace-pre-wrap break-words px-4 py-3 text-[16.5px] leading-5.5",
-    "select-none transition-all duration-150",
+    "relative max-w-[92%] px-3.5 py-2.5 text-[15.5px] leading-relaxed",
+    "select-none transition-all duration-150 break-words",
     copyMenuOpen ? "ring-2 ring-stone-400/50" : "",
     isUser
-      ? "mr-4 max-w-[74%] bg-[#dfe8d2] text-stone-900"
-      : "ml-4 max-w-[74%] bg-white text-stone-800 shadow-sm",
+      ? "bg-[#dfe8d2] text-stone-900"
+      : "bg-white text-stone-800 shadow-sm border border-stone-100",
     sameAsPrev ? "mt-0.5" : "mt-2",
-    sameAsNext ? "mb-0" : "mb-0.5",
-    isUser ? "rounded-[24px] rounded-br-md" : "rounded-[24px] rounded-bl-md",
-  ].join(" ");
-
-  const timestampClassName = [
-    "mt-0.5 text-[11px] text-stone-400",
-    isUser ? "mr-5 text-right" : "ml-5 text-left",
+    sameAsNext ? "mb-0" : "mb-1",
+    isUser
+      ? sameAsNext
+        ? "rounded-[20px] rounded-br-md"
+        : "rounded-[20px] rounded-br-sm"
+      : sameAsNext
+        ? "rounded-[20px] rounded-bl-md"
+        : "rounded-[20px] rounded-bl-sm",
   ].join(" ");
 
   const clearLongPressTimer = () => {
@@ -129,16 +130,28 @@ function MessageBubble({
         {/* IMAGE DISPLAY SECTION */}
         {message.imageUrl && (
           <div className="mb-2 -mx-1 overflow-hidden rounded-xl border border-black/5">
-            <img 
-              src={message.imageUrl} 
-              alt="Visual attachment" 
+            <img
+              src={message.imageUrl}
+              alt="Visual attachment"
               className="w-full h-auto block max-h-[300px] object-cover"
             />
           </div>
         )}
 
-        {/* MESSAGE TEXT */}
-        {message.content}
+        {/* MESSAGE TEXT CONTENT */}
+        <span className="whitespace-pre-wrap">{message.content}</span>
+
+        {/* EMBEDDED INLINE/BOTTOM-RIGHT TIMESTAMP */}
+        {showTimestamp && (
+          <span
+            className={[
+              "float-right ml-2.5 mt-1 select-none text-[10.5px] font-normal leading-none tabular-nums",
+              isUser ? "text-stone-600/70" : "text-stone-400",
+            ].join(" ")}
+          >
+            {formattedTime}
+          </span>
+        )}
       </div>
 
       {copyMenuOpen && (
@@ -149,15 +162,10 @@ function MessageBubble({
             "z-20 mt-1 rounded-xl bg-white",
             "px-4 py-2 text-sm font-medium text-stone-800",
             "shadow-lg border border-stone-200",
-            isUser ? "mr-4" : "ml-4",
           ].join(" ")}
         >
           Copy
         </button>
-      )}
-
-      {showTimestamp && (
-        <div className={timestampClassName}>{formattedTime}</div>
       )}
     </div>
   );
@@ -171,7 +179,7 @@ function areMessageBubblePropsEqual(
     previous.message.role === next.message.role &&
     previous.message.content === next.message.content &&
     previous.message.timestamp === next.message.timestamp &&
-    previous.message.imageUrl === next.message.imageUrl && // ADDED THIS
+    previous.message.imageUrl === next.message.imageUrl &&
     previous.message.isFeedbackPrompt === next.message.isFeedbackPrompt &&
     previous.sameAsPrev === next.sameAsPrev &&
     previous.sameAsNext === next.sameAsNext &&

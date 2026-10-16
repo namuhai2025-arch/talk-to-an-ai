@@ -5,7 +5,7 @@ import { fetchImageAccess } from "./talkioImageAccess.mjs";
 const hash = (value) =>
   createHash("sha256").update(value).digest("hex");
 
-const MAX_IMAGE_BYTES = 512 * 1024;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MB
 const MAX_BASE64_LENGTH = 4 * Math.ceil(MAX_IMAGE_BYTES / 3);
 const LEASE_MS = 10 * 60 * 1000;
 
@@ -25,6 +25,9 @@ function validateImage(body) {
   if (body.image == null) return null;
 
   const image = body.image;
+    if (typeof image?.data === "string") {
+    image.data = image.data.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
+  }
 
   if (
     typeof image !== "object" ||

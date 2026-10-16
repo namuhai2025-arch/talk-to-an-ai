@@ -1157,7 +1157,7 @@ useEffect(() => {
 
     const caption = (overrideText ?? input).trim();
     const imageFile = overrideText === undefined ? selectedImage : null;
-    const text = caption || (imageFile ? "Please respond to this photo." : "");
+    const text = caption;
     const normalizedText = text.toLowerCase();
     
     // Create a local URL so the image shows up instantly in the UI
@@ -1168,7 +1168,7 @@ useEffect(() => {
     const positiveSignals = ["thank you", "thanks", "helped", "i feel better", "that helped", "glad", "appreciate", "needed that"];
     const isPositiveMoment = positiveSignals.some((signal) => normalizedText.includes(signal));
 
-    if (!text || loading || isLimitReached || showSafety || crisisLock) return;
+    if ((!text && !imageFile) || loading || isLimitReached || showSafety || crisisLock) return;
 
     const safetyInterruption = classifySafetyInterruption(text);
     if (safetyInterruption.blocked) {

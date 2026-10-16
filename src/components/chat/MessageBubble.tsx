@@ -51,6 +51,8 @@ function MessageBubble({
     });
   }, [message.timestamp, showTimestamp]);
 
+  const hasContent = Boolean(message.content && message.content.trim().length > 0);
+
   const wrapperClassName = isUser
     ? "relative flex flex-col items-end w-full"
     : "relative flex flex-col items-start w-full";
@@ -102,8 +104,10 @@ function MessageBubble({
 
   const copyMessage = async () => {
     try {
-      await navigator.clipboard.writeText(message.content);
-      onCloseCopyMenu();
+      if (hasContent) {
+        await navigator.clipboard.writeText(message.content);
+        onCloseCopyMenu();
+      }
     } catch (error) {
       console.error("Failed to copy message:", error);
     }
@@ -129,7 +133,12 @@ function MessageBubble({
       >
         {/* IMAGE DISPLAY SECTION */}
         {message.imageUrl && (
-          <div className="mb-2 -mx-1 overflow-hidden rounded-xl border border-black/5">
+          <div
+            className={[
+              "overflow-hidden rounded-xl border border-black/5 -mx-1",
+              hasContent ? "mb-2" : "mb-1",
+            ].join(" ")}
+          >
             <img
               src={message.imageUrl}
               alt="Visual attachment"
@@ -139,7 +148,9 @@ function MessageBubble({
         )}
 
         {/* MESSAGE TEXT CONTENT */}
-        <span className="whitespace-pre-wrap">{message.content}</span>
+        {hasContent && (
+          <span className="whitespace-pre-wrap">{message.content}</span>
+        )}
 
         {/* EMBEDDED INLINE/BOTTOM-RIGHT TIMESTAMP */}
         {showTimestamp && (
@@ -154,7 +165,7 @@ function MessageBubble({
         )}
       </div>
 
-      {copyMenuOpen && (
+      {copyMenuOpen && hasContent && (
         <button
           type="button"
           onClick={copyMessage}

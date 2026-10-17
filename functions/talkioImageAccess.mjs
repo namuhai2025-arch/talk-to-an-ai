@@ -82,11 +82,7 @@ export function resolveImageAccess(
           entitlement.product_identifier
         ];
 
-      // Only verified production subscriptions.
-      if (
-        !isObject(subscription) ||
-        subscription.is_sandbox !== false
-      ) {
+      if (!isObject(subscription)) {
         continue;
       }
 
@@ -179,21 +175,43 @@ export async function fetchImageAccess(
   secret,
   now = Date.now(),
 ) {
+  // Resolve secret key with robust fallbacks
+  let apiKey = secret || process.env.REVENUE_CAT_KEY;
+
+  if (!apiKey) {
+    try {
+      apiKey = revenueCatKey.value();
+    } catch {
+      apiKey = null;
+    }
+  }
+
+  if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+    console.error("fetchImageAccess: Missing REVENUE_CAT_KEY secret!");
+    throw new Error("RevenueCat secret key is not configured.");
+  }
+
+  const cleanKey = apiKey.trim();
+
   const response = await fetch(
     `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}`,
     {
       headers: {
-        Authorization: `Bearer ${secret}`,
+        Authorization: `Bearer ${cleanKey}`,
         Accept: "application/json",
       },
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(8000),
     },
   );
 
   if (!response.ok) {
-    throw new Error(
-      `RevenueCat returned HTTP ${response.status}`,
+    const errorDetails = await response.text().catch(() => "");
+    console.error(
+      `RevenueCat returned HTTP ${response.status} for uid "${uid}":`,
+      errorDetails,
+      `Key preview: ${cleanKey.substring(0, 6)}...`
     );
+    throw new Error(`RevenueCat returned HTTP ${response.status}`);
   }
 
   const data = await response.json();
@@ -210,14 +228,13 @@ export const getTalkioImageAccess = onRequest(
       "capacitor://localhost",
       "ionic://localhost",
     ],
-    secrets: ["REVENUE_CAT_KEY"], 
+    secrets: ["REVENUE_CAT_KEY"],
   },
   async (req, res) => {
     res.set("Cache-Control", "no-store");
 
     if (req.method !== "POST") {
       res.set("Allow", "POST");
-
       return res.status(405).json({
         error: "Method not allowed",
       });
@@ -242,19 +259,6 @@ export const getTalkioImageAccess = onRequest(
       );
 
       uid = decoded.uid;
-          // DEVELOPER BYPASS: Give your specific UID full access automatically
-    // You can find your UID in the Firebase Auth console
-    if (uid === "YOUR_FIREBASE_UID_HERE") { 
-      return res.status(200).json({
-        verifiedTier: "companion",
-        eligible: true,
-        limit: 99,
-        remaining: 99,
-        canAttach: true,
-        reason: null,
-        used: 0
-      });
-    }
     } catch {
       return res.status(401).json({
         error: "Please sign in again.",
@@ -263,15 +267,11 @@ export const getTalkioImageAccess = onRequest(
     }
 
     try {
-      const access = await fetchImageAccess(
-        uid,
-        revenueCatKey.value(),
-      );
+      const access = await fetchImageAccess(uid, process.env.REVENUE_CAT_KEY);
 
       let used = 0;
 
       if (access.eligible) {
-        // Reading never creates or resets a usage counter.
         const quota = await getFirestore()
           .collection("talkioImageUsage")
           .doc(digest(uid))

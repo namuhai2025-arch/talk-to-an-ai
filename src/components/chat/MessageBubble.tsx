@@ -58,7 +58,7 @@ function MessageBubble({
     : "relative flex flex-col items-start w-full";
 
   const bubbleClassName = [
-    "relative max-w-[92%] px-3.5 py-2.5 text-[15.5px] leading-relaxed",
+    "relative max-w-[92%] px-3 py-2 text-[15.5px] leading-[1.32] tracking-[-0.01em]",
     "select-none transition-all duration-150 break-words",
     copyMenuOpen ? "ring-2 ring-stone-400/50" : "",
     isUser
@@ -136,7 +136,7 @@ function MessageBubble({
           <div
             className={[
               "overflow-hidden rounded-xl border border-black/5 -mx-1",
-              hasContent ? "mb-2" : "mb-1",
+              hasContent ? "mb-1.5" : "mb-0.5",
             ].join(" ")}
           >
             <img
@@ -156,7 +156,7 @@ function MessageBubble({
         {showTimestamp && (
           <span
             className={[
-              "float-right ml-2.5 mt-1 select-none text-[10.5px] font-normal leading-none tabular-nums",
+              "float-right ml-2 mt-1 select-none text-[10.5px] font-normal leading-none tabular-nums",
               isUser ? "text-stone-600/70" : "text-stone-400",
             ].join(" ")}
           >

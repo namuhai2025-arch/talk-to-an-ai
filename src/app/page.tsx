@@ -1151,36 +1151,53 @@ useEffect(() => {
       setAuthInProgress(false);
     }
   }
-    
-    async function sendMessage(overrideText?: string) {
+      async function sendMessage(overrideText?: string) {
     if (sendInFlightRef.current) return;
 
     const caption = (overrideText ?? input).trim();
     const imageFile = overrideText === undefined ? selectedImage : null;
-    const text = caption;
-    const normalizedText = text.toLowerCase();
-    
-    // Create a local URL so the image shows up instantly in the UI
-    const localImageUrl = imageFile 
-      ? Capacitor.convertFileSrc(URL.createObjectURL(imageFile)) 
-      : undefined;
 
-    const positiveSignals = ["thank you", "thanks", "helped", "i feel better", "that helped", "glad", "appreciate", "needed that"];
-    const isPositiveMoment = positiveSignals.some((signal) => normalizedText.includes(signal));
+    // 1. Internal fallback prompt for AI when photo has no caption
+    const text = caption || (imageFile ? "Please look at this photo." : "");
+    const normalizedText = text.toLowerCase();
 
     if ((!text && !imageFile) || loading || isLimitReached || showSafety || crisisLock) return;
 
-    const safetyInterruption = classifySafetyInterruption(text);
+    // 2. Prepare compressed image and persistent display URL
+    let imagePayload: { mimeType: string; data: string } | undefined = undefined;
+    let displayImageUrl: string | undefined = undefined;
+
+    if (imageFile) {
+      try {
+        const compressedBase64 = await prepareChatImage(imageFile);
+        displayImageUrl = compressedBase64;
+        imagePayload = {
+          mimeType: "image/jpeg",
+          data: compressedBase64.replace(/^data:image\/[a-zA-Z+]+;base64,/, ""),
+        };
+      } catch (err) {
+        console.error("Failed to prepare image:", err);
+      }
+    }
+
+    // 3. Safety classification
+    const safetyInterruption = classifySafetyInterruption(caption || text);
     if (safetyInterruption.blocked) {
       if (!overrideText) setInput("");
-      const nextMessages: ChatMessage[] = [...messages, { 
-        role: "user" as const, 
-        content: text, 
-        timestamp: Date.now(), 
-        ...(localImageUrl ? { imageUrl: localImageUrl } : {}) 
-      }].slice(-MAX_MESSAGES);
+      const nextMessages: ChatMessage[] = [
+        ...messages,
+        {
+          role: "user" as const,
+          content: caption,
+          timestamp: Date.now(),
+          ...(displayImageUrl ? { imageUrl: displayImageUrl } : {}),
+        },
+      ].slice(-MAX_MESSAGES);
+
       setMessages(nextMessages);
-      if (conversationTitle === "New conversation") setConversationTitle(buildConversationTitle(nextMessages));
+      if (conversationTitle === "New conversation") {
+        setConversationTitle(buildConversationTitle(nextMessages));
+      }
       setCrisisLock(true);
       return;
     }
@@ -1193,45 +1210,43 @@ useEffect(() => {
     try {
       sendInFlightRef.current = true;
 
-      const nextMessages: ChatMessage[] = [...messages, { 
-        role: "user" as const, 
-        content: text, 
-        timestamp: Date.now(),
-        ...(localImageUrl ? { imageUrl: localImageUrl } : {}) 
-      }].slice(-MAX_MESSAGES);
-      
+      // In the UI, render only the caption (stays blank if photo only)
+      const nextMessages: ChatMessage[] = [
+        ...messages,
+        {
+          role: "user" as const,
+          content: caption,
+          timestamp: Date.now(),
+          ...(displayImageUrl ? { imageUrl: displayImageUrl } : {}),
+        },
+      ].slice(-MAX_MESSAGES);
+
       setMessages(nextMessages);
-      if (conversationTitle === "New conversation") setConversationTitle(buildConversationTitle(nextMessages));
+      if (conversationTitle === "New conversation") {
+        setConversationTitle(buildConversationTitle(nextMessages));
+      }
 
       const auth = getFirebaseAuth();
       if (!auth.currentUser) throw new Error("Please wait a moment and try again.");
       const user = auth.currentUser;
-      
-      // COST SAVING: Use a shorter timeout for identity checks to fail fast 
+
       const token = await withTimeout(user.getIdToken(), 5000, "Auth timeout.");
-      
-      // DEVELOPER BYPASS: Always use "companion" tier for testing
-      let userTier = "companion"; 
-      /* 
-      try {
-        userTier = await withTimeout(resolveTalkioTier(), 8000, "Subscription check timed out.");
-      } catch (err) {
-        userTier = "free";
-      }
-      */
+      const userTier = "companion";
 
-      // THIS WAS MISSING IN YOUR SCREENSHOT: Prepare the image before making the payload!
-      const image = imageFile ? await prepareChatImage(imageFile) : undefined;
-
-      // COST SAVING: Only send necessary text data, strip out local image URLs
+      // 4. Assemble payload in proper order
       const chatPayload: ChatRequestPayload = {
         message: text,
-        messages: nextMessages.map(m => ({
+        messages: nextMessages.map((m) => ({
           role: m.role,
-          content: m.content.trim(), // Remove wasted whitespace
+          content: m.content.trim() || text,
         })),
         userTier,
-        ...(image ? { image, requestId: crypto.randomUUID() } : {}),
+        ...(imagePayload
+          ? {
+              image: imagePayload,
+              requestId: crypto.randomUUID(),
+            }
+          : {}),
         source: "chat",
       };
 
@@ -1242,31 +1257,63 @@ useEffect(() => {
       if (analytics) logEvent(analytics, "chat_message_sent", { source: "chat" });
 
       if (data?.safetyBlocked || data?.crisisLock) setCrisisLock(true);
-      if (typeof data?.remainingDaily === "number") setIsLimitReached(data.remainingDaily <= 0);
+      if (typeof data?.remainingDaily === "number") {
+        setIsLimitReached(data.remainingDaily <= 0);
+      }
 
-      let assistantReply = data?.reply?.trim() || "I'm having a little trouble thinking. Can you try again?";
+      const assistantReply = data?.reply?.trim() || "I'm having a little trouble thinking. Can you try again?";
       const replyDelay = 700 + Math.min(assistantReply.length * 5, 700);
       await sleep(replyDelay);
 
       setMessages((prev): ChatMessage[] => {
-        const updated = [...prev, { role: "assistant" as const, content: assistantReply, timestamp: Date.now() }];
+        const updated = [
+          ...prev,
+          {
+            role: "assistant" as const,
+            content: assistantReply,
+            timestamp: Date.now(),
+          },
+        ];
         return updated.slice(-MAX_MESSAGES);
       });
 
-      const reviewCompleted = localStorage.getItem("talkio_review_prompt_completed") === "true";
-      if (!feedbackAsked && !reviewCompleted && nextMessages.filter(m => m.role === "assistant").length >= 7 && isPositiveMoment) {
+      const positiveSignals = [
+        "thank you",
+        "thanks",
+        "helped",
+        "i feel better",
+        "that helped",
+        "glad",
+        "appreciate",
+        "needed that",
+      ];
+      const isPositiveMoment = positiveSignals.some((signal) =>
+        normalizedText.includes(signal)
+      );
+      const reviewCompleted =
+        localStorage.getItem("talkio_review_prompt_completed") === "true";
+
+      if (
+        !feedbackAsked &&
+        !reviewCompleted &&
+        nextMessages.filter((m) => m.role === "assistant").length >= 7 &&
+        isPositiveMoment
+      ) {
         setFeedbackAsked(true);
         setShowReviewPrompt(true);
       }
 
       if (imageFile) setSelectedImage(null);
-
     } catch (error: any) {
       console.error("Chat Error:", error);
       if (!overrideText) setInput(caption);
       setMessages((prev): ChatMessage[] => [
         ...prev,
-        { role: "assistant" as const, content: `I'm having trouble waking up: ${error?.message || "Connection lost."}`, timestamp: Date.now() },
+        {
+          role: "assistant" as const,
+          content: `I'm having trouble waking up: ${error?.message || "Connection lost."}`,
+          timestamp: Date.now(),
+        },
       ].slice(-MAX_MESSAGES));
     } finally {
       sendInFlightRef.current = false;

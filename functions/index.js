@@ -28,6 +28,7 @@ const { Redis } = require("@upstash/redis");
 
 const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
+const REVENUE_CAT_KEY = defineSecret("REVENUE_CAT_KEY");
 
 const TALKIO_VERIFICATION_TEMPLATE =
   "90bfdd75-bfda-4ad9-96a0-4ea25123a81a";
@@ -1083,26 +1084,52 @@ async function generateModelText({ ai, model, systemPrompt, messages, image }) {
     normalizedContents.push({ role: "user", parts: [{ text: "Hello" }] });
   }
 
+  // 3. Attach image inlineData to the most recent user turn
+  if (image && typeof image.data === "string" && typeof image.mimeType === "string") {
+    // Locate the latest user message from the end
+    let targetTurn = null;
+    for (let i = normalizedContents.length - 1; i >= 0; i--) {
+      if (normalizedContents[i].role === "user") {
+        targetTurn = normalizedContents[i];
+        break;
+      }
+    }
+
+    if (!targetTurn) {
+      targetTurn = { role: "user", parts: [] };
+      normalizedContents.push(targetTurn);
+    }
+
+    // Sanitize any stray data-URI prefix from the base64 string
+    const cleanBase64 = image.data.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
+
+    targetTurn.parts.push({
+      inlineData: {
+        mimeType: image.mimeType,
+        data: cleanBase64,
+      },
+    });
+  }
+
   try {
     const response = await ai.models.generateContent({
       model: model || "gemini-3-flash",
       contents: normalizedContents,
       config: {
         systemInstruction: systemPrompt,
-        // Crucial: keep latency snappy for chat interactions
         thinkingConfig: { thinkingBudget: 0 },
         temperature: 0.7,
       },
     });
 
-    // 3. Defensive text extraction - Return STRING, not parsed JSON
-    const rawText = typeof response.text === "function"
-      ? response.text()
-      : (response.text || response?.candidates?.[0]?.content?.parts?.[0]?.text || "");
+    const rawText =
+      typeof response.text === "function"
+        ? response.text()
+        : response.text || response?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    return rawText; // generateTalkioReply.js will handle the JSON parsing!
+    return rawText;
   } catch (err) {
-    const errorDetail = err instanceof Error ? (err.stack || err.message) : JSON.stringify(err);
+    const errorDetail = err instanceof Error ? err.stack || err.message : JSON.stringify(err);
     console.error("Gemini Generation Error:", errorDetail);
     throw new Error(`Generation Failed: ${err?.message || "Unknown API Error"}`);
   }
@@ -1703,7 +1730,7 @@ export const generateTalkioReply = onRequest(
   {
     timeoutSeconds: 60,
     minInstances: 0,
-    secrets: [GEMINI_API_KEY],
+    secrets: [GEMINI_API_KEY, REVENUE_CAT_KEY],
   },
   async (req, res) => {
     let imageSend = null;
@@ -1715,9 +1742,17 @@ export const generateTalkioReply = onRequest(
       if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
       const body = req.body || {};
-      const latestUserMessage = typeof body.message === "string" ? body.message.trim() : "";
-      if (!latestUserMessage) {
+      const hasImage = Boolean(body.image);
+      let latestUserMessage = typeof body.message === "string" ? body.message.trim() : "";
+
+      // Reject only if NEITHER text nor image is provided
+      if (!latestUserMessage && !hasImage) {
         return res.status(400).json({ error: "Missing message", reply: "" });
+      }
+
+      // If sending a photo with no text, provide an internal fallback prompt for Gemini
+      if (!latestUserMessage && hasImage) {
+        latestUserMessage = "Please look at this image.";
       }
 
       // 1. AUTH & SINGLE READ
@@ -1861,10 +1896,11 @@ export const generateTalkioReply = onRequest(
         res.status(200).json(responseBody);
       }
       
-    } catch (error) {
+        } catch (error) {
       logError("talkio_backend_error", error, { uid });
-      res.status(500).json({
-        error: "Server error",
+      const statusCode = error?.status || error?.statusCode || 500;
+      res.status(statusCode).json({
+        error: error?.message || "Server error",
         reply: "I'm having a bit of trouble thinking right now. Let's try again?",
       });
     } finally {

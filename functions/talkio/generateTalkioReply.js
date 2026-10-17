@@ -1005,7 +1005,7 @@ Runtime rules:
   await modelGenerate({
     systemPrompt: prompt,
     messages: safeMessages,
-    includeImage: false,
+    includeImage: true,
   });
 
       const structuredResult =

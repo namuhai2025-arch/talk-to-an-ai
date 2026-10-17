@@ -24,54 +24,74 @@ function fail(status, code, message) {
 function validateImage(body) {
   if (body.image == null) return null;
 
-  const image = body.image;
-    if (typeof image?.data === "string") {
-    image.data = image.data.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
-  }
+  let mimeType = "image/jpeg";
+  let rawData = "";
 
-  if (
-    typeof image !== "object" ||
-    Array.isArray(image) ||
-    !["image/jpeg", "image/png", "image/webp"].includes(image.mimeType) ||
-    typeof image.data !== "string" ||
-    !image.data.length ||
-    image.data.length > MAX_BASE64_LENGTH ||
-    image.data.length % 4 !== 0 ||
-    !/^[A-Za-z0-9+/]+={0,2}$/.test(image.data)
-  ) {
+  // 1. Handle both Object format AND raw String format
+  if (typeof body.image === "string") {
+    const str = body.image.trim();
+    const match = str.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+    if (match) {
+      mimeType = match[1];
+      rawData = str.slice(match[0].length);
+    } else {
+      rawData = str;
+    }
+  } else if (typeof body.image === "object" && !Array.isArray(body.image)) {
+    mimeType = body.image.mimeType || "image/jpeg";
+    rawData = typeof body.image.data === "string" ? body.image.data : "";
+  } else {
     fail(400, "INVALID_IMAGE", "Invalid photo.");
   }
 
-  const bytes = Buffer.from(image.data, "base64");
-
-  if (
-    bytes.length > MAX_IMAGE_BYTES ||
-    bytes.toString("base64") !== image.data
-  ) {
-    fail(400, "INVALID_IMAGE", "Invalid photo.");
+  // 2. Normalize MIME type
+  if (mimeType === "image/jpg") mimeType = "image/jpeg";
+  if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+    fail(400, "INVALID_IMAGE", "Invalid photo type.");
   }
 
+  // 3. Sanitize Base64 string
+  const cleanBase64 = rawData
+    .replace(/^data:image\/[a-zA-Z+]+;base64,/, "")
+    .replace(/\s+/g, "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+
+  if (!cleanBase64) {
+    fail(400, "INVALID_IMAGE", "Empty photo data.");
+  }
+
+  // 4. Decode into buffer
+  const bytes = Buffer.from(cleanBase64, "base64");
+
+  if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES) {
+    fail(400, "INVALID_IMAGE", "Photo exceeds maximum size.");
+  }
+
+  // 5. Binary magic-byte signature check
   const validSignature =
-    image.mimeType === "image/jpeg"
+    mimeType === "image/jpeg"
       ? bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255]))
-      : image.mimeType === "image/png"
-        ? bytes.subarray(0, 8).equals(
-            Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
-          )
+      : mimeType === "image/png"
+        ? bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
         : bytes.subarray(0, 4).toString() === "RIFF" &&
           bytes.subarray(8, 12).toString() === "WEBP";
 
+  if (!validSignature) {
+    fail(400, "INVALID_IMAGE", "Invalid photo signature.");
+  }
+
+  // 6. Ensure or create a valid requestId
   if (
-    !validSignature ||
     typeof body.requestId !== "string" ||
     !/^[A-Za-z0-9_-]{16,128}$/.test(body.requestId)
   ) {
-    fail(400, "INVALID_IMAGE_REQUEST", "Invalid photo request.");
+    body.requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
   }
 
   return {
-    mimeType: image.mimeType,
-    data: image.data,
+    mimeType,
+    data: bytes.toString("base64"),
   };
 }
 
@@ -115,7 +135,7 @@ export async function beginImageSend(uid, body) {
 
   const access = await fetchImageAccess(
     uid,
-    process.env.REVENUECAT_SECRET_API_KEY
+    process.env.REVENUE_CAT_KEY
   );
 
   if (

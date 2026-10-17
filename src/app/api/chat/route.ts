@@ -46,10 +46,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const message =
+        const message =
       typeof body.message === "string" ? body.message.trim() : "";
+    const hasImage = body.image != null;
 
-    if (!message) {
+    // Only reject if BOTH text and image are missing
+    if (!message && !hasImage) {
       return reply(
         {
           error: "Invalid message",
@@ -60,26 +62,27 @@ export async function POST(req: Request) {
     }
 
     const payload = {
-  message,
+      // If photo has no caption, supply internal prompt for the AI
+      message: message || "Please look at this image.",
 
-  messages: Array.isArray(body.messages)
-    ? body.messages
-    : [],
+      messages: Array.isArray(body.messages)
+        ? body.messages
+        : [],
 
-  userTier:
-    typeof body.userTier === "string" && body.userTier.trim()
-      ? body.userTier.trim()
-      : "free",
+      userTier:
+        typeof body.userTier === "string" && body.userTier.trim()
+          ? body.userTier.trim()
+          : "free",
 
-  source: body.source === "checkin" ? "checkin" : "chat",
+      source: body.source === "checkin" ? "checkin" : "chat",
 
-  ...(body.image != null
-    ? {
-        image: body.image,
-        requestId: body.requestId,
-      }
-    : {}),
-};
+      ...(body.image != null
+        ? {
+            image: body.image,
+            requestId: body.requestId,
+          }
+        : {}),
+    };
 
     const controller = new AbortController();
     const timeoutId = setTimeout(

@@ -57,9 +57,15 @@ function MessageBubble({
     ? "relative flex flex-col items-end w-full"
     : "relative flex flex-col items-start w-full";
 
+  const isComfort =
+  typeof window !== "undefined" &&
+  localStorage.getItem("talkio_display_mode") === "comfort";
+
   const bubbleClassName = [
-    "relative max-w-[92%] px-3 py-2 text-[15.5px] leading-[1.32] tracking-[-0.01em]",
-    "select-none transition-all duration-150 break-words",
+  isComfort
+    ? "relative max-w-[94%] px-4 py-3 text-[18px] leading-[1.35] tracking-[-0.01em]"
+    : "relative max-w-[92%] px-3 py-2 text-[15.5px] leading-[1.32] tracking-[-0.01em]",
+      "select-none transition-all duration-150 break-words",
     copyMenuOpen ? "ring-2 ring-stone-400/50" : "",
     isUser
       ? "bg-[#dfe8d2] text-stone-900"
@@ -154,15 +160,15 @@ function MessageBubble({
 
         {/* EMBEDDED INLINE/BOTTOM-RIGHT TIMESTAMP */}
         {showTimestamp && (
-          <span
-            className={[
-              "float-right ml-2 mt-1 select-none text-[10.5px] font-normal leading-none tabular-nums",
-              isUser ? "text-stone-600/70" : "text-stone-400",
-            ].join(" ")}
-          >
-            {formattedTime}
-          </span>
-        )}
+  <span
+    className={[
+      "float-right ml-2.5 mt-1 select-none font-normal leading-none tabular-nums",
+      isComfort ? "text-[12.5px] text-stone-500" : "text-[10.5px] " + (isUser ? "text-stone-600/70" : "text-stone-400"),
+    ].join(" ")}
+  >
+    {formattedTime}
+  </span>
+)}
       </div>
 
       {copyMenuOpen && hasContent && (

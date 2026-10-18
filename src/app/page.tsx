@@ -309,6 +309,16 @@ requestId?: string;
     const [draftNickname, setDraftNickname] = useState("");
     const [showNamePrompt, setShowNamePrompt] = useState(false);
 
+    const [displayMode, setDisplayMode] = useState<"standard" | "comfort">("standard");
+
+useEffect(() => {
+  if (!mounted) return;
+  const saved =
+    (localStorage.getItem("talkio_display_mode") as "standard" | "comfort") ||
+    "standard";
+  setDisplayMode(saved);
+}, [mounted]);
+
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [conversationLoaded, setConversationLoaded] = useState(false);
     const [conversationTitle, setConversationTitle] =
@@ -1093,6 +1103,14 @@ useEffect(() => {
       setEmailAuthError("");
     } catch (error: unknown) {
       console.error("Email authentication failed:", error);
+      
+      const [displayMode, setDisplayMode] = useState<"standard" | "comfort">("standard");
+
+useEffect(() => {
+  if (!mounted) return;
+  const saved = (localStorage.getItem("talkio_display_mode") as "standard" | "comfort") || "standard";
+  setDisplayMode(saved);
+}, [mounted]);
 
       const firebaseError =
         error && typeof error === "object"
@@ -1721,11 +1739,15 @@ useEffect(() => {
   </div>
 </div>
 
-    <div className="relative z-30 flex shrink-0 items-center gap-2 pt-1">
+        <div className="relative z-30 flex shrink-0 items-center gap-2 pt-1">
       <button
         type="button"
         aria-label="Open settings"
-        className="rounded-none border border-stone-200 bg-white/60 px-3 py-2 text-sm transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100"
+        className={`border border-stone-200 bg-white/60 transition-all duration-200 active:rotate-12 active:scale-95 active:bg-emerald-50 hover:bg-stone-100 ${
+          displayMode === "comfort"
+            ? "rounded-xl px-4 py-2.5 text-lg min-h-[44px] min-w-[44px] shadow-sm"
+            : "rounded-none px-3 py-2 text-sm"
+        }`}
         onClick={() => {
           window.location.href = "/settings";
         }}
@@ -1736,7 +1758,11 @@ useEffect(() => {
       {activeTab === "chat" && (
         <button
           type="button"
-          className="rounded-none border border-stone-200 bg-white/60 px-3 py-2 text-sm transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50"
+          className={`border border-stone-200 bg-white/60 transition-all duration-200 active:scale-95 active:bg-red-50 hover:bg-stone-100 disabled:opacity-50 ${
+            displayMode === "comfort"
+              ? "rounded-xl px-4 py-2.5 text-base font-semibold min-h-[44px] shadow-sm"
+              : "rounded-none px-3 py-2 text-sm"
+          }`}
           disabled={loading || messages.length <= 1}
           onClick={clearChat}
         >
@@ -1802,6 +1828,7 @@ useEffect(() => {
       : "Checking image allowance..."
   }
   imageSendingReady={true}
+  displayMode={displayMode}
 />
         </>
       )}

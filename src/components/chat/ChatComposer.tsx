@@ -1,6 +1,6 @@
 "use client";
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { Capacitor } from '@capacitor/core';
+import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { Capacitor } from "@capacitor/core";
 import React, {
   useCallback,
   useEffect,
@@ -20,6 +20,7 @@ type ChatComposerProps = {
   canAttach?: boolean;
   imageSendingReady?: boolean;
   attachmentStatus?: string;
+  displayMode?: "standard" | "comfort";
 };
 
 function ChatComposer({
@@ -34,7 +35,10 @@ function ChatComposer({
   canAttach = false,
   imageSendingReady = false,
   attachmentStatus = "",
+  displayMode = "standard",
 }: ChatComposerProps) {
+  const isComfort = displayMode === "comfort";
+
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
@@ -84,7 +88,7 @@ function ChatComposer({
       const contentHeight = textarea.scrollHeight;
 
       textarea.style.height = `${Math.max(
-        32,
+        isComfort ? 38 : 32,
         Math.min(contentHeight, maxHeightRef.current),
       )}px`;
 
@@ -97,7 +101,7 @@ function ChatComposer({
         textarea.scrollTop = 0;
       }
     });
-  }, []);
+  }, [isComfort]);
 
   useEffect(() => {
     const resize = () => {
@@ -141,8 +145,6 @@ function ChatComposer({
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.currentTarget.files?.[0];
-
-    // Allows selecting the same file again after removing it.
     event.currentTarget.value = "";
 
     if (
@@ -179,7 +181,6 @@ function ChatComposer({
     onAttachmentChange(file);
   };
 
-  // Helper: safely convert base64 to Blob without relying on iOS/WKWebView fetch()
   const base64ToBlob = (base64: string, mimeType: string) => {
     const byteCharacters = atob(base64);
     const byteNumbers = new Array(byteCharacters.length);
@@ -194,19 +195,17 @@ function ChatComposer({
     try {
       const image = await Camera.getPhoto({
         quality: 60,
-        width: 1200, // Forces a smaller size so the backend/AI processes it instantly
+        width: 1200,
         allowEditing: false,
         resultType: CameraResultType.Base64,
         source: CameraSource.Prompt,
       });
 
       if (image.base64String) {
-        // Normalize format so the backend doesn't complain about weird extensions
-        const rawFormat = (image.format || 'jpeg').toLowerCase();
-        const mimeType = rawFormat === 'png' ? 'image/png' : 'image/jpeg';
-        const fileExt = rawFormat === 'png' ? 'png' : 'jpg';
+        const rawFormat = (image.format || "jpeg").toLowerCase();
+        const mimeType = rawFormat === "png" ? "image/png" : "image/jpeg";
+        const fileExt = rawFormat === "png" ? "png" : "jpg";
 
-        // Create the blob directly using our helper function (Bypasses iOS bug)
         const blob = base64ToBlob(image.base64String, mimeType);
 
         if (blob.size === 0) {
@@ -238,13 +237,16 @@ function ChatComposer({
 
   return (
     <form
-      className="
+      className={`
         relative z-40 shrink-0
         border-t border-stone-200
         bg-[#f7f1e8]/95 px-3
-        pb-[calc(env(safe-area-inset-bottom)+8px)]
-        pt-2
-      "
+        ${
+          isComfort
+            ? "pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]"
+            : "pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)]"
+        }
+      `}
       onSubmit={(event) => {
         event.preventDefault();
         submitMessage();
@@ -323,19 +325,19 @@ function ChatComposer({
               title="Attach image"
               disabled={disabled || !canAttach}
               onClick={handleAttachmentClick}
-              className="
-                flex h-12 w-11 shrink-0
-                items-center justify-center rounded-md
-                text-[#58704f] disabled:opacity-40
-              "
+              className={
+                isComfort
+                  ? "flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl bg-white border border-stone-300 shadow-sm text-stone-800 disabled:opacity-40 active:scale-95 transition"
+                  : "flex h-12 w-11 shrink-0 items-center justify-center rounded-md text-[#58704f] disabled:opacity-40"
+              }
             >
               <svg
-                width="23"
-                height="23"
+                width={isComfort ? "28" : "23"}
+                height={isComfort ? "28" : "23"}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="1.8"
+                strokeWidth={isComfort ? "2.2" : "1.8"}
                 aria-hidden="true"
               >
                 <rect
@@ -354,10 +356,11 @@ function ChatComposer({
 
         <div className="relative min-w-0 flex-1">
           <div
-            className="
+            className={`
               absolute bottom-0 left-0 z-10
-              flex h-12 w-12 items-center justify-center
-            "
+              flex items-center justify-center
+              ${isComfort ? "h-[52px] w-[52px]" : "h-12 w-12"}
+            `}
             aria-hidden={expanded}
           >
             <button
@@ -367,13 +370,11 @@ function ChatComposer({
               onClick={onOpenReflections}
               aria-label="Open reflections"
               title="Reflections"
-              className="
-                flex h-12 w-12
-                items-center justify-center rounded-full
-                text-[26px] text-[#c7a84d]
-                transition active:scale-90
-                disabled:opacity-50
-              "
+              className={
+                isComfort
+                  ? "flex h-[52px] w-[52px] items-center justify-center rounded-xl bg-amber-50 border border-amber-200/80 text-[30px] text-amber-700 shadow-sm transition active:scale-90 disabled:opacity-50"
+                  : "flex h-12 w-12 items-center justify-center rounded-full text-[26px] text-[#c7a84d] transition active:scale-90 disabled:opacity-50"
+              }
             >
               <span aria-hidden="true">✨</span>
             </button>
@@ -382,12 +383,14 @@ function ChatComposer({
           <div
             className={`
               talkio-input relative z-20
-              flex min-h-[48px] items-end
-              overflow-hidden rounded-md
-              border border-stone-300 bg-white
-              px-3 py-2
-              transition-[margin] duration-200 ease-out
-              ${expanded ? "ml-0" : "ml-[52px]"}
+              flex items-end overflow-hidden
+              border bg-white transition-[margin] duration-200 ease-out
+              ${
+                isComfort
+                  ? "min-h-[52px] rounded-xl border-stone-300 px-3.5 py-2.5"
+                  : "min-h-[48px] rounded-md border-stone-300 px-3 py-2"
+              }
+              ${expanded ? "ml-0" : isComfort ? "ml-[58px]" : "ml-[52px]"}
             `}
           >
             <textarea
@@ -416,13 +419,15 @@ function ChatComposer({
                   submitMessage();
                 }
               }}
-              className="
-                h-[32px] w-full resize-none
-                border-0 bg-transparent p-0
-                text-[16px] leading-6 outline-none
-                placeholder:text-stone-400
-                disabled:opacity-60
-              "
+              className={`
+                w-full resize-none border-0 bg-transparent p-0 outline-none
+                placeholder:text-stone-400 disabled:opacity-60
+                ${
+                  isComfort
+                    ? "min-h-[36px] text-[18px] leading-7"
+                    : "h-[32px] text-[16px] leading-6"
+                }
+              `}
               style={{
                 borderRadius: "0px",
                 WebkitAppearance: "none",
@@ -436,13 +441,11 @@ function ChatComposer({
         <button
           type="submit"
           disabled={!canSend}
-          className="
-            h-12 min-w-[64px] shrink-0
-            rounded-md bg-[#78906f] px-4
-            text-sm font-medium text-white
-            transition active:scale-95
-            disabled:opacity-50
-          "
+          className={
+            isComfort
+              ? "h-[52px] min-w-[76px] shrink-0 rounded-xl bg-[#78906f] px-5 text-base font-semibold text-white shadow-sm transition active:scale-95 disabled:opacity-50"
+              : "h-12 min-w-[64px] shrink-0 rounded-md bg-[#78906f] px-4 text-sm font-medium text-white transition active:scale-95 disabled:opacity-50"
+          }
         >
           Send
         </button>

@@ -10,7 +10,6 @@ import { onAuthStateChanged } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
 
 export default function SettingsPage() {
-  // 1. Synchronously initialize from cache to prevent the Free Plan flicker
   const [planName, setPlanName] = useState<string>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("talkio_cached_plan") || "Free Plan";
@@ -25,6 +24,17 @@ export default function SettingsPage() {
     return true;
   });
 
+  // Comfort Mode State (defaults to "standard" if not set)
+  const [displayMode, setDisplayMode] = useState<"standard" | "comfort">(() => {
+    if (typeof window !== "undefined") {
+      return (
+        (localStorage.getItem("talkio_display_mode") as "standard" | "comfort") ||
+        "standard"
+      );
+    }
+    return "standard";
+  });
+
   useEffect(() => {
     const auth = getFirebaseAuth();
 
@@ -37,7 +47,6 @@ export default function SettingsPage() {
           return;
         }
 
-        // Configure RevenueCat with the verified Firebase UID
         await configureRevenueCat(user.uid);
 
         const result = await getTalkioCustomerInfo();
@@ -80,6 +89,14 @@ export default function SettingsPage() {
 
     return () => unsubscribe();
   }, []);
+
+  const toggleDisplayMode = () => {
+    const nextMode = displayMode === "comfort" ? "standard" : "comfort";
+    setDisplayMode(nextMode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("talkio_display_mode", nextMode);
+    }
+  };
 
   async function shareTalkio() {
     try {
@@ -180,6 +197,34 @@ export default function SettingsPage() {
               )}
             </>
           )}
+        </section>
+
+        {/* Comfort View Toggle Section */}
+        <section className="mt-6 rounded-3xl bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="pr-4">
+              <p className="font-medium text-stone-900">Comfort View</p>
+              <p className="mt-1 text-sm text-stone-500">
+                Larger text, bigger buttons, and easier reading.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={displayMode === "comfort"}
+              onClick={toggleDisplayMode}
+              className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                displayMode === "comfort" ? "bg-emerald-600" : "bg-stone-300"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  displayMode === "comfort" ? "translate-x-6" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
         </section>
 
         {/* Settings Options */}

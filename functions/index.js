@@ -1911,6 +1911,8 @@ export const generateTalkioReply = onRequest(
   }
 );
 
+export { initVoiceSession } from "./initVoiceSession.mjs";
+
 export const generateMyWeeklyReflection = onRequest(
   { cors: true, timeoutSeconds: 180, secrets: ["GEMINI_API_KEY"] },
   async (req, res) => {

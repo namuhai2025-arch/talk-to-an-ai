@@ -45,10 +45,6 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
   const isPuckSpeakingRef = useRef<boolean>(false);
   const initialGreetingDoneRef = useRef<boolean>(false);
 
-  // Voice Activity & Turn completion tracking
-  const hasSpokenInTurnRef = useRef<boolean>(false);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
   // Sync state reference for mute handler
   useEffect(() => {
     isMutedRef.current = isMuted;
@@ -87,11 +83,6 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
   // Internal teardown without clearing error states
   const cleanupResources = useCallback(() => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-
     stopPlayback();
 
     if (workletNodeRef.current) {
@@ -130,7 +121,6 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
     initialGreetingDoneRef.current = false;
     isPuckSpeakingRef.current = false;
-    hasSpokenInTurnRef.current = false;
     setIsListening(false);
     setIsSpeaking(false);
     setIsMuted(false);
@@ -162,6 +152,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       float32[i] = pcm16[i] / 32768.0;
     }
 
+    // Web Audio automatically resamples 24000Hz buffer to hardware rate on playback
     const audioBuffer = ctx.createBuffer(1, float32.length, 24000);
     audioBuffer.copyToChannel(float32, 0);
 
@@ -270,8 +261,9 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
       const micSource = audioCtx.createMediaStreamSource(stream);
 
+      // Pre-amplify mic input cleanly so Google VAD easily detects voice
       const micBoostNode = audioCtx.createGain();
-      micBoostNode.gain.value = 1.0;
+      micBoostNode.gain.value = 2.5;
       micBoostNodeRef.current = micBoostNode;
 
       const workletNode = new AudioWorkletNode(audioCtx, WORKLET_NAME);
@@ -282,6 +274,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       muteNode.gain.value = 0;
       muteGainNodeRef.current = muteNode;
 
+      // Connect: mic -> boost -> worklet -> silent mute -> speakers
       micSource.connect(micBoostNode);
       micBoostNode.connect(workletNode);
       workletNode.connect(muteNode);
@@ -297,7 +290,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       socket.onopen = () => {
         const setupMessage = {
           setup: {
-            model: "models/gemini-2.0-flash-exp",
+            model: "models/gemini-3.8-live",
             generationConfig: {
               responseModalities: ["AUDIO"],
               speechConfig: {
@@ -309,7 +302,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
               },
             },
             systemInstruction: {
-              parts: [{ text: puckInstructions || "You are Puck, a friendly conversational companion." }],
+              parts: [{ text: puckInstructions || "You are Puck, an articulate and warm conversation partner." }],
             },
           },
         };
@@ -317,7 +310,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
         socket.send(JSON.stringify(setupMessage));
       };
 
-      // Worklet sends cleanly downsampled 16kHz Int16 buffers
+      // Worklet sends downsampled 16kHz Int16 buffers
       workletNode.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
         if (
           socket.readyState !== WebSocket.OPEN ||
@@ -329,41 +322,17 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
           return;
         }
 
-        const pcm = new Int16Array(event.data);
-        let sum = 0;
-        for (let i = 0; i < pcm.length; i++) {
-          sum += Math.abs(pcm[i]);
-        }
-        const avgLevel = Math.round(sum / pcm.length);
-
         packetCounter++;
-        if (packetCounter % 20 === 0 && avgLevel > 150) {
-          console.log(`[LiveVoice] Mic level: ${avgLevel}`);
-        }
-
-        // Detect active speech
-        if (avgLevel > 1000) {
-          hasSpokenInTurnRef.current = true;
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-            silenceTimerRef.current = null;
+        if (packetCounter % 20 === 0) {
+          const pcm = new Int16Array(event.data);
+          let sum = 0;
+          for (let i = 0; i < pcm.length; i++) {
+            sum += Math.abs(pcm[i]);
           }
-        } else if (hasSpokenInTurnRef.current && avgLevel < 400 && !silenceTimerRef.current) {
-          // User finished speaking, paused for 700ms -> Commit the turn so Puck replies
-          silenceTimerRef.current = setTimeout(() => {
-            if (socket.readyState === WebSocket.OPEN && hasSpokenInTurnRef.current) {
-              console.log("[LiveVoice] Pause detected. Committing turn to Google...");
-              socket.send(
-                JSON.stringify({
-                  clientContent: {
-                    turnComplete: true,
-                  },
-                })
-              );
-              hasSpokenInTurnRef.current = false;
-            }
-            silenceTimerRef.current = null;
-          }, 700);
+          const avgLevel = Math.round(sum / pcm.length);
+          if (avgLevel > 300) {
+            console.log(`[LiveVoice] Mic input active (Level: ${avgLevel})`);
+          }
         }
 
         const base64Data = arrayBufferToBase64(event.data);
@@ -437,7 +406,6 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
           if (response.serverContent?.turnComplete) {
             console.log("[LiveVoice] Puck finished turn. Mic is active for your reply.");
             initialGreetingDoneRef.current = true;
-            hasSpokenInTurnRef.current = false;
           }
 
           // Handle Incoming Puck Audio Stream
@@ -452,7 +420,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
                 scheduleAudioChunk(part.inlineData.data);
               }
               if (part.text) {
-                console.log("[LiveVoice] Puck says:", part.text);
+                console.log("[LiveVoice] Puck text:", part.text);
               }
             }
           }

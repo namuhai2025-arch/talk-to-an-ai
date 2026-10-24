@@ -269,7 +269,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       socket.onopen = () => {
         const setupMessage = {
           setup: {
-            model: "models/gemini-2.0-flash-realtime-exp",
+            model: "models/gemini-3.8-live",
             generationConfig: {
               responseModalities: ["AUDIO"],
               speechConfig: {

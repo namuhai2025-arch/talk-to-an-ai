@@ -36,6 +36,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const muteGainNodeRef = useRef<GainNode | null>(null);
+  const micBoostNodeRef = useRef<GainNode | null>(null);
   const isMutedRef = useRef<boolean>(false);
 
   // Audio playback scheduling
@@ -84,6 +85,11 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
     if (workletNodeRef.current) {
       workletNodeRef.current.disconnect();
       workletNodeRef.current = null;
+    }
+
+    if (micBoostNodeRef.current) {
+      micBoostNodeRef.current.disconnect();
+      micBoostNodeRef.current = null;
     }
 
     if (muteGainNodeRef.current) {
@@ -222,7 +228,6 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
 
-      // Allow default native hardware sample rate to eliminate mobile OS audio session aborts
       const audioCtx = new AudioCtxClass();
 
       if (audioCtx.state === "suspended") {
@@ -248,6 +253,12 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       micStreamRef.current = stream;
 
       const micSource = audioCtx.createMediaStreamSource(stream);
+
+      // Pre-amplify mic input cleanly so Google VAD detects speech without clipping
+      const micBoostNode = audioCtx.createGain();
+      micBoostNode.gain.value = 1.8;
+      micBoostNodeRef.current = micBoostNode;
+
       const workletNode = new AudioWorkletNode(audioCtx, WORKLET_NAME);
       workletNodeRef.current = workletNode;
 
@@ -256,11 +267,14 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       muteNode.gain.value = 0;
       muteGainNodeRef.current = muteNode;
 
-      micSource.connect(workletNode);
+      // Connect: mic -> boost -> worklet -> silent mute -> speakers
+      micSource.connect(micBoostNode);
+      micBoostNode.connect(workletNode);
       workletNode.connect(muteNode);
       muteNode.connect(audioCtx.destination);
 
       let isSetupComplete = false;
+      let packetCounter = 0;
 
       // Step 4: Establish WebSocket connection
       const socket = new WebSocket(sessionUri);
@@ -298,6 +312,20 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
           !event.data
         ) {
           return;
+        }
+
+        // Telemetry: measure audio energy to ensure the mic isn't sending pure silence
+        packetCounter++;
+        if (packetCounter % 20 === 0) {
+          const pcm = new Int16Array(event.data);
+          let sum = 0;
+          for (let i = 0; i < pcm.length; i++) {
+            sum += Math.abs(pcm[i]);
+          }
+          const avgLevel = Math.round(sum / pcm.length);
+          if (avgLevel > 80) {
+            console.log(`[LiveVoice] Mic input active (Level: ${avgLevel})`);
+          }
         }
 
         const base64Data = arrayBufferToBase64(event.data);
@@ -355,13 +383,25 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
             return;
           }
 
+          // Handle server errors
+          if (response.error) {
+            console.error("[LiveVoice] Gemini Live Server Error:", response.error);
+            return;
+          }
+
           // Handle Interruption / User Barge-in
           if (response.serverContent?.interrupted) {
+            console.log("[LiveVoice] Puck detected user speech (Interruption triggered).");
             stopPlayback();
             return;
           }
 
-          // Handle Incoming Puck Audio Stream (corresponds to your screenshot)
+          // Turn completion marker
+          if (response.serverContent?.turnComplete) {
+            console.log("[LiveVoice] Puck finished turn. Waiting for you to speak...");
+          }
+
+          // Handle Incoming Puck Audio Stream
           const parts = response.serverContent?.modelTurn?.parts;
           if (Array.isArray(parts)) {
             for (const part of parts) {
@@ -370,7 +410,6 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
                 part.inlineData.mimeType?.startsWith("audio/pcm") &&
                 part.inlineData.data
               ) {
-                console.log("[LiveVoice] Playing audio chunk from Puck...");
                 scheduleAudioChunk(part.inlineData.data);
               }
             }

@@ -2,7 +2,6 @@
 
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
-import { VoiceCallOverlay } from "./VoiceCallOverlay";
 import React, {
   useCallback,
   useEffect,
@@ -45,8 +44,6 @@ function ChatComposer({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
   const maxHeightRef = useRef(320);
-
-  const [isVoiceCallOpen, setIsVoiceCallOpen] = useState<boolean>(false);
 
   const [isFocused, setIsFocused] = useState(false);
   const [preview, setPreview] = useState<{
@@ -240,257 +237,221 @@ function ChatComposer({
   };
 
   return (
-    <>
-      <form
-        className={`
-          relative z-40 shrink-0
-          border-t border-stone-200
-          bg-[#f7f1e8]/95 px-3
-          ${
-            isComfort
-              ? "pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]"
-              : "pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)]"
-          }
-        `}
-        onSubmit={(event) => {
-          event.preventDefault();
-          submitMessage();
-        }}
-      >
-        {hasAttachment && (
-          <div
+    <form
+      className={`
+        relative z-40 shrink-0
+        border-t border-stone-200
+        bg-[#f7f1e8]/95 px-3
+        ${
+          isComfort
+            ? "pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]"
+            : "pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)]"
+        }
+      `}
+      onSubmit={(event) => {
+        event.preventDefault();
+        submitMessage();
+      }}
+    >
+      {hasAttachment && (
+        <div
+          className="
+            mb-2 flex items-center gap-3
+            rounded-lg border border-stone-200
+            bg-white p-2
+          "
+        >
+          {preview?.file === attachment && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preview.url}
+              alt="Selected attachment"
+              width={64}
+              height={64}
+              className="h-16 w-16 rounded-md object-cover"
+              onError={() =>
+                setFileError(
+                  "This image could not be previewed. Please choose another image.",
+                )
+              }
+            />
+          )}
+
+          <span className="min-w-0 flex-1 truncate text-sm text-stone-600">
+            {attachment.name}
+          </span>
+
+          <button
+            type="button"
+            disabled={disabled}
+            aria-label="Remove image"
+            onClick={() => {
+              onAttachmentChange?.(null);
+              setFileError("");
+            }}
             className="
-              mb-2 flex items-center gap-3
-              rounded-lg border border-stone-200
-              bg-white p-2
+              min-h-11 px-3 text-sm
+              text-stone-700 disabled:opacity-50
             "
           >
-            {preview?.file === attachment && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={preview.url}
-                alt="Selected attachment"
-                width={64}
-                height={64}
-                className="h-16 w-16 rounded-md object-cover"
-                onError={() =>
-                  setFileError(
-                    "This image could not be previewed. Please choose another image.",
-                  )
-                }
-              />
-            )}
+            Remove
+          </button>
+        </div>
+      )}
 
-            <span className="min-w-0 flex-1 truncate text-sm text-stone-600">
-              {attachment.name}
-            </span>
+      {fileError && (
+        <p
+          role="alert"
+          className="mb-2 text-sm text-red-700"
+        >
+          {fileError}
+        </p>
+      )}
+
+      <div className="flex items-end gap-2">
+        {onAttachmentChange && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png"
+              className="hidden"
+              onChange={chooseFile}
+              disabled={disabled || !canAttach}
+            />
 
             <button
               type="button"
-              disabled={disabled}
-              aria-label="Remove image"
-              onClick={() => {
-                onAttachmentChange?.(null);
-                setFileError("");
-              }}
-              className="
-                min-h-11 px-3 text-sm
-                text-stone-700 disabled:opacity-50
-              "
+              aria-label="Attach image"
+              title="Attach image"
+              disabled={disabled || !canAttach}
+              onClick={handleAttachmentClick}
+              className={
+                isComfort
+                  ? "flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl bg-white border border-stone-300 shadow-sm text-stone-800 disabled:opacity-40 active:scale-95 transition"
+                  : "flex h-12 w-11 shrink-0 items-center justify-center rounded-md text-[#58704f] disabled:opacity-40"
+              }
             >
-              Remove
+              <svg
+                width={isComfort ? "28" : "23"}
+                height={isComfort ? "28" : "23"}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={isComfort ? "2.2" : "1.8"}
+                aria-hidden="true"
+              >
+                <rect
+                  x="3"
+                  y="3"
+                  width="18"
+                  height="18"
+                  rx="3"
+                />
+                <circle cx="8" cy="8" r="1.5" />
+                <path d="m3 17 5-5 4 4 4-6 5 7" />
+              </svg>
+            </button>
+          </>
+        )}
+
+        <div className="relative min-w-0 flex-1">
+          <div
+            className={`
+              absolute bottom-0 left-0 z-10
+              flex items-center justify-center
+              ${isComfort ? "h-[52px] w-[52px]" : "h-12 w-12"}
+            `}
+            aria-hidden={expanded}
+          >
+            <button
+              type="button"
+              disabled={disabled || expanded}
+              tabIndex={expanded ? -1 : 0}
+              onClick={onOpenReflections}
+              aria-label="Open reflections"
+              title="Reflections"
+              className={
+                isComfort
+                  ? "flex h-[52px] w-[52px] items-center justify-center rounded-xl bg-amber-50 border border-amber-200/80 text-[30px] text-amber-700 shadow-sm transition active:scale-90 disabled:opacity-50"
+                  : "flex h-12 w-12 items-center justify-center rounded-full text-[26px] text-[#c7a84d] transition active:scale-90 disabled:opacity-50"
+              }
+            >
+              <span aria-hidden="true">✨</span>
             </button>
           </div>
-        )}
 
-        {fileError && (
-          <p
-            role="alert"
-            className="mb-2 text-sm text-red-700"
+          <div
+            className={`
+              talkio-input relative z-20
+              flex items-end overflow-hidden
+              border bg-white transition-[margin] duration-200 ease-out
+              ${
+                isComfort
+                  ? "min-h-[52px] rounded-xl border-stone-300 px-3.5 py-2.5"
+                  : "min-h-[48px] rounded-md border-stone-300 px-3 py-2"
+              }
+              ${expanded ? "ml-0" : isComfort ? "ml-[58px]" : "ml-[52px]"}
+            `}
           >
-            {fileError}
-          </p>
-        )}
-
-        <div className="flex items-end gap-2">
-          {/* Call Puck Button */}
-          <button
-            type="button"
-            onClick={() => setIsVoiceCallOpen(true)}
-            disabled={disabled}
-            aria-label="Start Voice Call"
-            title="Talk to Puck"
-            className={
-              isComfort
-                ? "flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl bg-white border border-stone-300 shadow-sm text-[#58704f] hover:text-[#3e5138] disabled:opacity-40 active:scale-95 transition"
-                : "flex h-12 w-11 shrink-0 items-center justify-center rounded-md text-[#58704f] hover:text-[#3e5138] disabled:opacity-40 active:scale-95 transition"
-            }
-          >
-            <svg
-              className={isComfort ? "w-6 h-6" : "w-5 h-5"}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.8}
-                d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-              />
-            </svg>
-          </button>
-
-          {onAttachmentChange && (
-            <>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png"
-                className="hidden"
-                onChange={chooseFile}
-                disabled={disabled || !canAttach}
-              />
-
-              <button
-                type="button"
-                aria-label="Attach image"
-                title="Attach image"
-                disabled={disabled || !canAttach}
-                onClick={handleAttachmentClick}
-                className={
-                  isComfort
-                    ? "flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl bg-white border border-stone-300 shadow-sm text-stone-800 disabled:opacity-40 active:scale-95 transition"
-                    : "flex h-12 w-11 shrink-0 items-center justify-center rounded-md text-[#58704f] disabled:opacity-40"
+            <textarea
+              ref={textareaRef}
+              value={value}
+              rows={1}
+              disabled={disabled}
+              aria-label="Message"
+              placeholder={placeholder}
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              autoComplete="off"
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              onChange={(event) =>
+                onChange(event.currentTarget.value)
+              }
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing
+                ) {
+                  event.preventDefault();
+                  submitMessage();
                 }
-              >
-                <svg
-                  width={isComfort ? "28" : "23"}
-                  height={isComfort ? "28" : "23"}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={isComfort ? "2.2" : "1.8"}
-                  aria-hidden="true"
-                >
-                  <rect
-                    x="3"
-                    y="3"
-                    width="18"
-                    height="18"
-                    rx="3"
-                  />
-                  <circle cx="8" cy="8" r="1.5" />
-                  <path d="m3 17 5-5 4 4 4-6 5 7" />
-                </svg>
-              </button>
-            </>
-          )}
-
-          <div className="relative min-w-0 flex-1">
-            <div
+              }}
               className={`
-                absolute bottom-0 left-0 z-10
-                flex items-center justify-center
-                ${isComfort ? "h-[52px] w-[52px]" : "h-12 w-12"}
-              `}
-              aria-hidden={expanded}
-            >
-              <button
-                type="button"
-                disabled={disabled || expanded}
-                tabIndex={expanded ? -1 : 0}
-                onClick={onOpenReflections}
-                aria-label="Open reflections"
-                title="Reflections"
-                className={
-                  isComfort
-                    ? "flex h-[52px] w-[52px] items-center justify-center rounded-xl bg-amber-50 border border-amber-200/80 text-[30px] text-amber-700 shadow-sm transition active:scale-90 disabled:opacity-50"
-                    : "flex h-12 w-12 items-center justify-center rounded-full text-[26px] text-[#c7a84d] transition active:scale-90 disabled:opacity-50"
-                }
-              >
-                <span aria-hidden="true">✨</span>
-              </button>
-            </div>
-
-            <div
-              className={`
-                talkio-input relative z-20
-                flex items-end overflow-hidden
-                border bg-white transition-[margin] duration-200 ease-out
+                w-full resize-none border-0 bg-transparent p-0 outline-none
+                placeholder:text-stone-400 disabled:opacity-60
                 ${
                   isComfort
-                    ? "min-h-[52px] rounded-xl border-stone-300 px-3.5 py-2.5"
-                    : "min-h-[48px] rounded-md border-stone-300 px-3 py-2"
+                    ? "min-h-[36px] text-[18px] leading-7"
+                    : "h-[32px] text-[16px] leading-6"
                 }
-                ${expanded ? "ml-0" : isComfort ? "ml-[58px]" : "ml-[52px]"}
               `}
-            >
-              <textarea
-                ref={textareaRef}
-                value={value}
-                rows={1}
-                disabled={disabled}
-                aria-label="Message"
-                placeholder={placeholder}
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                autoComplete="off"
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-                onChange={(event) =>
-                  onChange(event.currentTarget.value)
-                }
-                onKeyDown={(event) => {
-                  if (
-                    event.key === "Enter" &&
-                    !event.shiftKey &&
-                    !event.nativeEvent.isComposing
-                  ) {
-                    event.preventDefault();
-                    submitMessage();
-                  }
-                }}
-                className={`
-                  w-full resize-none border-0 bg-transparent p-0 outline-none
-                  placeholder:text-stone-400 disabled:opacity-60
-                  ${
-                    isComfort
-                      ? "min-h-[36px] text-[18px] leading-7"
-                      : "h-[32px] text-[16px] leading-6"
-                  }
-                `}
-                style={{
-                  borderRadius: "0px",
-                  WebkitAppearance: "none",
-                  appearance: "none",
-                  overflowY: "hidden",
-                }}
-              />
-            </div>
+              style={{
+                borderRadius: "0px",
+                WebkitAppearance: "none",
+                appearance: "none",
+                overflowY: "hidden",
+              }}
+            />
           </div>
-
-          <button
-            type="submit"
-            disabled={!canSend}
-            className={
-              isComfort
-                ? "h-[52px] min-w-[76px] shrink-0 rounded-xl bg-[#78906f] px-5 text-base font-semibold text-white shadow-sm transition active:scale-95 disabled:opacity-50"
-                : "h-12 min-w-[64px] shrink-0 rounded-md bg-[#78906f] px-4 text-sm font-medium text-white transition active:scale-95 disabled:opacity-50"
-            }
-          >
-            Send
-          </button>
         </div>
-      </form>
 
-      {/* Voice Call Overlay Modal */}
-      <VoiceCallOverlay
-        isOpen={isVoiceCallOpen}
-        onClose={() => setIsVoiceCallOpen(false)}
-      />
-    </>
+        <button
+          type="submit"
+          disabled={!canSend}
+          className={
+            isComfort
+              ? "h-[52px] min-w-[76px] shrink-0 rounded-xl bg-[#78906f] px-5 text-base font-semibold text-white shadow-sm transition active:scale-95 disabled:opacity-50"
+              : "h-12 min-w-[64px] shrink-0 rounded-md bg-[#78906f] px-4 text-sm font-medium text-white transition active:scale-95 disabled:opacity-50"
+          }
+        >
+          Send
+        </button>
+      </div>
+    </form>
   );
 }
 

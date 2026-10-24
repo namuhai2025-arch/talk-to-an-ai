@@ -256,7 +256,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
       // Pre-amplify mic input cleanly so Google VAD detects speech without clipping
       const micBoostNode = audioCtx.createGain();
-      micBoostNode.gain.value = 1.8;
+      micBoostNode.gain.value = 1.0;
       micBoostNodeRef.current = micBoostNode;
 
       const workletNode = new AudioWorkletNode(audioCtx, WORKLET_NAME);
@@ -333,7 +333,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
           realtimeInput: {
             mediaChunks: [
               {
-                mimeType: "audio/pcm;rate=16000",
+                mimeType: "audio/pcm",
                 data: base64Data,
               },
             ],

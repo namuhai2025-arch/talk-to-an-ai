@@ -42,6 +42,8 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
   // Audio playback scheduling
   const nextScheduledTimeRef = useRef<number>(0);
   const activeAudioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const isPuckSpeakingRef = useRef<boolean>(false);
+  const initialGreetingDoneRef = useRef<boolean>(false);
 
   // Sync state reference for mute handler
   useEffect(() => {
@@ -75,6 +77,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
     if (audioContextRef.current) {
       nextScheduledTimeRef.current = audioContextRef.current.currentTime;
     }
+    isPuckSpeakingRef.current = false;
     setIsSpeaking(false);
   }, []);
 
@@ -116,6 +119,8 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       wsRef.current = null;
     }
 
+    initialGreetingDoneRef.current = false;
+    isPuckSpeakingRef.current = false;
     setIsListening(false);
     setIsSpeaking(false);
     setIsMuted(false);
@@ -163,6 +168,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
     source.start(nextScheduledTimeRef.current);
     nextScheduledTimeRef.current += audioBuffer.duration;
 
+    isPuckSpeakingRef.current = true;
     setIsSpeaking(true);
     activeAudioSourcesRef.current.push(source);
 
@@ -171,6 +177,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
         (s) => s !== source
       );
       if (activeAudioSourcesRef.current.length === 0) {
+        isPuckSpeakingRef.current = false;
         setIsSpeaking(false);
       }
     };
@@ -254,7 +261,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
       const micSource = audioCtx.createMediaStreamSource(stream);
 
-      // Pre-amplify mic input cleanly so Google VAD detects speech without clipping
+      // Pre-amplify mic input cleanly
       const micBoostNode = audioCtx.createGain();
       micBoostNode.gain.value = 1.0;
       micBoostNodeRef.current = micBoostNode;
@@ -309,6 +316,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
           socket.readyState !== WebSocket.OPEN ||
           !isSetupComplete ||
           isMutedRef.current ||
+          !initialGreetingDoneRef.current || // Do not transmit mic during Puck's greeting
           !event.data
         ) {
           return;
@@ -333,7 +341,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
           realtimeInput: {
             mediaChunks: [
               {
-                mimeType: "audio/pcm",
+                mimeType: "audio/pcm;rate=16000",
                 data: base64Data,
               },
             ],
@@ -398,7 +406,8 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
           // Turn completion marker
           if (response.serverContent?.turnComplete) {
-            console.log("[LiveVoice] Puck finished turn. Waiting for you to speak...");
+            console.log("[LiveVoice] Puck finished turn. Mic is now LIVE for you to speak.");
+            initialGreetingDoneRef.current = true;
           }
 
           // Handle Incoming Puck Audio Stream
@@ -411,6 +420,9 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
                 part.inlineData.data
               ) {
                 scheduleAudioChunk(part.inlineData.data);
+              }
+              if (part.text) {
+                console.log("[LiveVoice] Puck text response:", part.text);
               }
             }
           }

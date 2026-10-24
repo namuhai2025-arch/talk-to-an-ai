@@ -897,13 +897,15 @@ useEffect(() => {
       if (startupServicesUidRef.current !== user.uid) {
         startupServicesUidRef.current = user.uid;
 
-        try {
+                try {
           await syncTalkioProfile();
 
-          await Promise.all([
-            registerTalkioPushToken(),
-            configureRevenueCat(user.uid),
-          ]);
+          if (Capacitor.isNativePlatform()) {
+            await Promise.all([
+              registerTalkioPushToken(),
+              configureRevenueCat(user.uid),
+            ]);
+          }
         } catch (error) {
           console.error("Startup auth services failed:", error);
         }

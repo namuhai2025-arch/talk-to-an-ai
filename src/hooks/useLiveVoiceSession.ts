@@ -33,9 +33,9 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
   // References for network and audio resources
   const wsRef = useRef<WebSocket | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
-  const inputAudioContextRef = useRef<AudioContext | null>(null);
-  const outputAudioContextRef = useRef<AudioContext | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const muteGainNodeRef = useRef<GainNode | null>(null);
   const isMutedRef = useRef<boolean>(false);
 
   // Audio playback scheduling
@@ -48,9 +48,11 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
   }, [isMuted]);
 
   // Convert raw 16-bit PCM byte array into base64 for transmission
-  const arrayBufferToBase64 = useCallback((buffer: ArrayBuffer): string => {
+  const arrayBufferToBase64 = useCallback((buffer: ArrayBuffer | ArrayBufferView): string => {
     let binary = "";
-    const bytes = new Uint8Array(buffer);
+    const bytes = ArrayBuffer.isView(buffer)
+      ? new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+      : new Uint8Array(buffer);
     const len = bytes.byteLength;
     for (let i = 0; i < len; i++) {
       binary += String.fromCharCode(bytes[i]);
@@ -69,14 +71,14 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       }
     }
     activeAudioSourcesRef.current = [];
-    if (outputAudioContextRef.current) {
-      nextScheduledTimeRef.current = outputAudioContextRef.current.currentTime;
+    if (audioContextRef.current) {
+      nextScheduledTimeRef.current = audioContextRef.current.currentTime;
     }
     setIsSpeaking(false);
   }, []);
 
-  // Teardown all resources cleanly
-  const endSession = useCallback(() => {
+  // Internal teardown without clearing error states
+  const cleanupResources = useCallback(() => {
     stopPlayback();
 
     if (workletNodeRef.current) {
@@ -84,22 +86,23 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       workletNodeRef.current = null;
     }
 
+    if (muteGainNodeRef.current) {
+      muteGainNodeRef.current.disconnect();
+      muteGainNodeRef.current = null;
+    }
+
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((track) => track.stop());
       micStreamRef.current = null;
     }
 
-    if (inputAudioContextRef.current) {
-      inputAudioContextRef.current.close().catch(() => {});
-      inputAudioContextRef.current = null;
-    }
-
-    if (outputAudioContextRef.current) {
-      outputAudioContextRef.current.close().catch(() => {});
-      outputAudioContextRef.current = null;
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
     }
 
     if (wsRef.current) {
+      wsRef.current.onopen = null;
       wsRef.current.onclose = null;
       wsRef.current.onerror = null;
       wsRef.current.onmessage = null;
@@ -107,15 +110,21 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       wsRef.current = null;
     }
 
-    setStatus("idle");
     setIsListening(false);
     setIsSpeaking(false);
     setIsMuted(false);
   }, [stopPlayback]);
 
+  // Stable endSession reference
+  const endSession = useCallback(() => {
+    cleanupResources();
+    setStatus("idle");
+  }, [cleanupResources]);
+
   // Play incoming 24kHz PCM linear audio chunks from Puck
   const scheduleAudioChunk = useCallback((base64Audio: string) => {
-    if (!outputAudioContextRef.current) {
+    const ctx = audioContextRef.current;
+    if (!ctx) {
       return;
     }
 
@@ -132,7 +141,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       float32[i] = pcm16[i] / 32768.0;
     }
 
-    const ctx = outputAudioContextRef.current;
+    // Web Audio automatically resamples 24000Hz buffer to hardware rate on playback
     const audioBuffer = ctx.createBuffer(1, float32.length, 24000);
     audioBuffer.copyToChannel(float32, 0);
 
@@ -168,6 +177,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
   // Main session activation logic
   const startSession = useCallback(async () => {
     try {
+      cleanupResources();
       setError(null);
       setStatus("authenticating");
 
@@ -179,7 +189,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
       const idToken = await currentUser.getIdToken();
 
-      // Step 1: Handshake with our deployed Cloud Function
+      // Step 1: Handshake with deployed Cloud Function
       const initResponse = await fetch(INIT_ENDPOINT_URL, {
         method: "POST",
         headers: {
@@ -190,6 +200,9 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
       if (!initResponse.ok) {
         const errJson = await initResponse.json().catch(() => ({}));
+        if (initResponse.status === 403 && errJson.code === "UPGRADE_REQUIRED") {
+          throw new Error("UPGRADE_REQUIRED");
+        }
         throw new Error(
           errJson.error || `Handshake failed with status ${initResponse.status}`
         );
@@ -204,36 +217,29 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
       setStatus("connecting");
 
-      // Step 2: Initialize Web Audio Contexts
-      // Input at 16kHz for Gemini Multimodal Live API
-      const inputCtx = new (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext })
-          .webkitAudioContext)({
-        sampleRate: 16000,
-      });
-      // Output at 24kHz for Puck's synthesized response chunks
-      const outputCtx = new (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext })
-          .webkitAudioContext)({
-        sampleRate: 24000,
-      });
+      // Step 2: Initialize a single unified Web Audio Context
+      const AudioCtxClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
 
-      await inputCtx.resume();
-      await outputCtx.resume();
+      // Allow default native hardware sample rate to eliminate mobile OS audio session aborts
+      const audioCtx = new AudioCtxClass();
 
-      inputAudioContextRef.current = inputCtx;
-      outputAudioContextRef.current = outputCtx;
-      nextScheduledTimeRef.current = outputCtx.currentTime;
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
 
-      // Step 3: Load AudioWorklet for 16kHz PCM capture
+      audioContextRef.current = audioCtx;
+      nextScheduledTimeRef.current = audioCtx.currentTime;
+
+      // Step 3: Load AudioWorklet resampler module
       const workletBlobUrl = getAudioWorkletBlobUrl();
-      await inputCtx.audioWorklet.addModule(workletBlobUrl);
+      await audioCtx.audioWorklet.addModule(workletBlobUrl);
       URL.revokeObjectURL(workletBlobUrl);
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          sampleRate: 16000,
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
@@ -241,16 +247,26 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       });
       micStreamRef.current = stream;
 
-      const micSource = inputCtx.createMediaStreamSource(stream);
-      const workletNode = new AudioWorkletNode(inputCtx, WORKLET_NAME);
+      const micSource = audioCtx.createMediaStreamSource(stream);
+      const workletNode = new AudioWorkletNode(audioCtx, WORKLET_NAME);
       workletNodeRef.current = workletNode;
+
+      // Pull-graph anchor: route worklet through silent gain to destination so audio clock never stalls
+      const muteNode = audioCtx.createGain();
+      muteNode.gain.value = 0;
+      muteGainNodeRef.current = muteNode;
+
+      micSource.connect(workletNode);
+      workletNode.connect(muteNode);
+      muteNode.connect(audioCtx.destination);
+
+      let isSetupComplete = false;
 
       // Step 4: Establish WebSocket connection
       const socket = new WebSocket(sessionUri);
       wsRef.current = socket;
 
       socket.onopen = () => {
-        // Send initial setup frame with Puck voice and personalized instructions
         const setupMessage = {
           setup: {
             model: "models/gemini-2.0-flash-exp",
@@ -271,14 +287,13 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
         };
 
         socket.send(JSON.stringify(setupMessage));
-        setStatus("connected");
-        setIsListening(true);
       };
 
-      // Mic processor sends chunks up to Gemini
+      // Worklet sends cleanly downsampled 16kHz Int16 buffers
       workletNode.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
         if (
           socket.readyState !== WebSocket.OPEN ||
+          !isSetupComplete ||
           isMutedRef.current ||
           !event.data
         ) {
@@ -299,25 +314,35 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
         socket.send(JSON.stringify(inputMessage));
       };
 
-      micSource.connect(workletNode);
-      workletNode.connect(inputCtx.destination);
-
-      // Handle downstream audio chunks from Gemini
-      socket.onmessage = (event: MessageEvent) => {
+      socket.onmessage = async (event: MessageEvent) => {
         try {
           const rawData =
-            typeof event.data === "string" ? event.data : null;
+            typeof event.data === "string"
+              ? event.data
+              : event.data instanceof Blob
+              ? await event.data.text()
+              : null;
+
           if (!rawData) return;
 
           const response = JSON.parse(rawData);
 
-          // Handle Barge-in Interruption signal
+          // Handle Setup Acknowledgment
+          if (response.setupComplete) {
+            console.log("[LiveVoice] Handshake acknowledged by Google.");
+            isSetupComplete = true;
+            setStatus("connected");
+            setIsListening(true);
+            return;
+          }
+
+          // Handle User Barge-in
           if (response.serverContent?.interrupted) {
             stopPlayback();
             return;
           }
 
-          // Process model turn parts
+          // Handle Incoming Puck Audio Stream
           const parts = response.serverContent?.modelTurn?.parts;
           if (Array.isArray(parts)) {
             for (const part of parts) {
@@ -335,29 +360,43 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
         }
       };
 
-      socket.onerror = () => {
+      socket.onerror = (e) => {
+        console.error("Voice WebSocket encountered an error:", e);
         setError("WebSocket communication error occurred.");
-        endSession();
+        setStatus("error");
+        cleanupResources();
       };
 
-      socket.onclose = () => {
-        endSession();
+      socket.onclose = (event) => {
+        console.warn("Voice WebSocket closed:", event.code, event.reason);
+        cleanupResources();
+        if (event.code !== 1000 && event.code !== 1005) {
+          setError(
+            `Session closed unexpectedly (Code ${event.code}: ${
+              event.reason || "Policy/Protocol error"
+            })`
+          );
+          setStatus("error");
+        } else {
+          setStatus((prev) => (prev === "error" ? "error" : "idle"));
+        }
       };
     } catch (err: unknown) {
+      console.error("Failed to start voice session:", err);
       const message =
         err instanceof Error ? err.message : "Failed to initiate voice session.";
       setError(message);
       setStatus("error");
-      endSession();
+      cleanupResources();
     }
-  }, [arrayBufferToBase64, endSession, scheduleAudioChunk, stopPlayback]);
+  }, [arrayBufferToBase64, cleanupResources, scheduleAudioChunk, stopPlayback]);
 
-  // Cleanup on unmount
+  // Teardown once on unmount only
   useEffect(() => {
     return () => {
-      endSession();
+      cleanupResources();
     };
-  }, [endSession]);
+  }, [cleanupResources]);
 
   return {
     status,

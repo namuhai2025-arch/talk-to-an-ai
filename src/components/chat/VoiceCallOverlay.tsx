@@ -1,16 +1,17 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useLiveVoiceSession } from "@/hooks/useLiveVoiceSession";
 
 interface VoiceCallOverlayProps {
   isOpen: boolean;
   onClose: () => void;
+  onUpgrade?: () => void;
 }
 
 export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   isOpen,
   onClose,
+  onUpgrade,
 }) => {
   const {
     status,
@@ -24,6 +25,8 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   } = useLiveVoiceSession();
 
   const [callDuration, setCallDuration] = useState<number>(0);
+
+  const isUpgradeRequired = error === "UPGRADE_REQUIRED";
 
   // Auto-start session when modal opens, teardown when closed
   useEffect(() => {
@@ -66,13 +69,22 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
     onClose();
   };
 
-  // Derive visual status text
+  const handleUpgradeClick = () => {
+    endSession();
+    if (onUpgrade) {
+      onUpgrade();
+    } else {
+      window.location.href = "/subscription";
+    }
+  };
+
+  // Derive visual status text for standard call flow
   const getStatusLabel = () => {
     if (error) return "Connection Failed";
     if (status === "authenticating") return "Authenticating...";
-    if (status === "connecting") return "Connecting to Puck...";
+    if (status === "connecting") return "Connecting to Talkio...";
     if (status === "connected") {
-      if (isSpeaking) return "Puck is speaking...";
+      if (isSpeaking) return "Talkio is speaking...";
       if (isMuted) return "Microphone is muted";
       if (isListening) return "Listening (Speak anytime)...";
       return "Connected";
@@ -80,6 +92,74 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
     return "Disconnected";
   };
 
+  // Upgrade Screen State
+  if (isUpgradeRequired) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950/95 backdrop-blur-xl px-6 py-12 text-white">
+        <div className="w-full max-w-sm rounded-3xl bg-zinc-900/90 border border-zinc-800/80 p-8 flex flex-col items-center text-center shadow-2xl relative overflow-hidden">
+          {/* Subtle glow header */}
+          <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-48 h-48 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Tier Badge */}
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold tracking-wider uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 mb-6">
+            Presence Tier
+          </span>
+
+          {/* Icon */}
+          <div className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25 mb-5">
+            <svg
+              className="w-8 h-8 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.75}
+                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z"
+              />
+            </svg>
+          </div>
+
+          {/* Pitch */}
+          <h3 className="text-xl font-bold tracking-tight text-zinc-100">
+            Talkio Live Voice
+          </h3>
+          <p className="text-sm text-zinc-400 mt-2 mb-6 leading-relaxed">
+            Real-time spoken conversations with natural pacing, voice emotion,
+            and instant interruption.
+          </p>
+
+          {/* Price */}
+          <div className="flex items-baseline gap-1 mb-6">
+            <span className="text-3xl font-extrabold tracking-tight text-white">
+              $14.99
+            </span>
+            <span className="text-xs text-zinc-500 font-medium">/ month</span>
+          </div>
+
+          {/* Action CTAs */}
+          <div className="w-full flex flex-col gap-3">
+            <button
+              onClick={handleUpgradeClick}
+              className="w-full py-3.5 px-4 rounded-xl font-medium text-sm text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98]"
+            >
+              Upgrade to Presence
+            </button>
+            <button
+              onClick={handleHangUp}
+              className="w-full py-3 px-4 rounded-xl font-medium text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Standard Voice Call Screen
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-zinc-950/95 backdrop-blur-xl px-6 py-12 text-white">
       {/* Top Header / Status & Timer */}
@@ -153,8 +233,8 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
         </div>
       </div>
 
-      {/* Error Banner */}
-      {error && (
+      {/* General Error Banner (only for non-upgrade errors) */}
+      {error && !isUpgradeRequired && (
         <div className="mb-4 max-w-sm rounded-lg bg-red-950/50 border border-red-800/60 p-3 text-center text-xs text-red-200">
           {error}
         </div>

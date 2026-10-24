@@ -13,7 +13,7 @@ if (!getApps().length) {
 
 const AUTHORIZED_VOICE_TIERS = new Set(["presence", "professionals", "elite"]);
 const DEFAULT_VOICE_NAME = "Puck";
-const LIVE_MODEL_ID = "gemini-2.0-flash-exp";
+const LIVE_MODEL_ID = "models/gemini-3.8-live";
 
 function buildVoiceSystemInstruction({
   userName,
@@ -28,7 +28,7 @@ function buildVoiceSystemInstruction({
 
   return [
     `[IDENTITY & PERSONA]`,
-    `You are Puck, the voice companion of Talkio. You are the "Playful Anchor"—grounded, witty, warm, emotionally intelligent, and genuinely present. You sound like an authentic close friend over the phone, never an automated assistant or corporate bot.`,
+    'You are Talkio. You are the "Playful Anchor"—grounded, witty, warm, emotionally present.',
     ``,
     `[MULTILINGUAL BEHAVIOR]`,
     languageDirective,
@@ -136,34 +136,11 @@ export const initVoiceSession = onRequest(
         recentChatSnippet,
       });
 
-      // 5. Mint Ephemeral Token using Google GenAI Live Client Configuration
+            // 5. Retrieve API Key
       const apiKeyVal = geminiApiKey.value();
-      const tokenExpirySeconds = 300; // 5 minutes TTL to establish handshake
 
-      const tokenResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1alpha/authTokens`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKeyVal,
-          },
-          body: JSON.stringify({
-            ttl: `${tokenExpirySeconds}s`,
-            uses: 1,
-          }),
-          signal: AbortSignal.timeout(8000),
-        }
-      );
-
-      let ephemeralToken = null;
-
-      if (tokenResponse.ok) {
-        const tokenJson = await tokenResponse.json();
-        ephemeralToken = tokenJson.name || tokenJson.token;
-      } else {
-        // Fallback for direct edge relay if ephemeral tokens are provisioned under custom scoped keys
-        console.warn(`Ephemeral authTokens endpoint returned status ${tokenResponse.status}. Falling back to signed session dispatch.`);
+      if (!apiKeyVal) {
+        throw new Error("GEMINI_API_KEY secret is not set or empty.");
       }
 
       // 6. Record Initialized Presence Voice Session in Firestore
@@ -177,27 +154,21 @@ export const initVoiceSession = onRequest(
         createdAt: FieldValue.serverTimestamp(),
       });
 
-      // 7. Return Handshake Payload to Client
+      // 7. Return Handshake Payload to Client with valid API Key
+      const baseWs = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent";
+      const sessionUri = `${baseWs}?key=${apiKeyVal}`;
+
       return res.status(200).json({
         sessionId: sessionDocRef.id,
-        wsEndpoint: `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent`,
-        ephemeralToken: ephemeralToken,
+        sessionUri: sessionUri,
+        puckInstructions: systemInstruction,
+        wsEndpoint: sessionUri,
         voiceConfig: {
-          model: LIVE_MODEL_ID,
           voiceName: DEFAULT_VOICE_NAME,
-          systemInstruction,
-          audioConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: DEFAULT_VOICE_NAME,
-                },
-              },
-            },
-          },
+          systemInstruction: systemInstruction,
         },
       });
+
     } catch (error) {
       console.error("Failed to initialize voice session:", error);
       return res.status(500).json({

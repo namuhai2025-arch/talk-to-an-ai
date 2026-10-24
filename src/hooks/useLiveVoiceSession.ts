@@ -30,7 +30,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Network and audio resource references
+  // References for network and audio hardware
   const wsRef = useRef<WebSocket | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -38,15 +38,11 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
   const muteGainNodeRef = useRef<GainNode | null>(null);
   const isMutedRef = useRef<boolean>(false);
 
-  // Playback scheduling
+  // Playback scheduling references
   const nextScheduledTimeRef = useRef<number>(0);
   const activeAudioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const isPuckSpeakingRef = useRef<boolean>(false);
   const initialGreetingDoneRef = useRef<boolean>(false);
-
-  // Voice Activity & Silence Detection for Turn Completion
-  const hasSpokenInCurrentTurnRef = useRef<boolean>(false);
-  const pauseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isMutedRef.current = isMuted;
@@ -70,7 +66,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
         source.stop();
         source.disconnect();
       } catch {
-        // Source already terminated
+        // Source node might already be dead
       }
     }
     activeAudioSourcesRef.current = [];
@@ -82,11 +78,6 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
   }, []);
 
   const cleanupResources = useCallback(() => {
-    if (pauseTimerRef.current) {
-      clearTimeout(pauseTimerRef.current);
-      pauseTimerRef.current = null;
-    }
-
     stopPlayback();
 
     if (workletNodeRef.current) {
@@ -120,7 +111,6 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
     initialGreetingDoneRef.current = false;
     isPuckSpeakingRef.current = false;
-    hasSpokenInCurrentTurnRef.current = false;
     setIsListening(false);
     setIsSpeaking(false);
     setIsMuted(false);
@@ -170,6 +160,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
     source.onended = () => {
       activeAudioSourcesRef.current = activeAudioSourcesRef.current.filter((s) => s !== source);
       if (activeAudioSourcesRef.current.length === 0) {
+        // Buffer queue has run empty
         isPuckSpeakingRef.current = false;
         setIsSpeaking(false);
       }
@@ -194,7 +185,6 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
       const idToken = await currentUser.getIdToken();
 
-      // Handshake with Cloud Function
       const initResponse = await fetch(INIT_ENDPOINT_URL, {
         method: "POST",
         headers: {
@@ -220,12 +210,11 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
       setStatus("connecting");
 
-      // Initialize AudioContext with native 16000Hz downsampling
       const AudioCtxClass =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
 
-      const audioCtx = new AudioCtxClass({ sampleRate: 16000 });
+      const audioCtx = new AudioCtxClass();
 
       if (audioCtx.state === "suspended") {
         await audioCtx.resume();
@@ -234,7 +223,6 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       audioContextRef.current = audioCtx;
       nextScheduledTimeRef.current = audioCtx.currentTime;
 
-      // Register Worklet
       const workletBlobUrl = getAudioWorkletBlobUrl();
       await audioCtx.audioWorklet.addModule(workletBlobUrl);
       URL.revokeObjectURL(workletBlobUrl);
@@ -264,7 +252,6 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
       let isSetupComplete = false;
       let packetCounter = 0;
 
-      // Connect to Google WebSocket
       const socket = new WebSocket(sessionUri);
       wsRef.current = socket;
 
@@ -283,7 +270,13 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
               },
             },
             systemInstruction: {
-              parts: [{ text: puckInstructions || "You are Puck, a friendly conversational partner." }],
+              parts: [
+                {
+                  text:
+                    puckInstructions ||
+                    "You are Puck, a warm, concise conversational companion. Speak naturally in brief sentences.",
+                },
+              ],
             },
           },
         };
@@ -291,7 +284,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
         socket.send(JSON.stringify(setupMessage));
       };
 
-      // Ingest audio from Worklet and detect turn completion
+      // Mic Worklet Event Handler
       workletNode.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
         if (
           socket.readyState !== WebSocket.OPEN ||
@@ -303,6 +296,11 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
           return;
         }
 
+        // Echo protection: Do not stream mic while Puck is actively speaking through the speakers
+        if (isPuckSpeakingRef.current) {
+          return;
+        }
+
         const pcm = new Int16Array(event.data);
         let sum = 0;
         for (let i = 0; i < pcm.length; i++) {
@@ -311,33 +309,8 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
         const avgLevel = Math.round(sum / pcm.length);
 
         packetCounter++;
-        if (packetCounter % 20 === 0 && avgLevel > 300) {
-          console.log(`[LiveVoice] Mic input active (Level: ${avgLevel})`);
-        }
-
-        // Voice Activity Detection: If voice level is active (> 600)
-        if (avgLevel > 600) {
-          hasSpokenInCurrentTurnRef.current = true;
-          if (pauseTimerRef.current) {
-            clearTimeout(pauseTimerRef.current);
-            pauseTimerRef.current = null;
-          }
-        } else if (hasSpokenInCurrentTurnRef.current && avgLevel < 350 && !pauseTimerRef.current) {
-          // User finished speaking and paused for 600ms -> Commit the turn
-          pauseTimerRef.current = setTimeout(() => {
-            if (socket.readyState === WebSocket.OPEN && hasSpokenInCurrentTurnRef.current) {
-              console.log("[LiveVoice] Pause detected. Committing turn to Puck...");
-              socket.send(
-                JSON.stringify({
-                  clientContent: {
-                    turnComplete: true,
-                  },
-                })
-              );
-              hasSpokenInCurrentTurnRef.current = false;
-            }
-            pauseTimerRef.current = null;
-          }, 600);
+        if (packetCounter % 25 === 0 && avgLevel > 300) {
+          console.log(`[LiveVoice] Streaming mic to Google (Level: ${avgLevel})`);
         }
 
         const base64Data = arrayBufferToBase64(event.data);
@@ -367,14 +340,14 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
           const response = JSON.parse(rawData);
 
-          // Handle Setup Complete
+          // Handle Setup Completion
           if (response.setupComplete) {
             console.log("[LiveVoice] Handshake acknowledged by Google.");
             isSetupComplete = true;
             setStatus("connected");
             setIsListening(true);
 
-            // Kick off greeting turn
+            // Greet user
             socket.send(
               JSON.stringify({
                 clientContent: {
@@ -383,7 +356,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
                       role: "user",
                       parts: [
                         {
-                          text: "Hello! The call just connected. Greet me warmly in one natural sentence to start our conversation.",
+                          text: "Hello! The call just connected. Greet me in one short, natural sentence.",
                         },
                       ],
                     },
@@ -400,21 +373,20 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
             return;
           }
 
-          // Handle Interruption / Barge-in
+          // Handle User Barge-In
           if (response.serverContent?.interrupted) {
-            console.log("[LiveVoice] Puck interrupted by user.");
+            console.log("[LiveVoice] Puck was interrupted.");
             stopPlayback();
             return;
           }
 
-          // Handle Turn Complete
+          // Handle Puck Finished Talking
           if (response.serverContent?.turnComplete) {
-            console.log("[LiveVoice] Puck finished turn. Mic is active for your reply.");
+            console.log("[LiveVoice] Puck finished speaking. Ready for your voice.");
             initialGreetingDoneRef.current = true;
-            hasSpokenInCurrentTurnRef.current = false;
           }
 
-          // Schedule Puck Audio
+          // Ingest Incoming Puck Audio Chunks
           const parts = response.serverContent?.modelTurn?.parts;
           if (Array.isArray(parts)) {
             for (const part of parts) {

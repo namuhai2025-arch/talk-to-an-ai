@@ -327,22 +327,41 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
 
           const response = JSON.parse(rawData);
 
-          // Handle Setup Acknowledgment
+          // Handle Setup Acknowledgment & Kickoff initial turn
           if (response.setupComplete) {
             console.log("[LiveVoice] Handshake acknowledged by Google.");
             isSetupComplete = true;
             setStatus("connected");
             setIsListening(true);
+
+            // Trigger greeting turn so Puck speaks immediately
+            socket.send(
+              JSON.stringify({
+                clientContent: {
+                  turns: [
+                    {
+                      role: "user",
+                      parts: [
+                        {
+                          text: "Hello! The voice call just connected. Greet me warmly in one natural sentence to start our conversation.",
+                        },
+                      ],
+                    },
+                  ],
+                  turnComplete: true,
+                },
+              })
+            );
             return;
           }
 
-          // Handle User Barge-in
+          // Handle Interruption / User Barge-in
           if (response.serverContent?.interrupted) {
             stopPlayback();
             return;
           }
 
-          // Handle Incoming Puck Audio Stream
+          // Handle Incoming Puck Audio Stream (corresponds to your screenshot)
           const parts = response.serverContent?.modelTurn?.parts;
           if (Array.isArray(parts)) {
             for (const part of parts) {
@@ -351,6 +370,7 @@ export function useLiveVoiceSession(): UseLiveVoiceSessionReturn {
                 part.inlineData.mimeType?.startsWith("audio/pcm") &&
                 part.inlineData.data
               ) {
+                console.log("[LiveVoice] Playing audio chunk from Puck...");
                 scheduleAudioChunk(part.inlineData.data);
               }
             }

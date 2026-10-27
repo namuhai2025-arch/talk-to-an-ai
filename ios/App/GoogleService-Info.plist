@@ -30,5 +30,7 @@
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
 	<string>1:813406735573:ios:dccca4e5e41b69a86ee65c</string>
+	<key>NSMicrophoneUsageDescription</key>
+    <string>Talkio needs access to your microphone for voice reflections.</string>
 </dict>
 </plist>

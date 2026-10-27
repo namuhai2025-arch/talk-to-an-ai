@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Talkio',
   webDir: 'out', // or whatever your webDir is
   server: {
-    url: 'https://talkiochat.com',
+    url: 'http://localhost:3000',
     cleartext: true
   },
   plugins: {

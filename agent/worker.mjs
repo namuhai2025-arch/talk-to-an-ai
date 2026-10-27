@@ -118,7 +118,7 @@ async function handleRoomSession(roomName) {
     geminiWs.send(JSON.stringify(setupPayload));
   });
 
-  geminiWs.on("message", async (rawMessage) => {
+    geminiWs.on("message", async (rawMessage) => {
     try {
       const response = JSON.parse(rawMessage.toString());
 
@@ -128,9 +128,8 @@ async function handleRoomSession(roomName) {
         return;
       }
 
-      // Handle user interruption (barge-in): Flush pending audio
       if (response.serverContent?.interrupted) {
-        console.log(`[Gemini] User interrupted Puck. Flushing audio queue.`);
+        console.log(`[Gemini] User interrupted Puck. Flushing audio.`);
         audioQueue = [];
         isPlaying = false;
         return;
@@ -139,7 +138,11 @@ async function handleRoomSession(roomName) {
       const parts = response.serverContent?.modelTurn?.parts;
       if (Array.isArray(parts)) {
         for (const part of parts) {
+          if (part.text) {
+            console.log(`[Gemini Puck Text]: ${part.text}`);
+          }
           if (part.inlineData && part.inlineData.mimeType?.startsWith("audio/pcm")) {
+            console.log(`[Gemini Puck Voice]: Received audio chunk (${part.inlineData.data.length} chars)`);
             const buffer = Buffer.from(part.inlineData.data, "base64");
             audioQueue.push(buffer);
             processAudioQueue();
@@ -162,8 +165,7 @@ async function handleRoomSession(roomName) {
     console.error("[Gemini] WebSocket error:", err);
   });
 
-  room.on(RoomEvent.TrackSubscribed, async (track, publication, participant) => {
-    // CRITICAL: Ignore other agents or local self-subscription to stop infinite loop
+    room.on(RoomEvent.TrackSubscribed, async (track, publication, participant) => {
     if (
       track.kind === TrackKind.KIND_AUDIO &&
       !participant.identity.startsWith("agent-") &&
@@ -171,12 +173,17 @@ async function handleRoomSession(roomName) {
     ) {
       console.log(`[LiveKit] Subscribed to human participant audio: ${participant.identity}`);
 
-      // Capture human audio at 16kHz mono PCM for Gemini
       const audioStream = new AudioStream(track, 16000, 1);
+      let chunkCount = 0;
 
       for await (const frame of audioStream) {
         if (!isGeminiReady || geminiWs.readyState !== WebSocket.OPEN) {
           continue;
+        }
+
+        chunkCount++;
+        if (chunkCount % 50 === 0) {
+          console.log(`[LiveKit -> Gemini] Streaming mic audio... (${chunkCount} frames sent)`);
         }
 
         const buffer = Buffer.from(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength);

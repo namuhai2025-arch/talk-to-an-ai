@@ -90,7 +90,7 @@ async function handleRoomSession(roomName) {
   }
 
   geminiWs.on("open", () => {
-    console.log(`[Gemini] Connected to Gemini 3.8 Live WebSocket for room: ${roomName}`);
+    console.log(`[Gemini] Connected to Gemini Realtime WebSocket for room: ${roomName}`);
 
     const setupPayload = {
       setup: {
@@ -152,8 +152,10 @@ async function handleRoomSession(roomName) {
   });
 
   geminiWs.on("close", (code, reason) => {
-    console.log(`[Gemini] Connection closed (${code}): ${reason}`);
+    console.log(`[Gemini] Connection closed (${code}): ${reason.toString()}`);
     isGeminiReady = false;
+    activeRooms.delete(roomName);
+    room.disconnect();
   });
 
   geminiWs.on("error", (err) => {
@@ -161,8 +163,13 @@ async function handleRoomSession(roomName) {
   });
 
   room.on(RoomEvent.TrackSubscribed, async (track, publication, participant) => {
-    if (track.kind === TrackKind.KIND_AUDIO && participant.identity !== room.localParticipant.identity) {
-      console.log(`[LiveKit] Subscribed to audio track from participant: ${participant.identity}`);
+    // CRITICAL: Ignore other agents or local self-subscription to stop infinite loop
+    if (
+      track.kind === TrackKind.KIND_AUDIO &&
+      !participant.identity.startsWith("agent-") &&
+      participant.identity !== room.localParticipant.identity
+    ) {
+      console.log(`[LiveKit] Subscribed to human participant audio: ${participant.identity}`);
 
       // Capture human audio at 16kHz mono PCM for Gemini
       const audioStream = new AudioStream(track, 16000, 1);
@@ -214,7 +221,7 @@ async function monitorRooms() {
     try {
       const rooms = await roomServiceClient.listRooms();
       for (const r of rooms) {
-        // Target active rooms that have human participants and no active agent session yet
+        // Only join rooms that have participants and no running agent session
         if (r.numParticipants > 0 && !activeRooms.has(r.name)) {
           handleRoomSession(r.name).catch((err) => {
             console.error(`[Worker] Error handling room ${r.name}:`, err);

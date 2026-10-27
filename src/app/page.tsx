@@ -22,6 +22,8 @@
   import ChatComposer from "@/components/chat/ChatComposer";
   import ReflectionsPanel from "@/components/reflections/ReflectionsPanel";
 
+  import VoiceModal from "@/components/voice/VoiceModal";
+
   import {
     GoogleAuthProvider,
     OAuthProvider,
@@ -267,6 +269,7 @@ requestId?: string;
   export default function Page() {
     const bottomRef = useRef<HTMLDivElement | null>(null);
     const sendInFlightRef = useRef(false);
+    const [isVoiceOpen, setIsVoiceOpen] = useState(false);
 
     const pendingImageRequestRef = useRef<{
   file: File;
@@ -1103,17 +1106,10 @@ useEffect(() => {
       setShowEmailAuth(false);
       setEmailPassword("");
       setEmailAuthError("");
+
     } catch (error: unknown) {
       console.error("Email authentication failed:", error);
       
-      const [displayMode, setDisplayMode] = useState<"standard" | "comfort">("standard");
-
-useEffect(() => {
-  if (!mounted) return;
-  const saved = (localStorage.getItem("talkio_display_mode") as "standard" | "comfort") || "standard";
-  setDisplayMode(saved);
-}, [mounted]);
-
       const firebaseError =
         error && typeof error === "object"
           ? (error as { code?: string; message?: string })
@@ -1804,42 +1800,49 @@ useEffect(() => {
           )}
 
           <ChatComposer
-  value={input}
-  onChange={setInput}
-  onSend={() => sendMessage()}
-  onOpenReflections={() => setActiveTab("reflections")}
-  disabled={
-    loading ||
-    showSafety ||
-    crisisLock ||
-    isLimitReached
-  }
-  placeholder={
-    crisisLock
-      ? "Chat paused for safety"
-      : isLimitReached
-        ? "Daily free limit reached."
-        : "Type your message..."
-  }
-  attachment={selectedImage}
-  onAttachmentChange={setSelectedImage}
-  canAttach={true}
-  attachmentStatus={
-    imageAccess?.uid === userId
-      ? imageAccess.status
-      : "Checking image allowance..."
-  }
-  imageSendingReady={true}
-  displayMode={displayMode}
-/>
+                value={input}
+                onChange={setInput}
+                onSend={() => sendMessage()}
+                onOpenVoice={() => setIsVoiceOpen(true)}
+                onOpenReflections={() => setActiveTab("reflections")}
+                disabled={
+                  loading ||
+                  showSafety ||
+                  crisisLock ||
+                  isLimitReached
+                }
+                placeholder={
+                  crisisLock
+                    ? "Chat paused for safety"
+                    : isLimitReached
+                    ? "Daily free limit reached."
+                    : "Type your message..."
+                }
+                attachment={selectedImage}
+                onAttachmentChange={setSelectedImage}
+                canAttach={true}
+                attachmentStatus={
+                  imageAccess?.uid === userId
+                    ? imageAccess.status
+                    : "Checking image allowance..."
+                }
+                imageSendingReady={true}
+                displayMode={displayMode}
+              />
+            </>
+          )}
         </>
+      ) : (
+        <ReflectionsPanel
+          onBack={() => setActiveTab("chat")}
+        />
       )}
-    </>
-  ) : (
-    <ReflectionsPanel
-  onBack={() => setActiveTab("chat")}
-/>
-)}
-</main>
-);
+
+      {/* Voice Reflection Modal */}
+      <VoiceModal
+        isOpen={isVoiceOpen}
+        onClose={() => setIsVoiceOpen(false)}
+      />
+    </main>
+  );
 }

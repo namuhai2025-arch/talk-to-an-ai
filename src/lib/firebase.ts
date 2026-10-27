@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
+import { getFunctions, type Functions } from "firebase/functions";
 import {
   getAnalytics,
   isSupported,
@@ -19,6 +20,7 @@ const firebaseConfig = {
 
 let app: FirebaseApp | null = null;
 let authInstance: Auth | null = null;
+let functionsInstance: Functions | null = null;
 let analyticsInstance: Analytics | null = null;
 
 export function getFirebaseApp(): FirebaseApp {
@@ -41,6 +43,18 @@ export function getFirebaseAuth(): Auth {
 
   authInstance = getAuth(getFirebaseApp());
   return authInstance;
+}
+
+export function getFirebaseFunctions(): Functions {
+  if (typeof window === "undefined") {
+    throw new Error("Firebase functions should only be initialized in the browser");
+  }
+
+  if (functionsInstance) return functionsInstance;
+
+  // Uses 'us-central1' explicitly to match your Cloud Functions region
+  functionsInstance = getFunctions(getFirebaseApp(), "us-central1");
+  return functionsInstance;
 }
 
 export async function getFirebaseAnalytics(): Promise<Analytics | null> {

@@ -13,6 +13,7 @@ type ChatComposerProps = {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
+  onOpenVoice?: () => void;
   onOpenReflections: () => void;
   disabled?: boolean;
   placeholder?: string;
@@ -28,6 +29,7 @@ function ChatComposer({
   value,
   onChange,
   onSend,
+  onOpenVoice,
   onOpenReflections,
   disabled = false,
   placeholder = "Type your message...",
@@ -309,6 +311,7 @@ function ChatComposer({
       )}
 
       <div className="flex items-end gap-2">
+        {/* Attachment Button */}
         {onAttachmentChange && (
           <>
             <input
@@ -353,6 +356,38 @@ function ChatComposer({
               </svg>
             </button>
           </>
+        )}
+
+        {/* Live Voice Call Button */}
+        {onOpenVoice && (
+          <button
+            type="button"
+            aria-label="Start Voice Call"
+            title="Talk to Talkio"
+            disabled={disabled}
+            onClick={onOpenVoice}
+            className={
+              isComfort
+                ? "flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl bg-white border border-stone-300 shadow-sm text-stone-700 hover:text-stone-900 disabled:opacity-40 active:scale-95 transition"
+                : "flex h-12 w-11 shrink-0 items-center justify-center rounded-md text-stone-600 hover:text-stone-900 disabled:opacity-40 active:scale-95 transition"
+            }
+          >
+            <svg
+              width={isComfort ? "26" : "22"}
+              height={isComfort ? "26" : "22"}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={isComfort ? "2.2" : "1.8"}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
+          </button>
         )}
 
         <div className="relative min-w-0 flex-1">

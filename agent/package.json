@@ -1,0 +1,15 @@
+{
+  "name": "talkio-voice-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "worker.mjs",
+  "scripts": {
+    "start": "node worker.mjs"
+  },
+  "dependencies": {
+    "@livekit/rtc-node": "^0.9.0",
+    "dotenv": "^16.4.7",
+    "livekit-server-sdk": "^2.9.4",
+    "ws": "^8.18.0"
+  }
+}

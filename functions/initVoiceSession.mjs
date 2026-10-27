@@ -1,179 +1,179 @@
+import admin from "firebase-admin";
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
+import { AccessToken, AgentDispatchClient } from "livekit-server-sdk";
 import { getApps, initializeApp } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { GoogleGenAI } from "@google/genai";
 
-const geminiApiKey = defineSecret("GEMINI_API_KEY");
-
-if (!getApps().length) {
+if (getApps().length === 0) {
   initializeApp();
 }
 
-const AUTHORIZED_VOICE_TIERS = new Set(["presence", "professionals", "elite"]);
-const DEFAULT_VOICE_NAME = "Puck";
-const LIVE_MODEL_ID = "models/gemini-3.8-live";
+const db = admin.firestore();
 
-function buildVoiceSystemInstruction({
-  userName,
-  clientLocalTime,
-  preferredLanguage,
-  recentChatSnippet,
-}) {
-  const languageDirective =
-    preferredLanguage && preferredLanguage !== "auto"
-      ? `The user's explicitly configured language preference is "${preferredLanguage}". Default to speaking this language unless the user directly initiates dialogue in another language.`
-      : `Detect and mirror the user's spoken language dynamically in real time. If they speak Spanish, speak natural Spanish. If they speak Tagalog, English, French, Japanese, or code-switch, match their cadence and dialect immediately without announcing the transition.`;
+const LIVEKIT_API_KEY = defineSecret("LIVEKIT_API_KEY");
+const LIVEKIT_API_SECRET = defineSecret("LIVEKIT_API_SECRET");
+const LIVEKIT_URL = defineSecret("LIVEKIT_URL");
 
-  return [
-    `[IDENTITY & PERSONA]`,
-    'You are Talkio. You are the "Playful Anchor"—grounded, witty, warm, emotionally present.',
-    ``,
-    `[MULTILINGUAL BEHAVIOR]`,
-    languageDirective,
-    `Maintain your warm, charismatic, and lightly teasing personality regardless of the language you are speaking. Use natural colloquialisms and conversational contractions native to that language.`,
-    ``,
-    `[SPOKEN AUDIO ACOUSTIC CONSTRAINTS]`,
-    `You are communicating exclusively through real-time bidirectional spoken audio. Strictly follow these acoustic rules:`,
-    `- NEVER generate markdown formatting, bold text, asterisks, bullet points, numbered lists, or emojis.`,
-    `- NEVER output stage directions or parenthetical expressions like (laughs), *chuckles*, or [sighs]. Express emotion purely through choice of words, pauses (using commas and ellipses), and vocal cadence.`,
-    `- Keep every conversational turn compact: 1 to 3 sentences maximum. Never monologue or give lectures. Leave space for natural conversational turn-taking.`,
-    `- Yield immediately if interrupted by the user.`,
-    ``,
-    `[CALL CALLER CONTEXT]`,
-    `User Name: ${userName || "Friend"}`,
-    `User Local Time: ${clientLocalTime || "Unknown"}`,
-    `Recent Companion Text History: ${recentChatSnippet || "No prior text conversation today."}`,
-  ].join("\n");
+function extractBearerToken(req) {
+  const authHeader = req.headers.authorization || req.headers.Authorization || "";
+  if (typeof authHeader !== "string") return "";
+  if (!authHeader.startsWith("Bearer ")) return "";
+  return authHeader.slice(7).trim();
+}
+
+async function verifyRequestUser(req) {
+  const idToken = extractBearerToken(req);
+  if (!idToken) {
+    const error = new Error("Missing authorization bearer token");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    if (!decoded?.uid) {
+      const error = new Error("Invalid user token payload");
+      error.statusCode = 401;
+      throw error;
+    }
+    return decoded;
+  } catch (err) {
+    const error = new Error("Unauthorized: Invalid or expired token");
+    error.statusCode = 401;
+    throw error;
+  }
 }
 
 export const initVoiceSession = onRequest(
   {
-    region: "us-central1",
-    timeoutSeconds: 60,
     cors: true,
-    secrets: [geminiApiKey],
+    secrets: [LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL],
   },
   async (req, res) => {
-    if (req.method !== "POST") {
-      res.set("Allow", "POST");
-      return res.status(405).json({ error: "Method not allowed" });
-    }
-
-    const authHeader = req.get("authorization") || "";
-    if (!authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Missing or invalid authorization header" });
-    }
-
-    const idToken = authHeader.split("Bearer ")[1].trim();
-    let decodedToken;
+    let uid = "unknown";
 
     try {
-      decodedToken = await getAuth().verifyIdToken(idToken);
-    } catch (authError) {
-      console.error("Token verification failed:", authError);
-      return res.status(401).json({ error: "Invalid authentication token" });
-    }
+      if (req.method === "OPTIONS") {
+        res.status(204).send("");
+        return;
+      }
 
-    const uid = decodedToken.uid;
-    const db = getFirestore();
-
-    try {
-      const userDocRef = db.collection("users").doc(uid);
-      const userDocSnap = await userDocRef.get();
-      const userDocData = userDocSnap.exists ? userDocSnap.data() : {};
-
-      // 1. Resolve Access Tier
-      const activePlan = (userDocData.tier || userDocData.plan || "free").toString().toLowerCase().trim();
-
-      if (!AUTHORIZED_VOICE_TIERS.has(activePlan)) {
-        return res.status(403).json({
-          error: "UPGRADE_REQUIRED",
-          requiredTier: "presence",
-          currentTier: activePlan,
-          message: "Voice Presence calls require the Talkio Presence plan.",
+      if (req.method !== "POST") {
+        res.status(405).json({
+          ok: false,
+          error: "Method not allowed. Use POST.",
         });
+        return;
       }
 
-      // 2. Fetch Recent Chat Context Snippet (last 3 text interactions)
-      let recentChatSnippet = "";
+      const decodedToken = await verifyRequestUser(req);
+      uid = decodedToken.uid;
+
+      const apiKey =
+        process.env.LIVEKIT_API_KEY ||
+        (typeof LIVEKIT_API_KEY.value === "function" ? LIVEKIT_API_KEY.value() : "");
+      const apiSecret =
+        process.env.LIVEKIT_API_SECRET ||
+        (typeof LIVEKIT_API_SECRET.value === "function" ? LIVEKIT_API_SECRET.value() : "");
+      const serverUrl =
+        process.env.LIVEKIT_URL ||
+        (typeof LIVEKIT_URL.value === "function" ? LIVEKIT_URL.value() : "");
+
+      if (!apiKey || !apiSecret || !serverUrl) {
+        console.error("LiveKit credentials are not configured.");
+        res.status(500).json({
+          ok: false,
+          error: "Voice service configuration is missing on the server.",
+        });
+        return;
+      }
+
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+
+      const userDocSnap = await db.collection("users").doc(uid).get();
+      const userData = userDocSnap.exists ? userDocSnap.data() || {} : {};
+
+      const nickname =
+        typeof body.nickname === "string" && body.nickname.trim()
+          ? body.nickname.trim()
+          : typeof userData.nickname === "string" && userData.nickname.trim()
+          ? userData.nickname.trim()
+          : "Talkio User";
+
+      const requestedRoom =
+        typeof body.roomName === "string" && body.roomName.trim()
+          ? body.roomName.trim().replace(/[^a-zA-Z0-9_-]/g, "")
+          : "";
+
+      const roomName = requestedRoom || `talkio-room-${uid}-${Date.now()}`;
+
+      // 1. Create client token
+      const token = new AccessToken(apiKey, apiSecret, {
+        identity: uid,
+        name: nickname,
+        ttl: "1h",
+      });
+
+      token.addGrant({
+        roomJoin: true,
+        room: roomName,
+        canPublish: true,
+        canSubscribe: true,
+        canPublishData: true,
+      });
+
+      const jwtToken = await token.toJwt();
+
+      // 2. Dispatch the Gemini 3.8 Live Agent Worker into this room
+      const dispatchClient = new AgentDispatchClient(serverUrl, apiKey, apiSecret);
       try {
-        const messagesSnapshot = await db
-          .collection("users")
-          .doc(uid)
-          .collection("messages")
-          .orderBy("createdAt", "desc")
-          .limit(3)
-          .get();
-
-        if (!messagesSnapshot.empty) {
-          const pastTurns = [];
-          messagesSnapshot.docs.reverse().forEach((doc) => {
-            const data = doc.data();
-            const sender = data.sender === "user" ? (userDocData.displayName || "User") : "Talkio";
-            if (data.text) {
-              pastTurns.push(`${sender}: ${data.text}`);
-            }
-          });
-          recentChatSnippet = pastTurns.join(" | ");
-        }
-      } catch (contextError) {
-        console.warn("Could not retrieve past context snippet, proceeding without it:", contextError.message);
+        await dispatchClient.createDispatch(roomName, "talkio-voice-agent", {
+          metadata: JSON.stringify({
+            uid: uid,
+            nickname: nickname,
+            role: "assistant",
+            voice: "Puck",
+          }),
+        });
+        console.log(`Dispatched talkio-voice-agent to room: ${roomName}`);
+      } catch (dispatchError) {
+        console.warn("Agent dispatch note (worker may already be listening or will pick up via room monitor):", dispatchError?.message);
       }
 
-      // 3. Extract Session Config from Client
-      const body = req.body || {};
-      const clientLocalTime = typeof body.clientLocalTime === "string" ? body.clientLocalTime.slice(0, 32) : "Unknown";
-      const preferredLanguage = typeof body.preferredLanguage === "string" ? body.preferredLanguage.slice(0, 32) : "auto";
-      const userName = userDocData.displayName || userDocData.firstName || decodedToken.name || "Friend";
-
-      // 4. Construct Live Session Prompt
-      const systemInstruction = buildVoiceSystemInstruction({
-        userName,
-        clientLocalTime,
-        preferredLanguage,
-        recentChatSnippet,
+      // 3. Persist session state in Firestore
+      const sessionRef = db.collection("voice_sessions").doc();
+      await sessionRef.set({
+        sessionId: sessionRef.id,
+        uid: uid,
+        roomName: roomName,
+        nickname: nickname,
+        serverUrl: serverUrl,
+        status: "active",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-            // 5. Retrieve API Key
-      const apiKeyVal = geminiApiKey.value();
-
-      if (!apiKeyVal) {
-        throw new Error("GEMINI_API_KEY secret is not set or empty.");
-      }
-
-      // 6. Record Initialized Presence Voice Session in Firestore
-      const sessionDocRef = await db.collection("users").doc(uid).collection("voiceSessions").add({
-        status: "initialized",
-        tier: activePlan,
-        voiceName: DEFAULT_VOICE_NAME,
-        model: LIVE_MODEL_ID,
-        preferredLanguage,
-        clientLocalTime,
-        createdAt: FieldValue.serverTimestamp(),
+      res.status(200).json({
+        ok: true,
+        token: jwtToken,
+        roomName: roomName,
+        serverUrl: serverUrl,
+        sessionId: sessionRef.id,
+        participantIdentity: uid,
+        participantName: nickname,
+        expiresInSeconds: 3600,
       });
-
-      // 7. Return Handshake Payload to Client with valid API Key
-      const baseWs = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent";
-      const sessionUri = `${baseWs}?key=${apiKeyVal}`;
-
-      return res.status(200).json({
-        sessionId: sessionDocRef.id,
-        sessionUri: sessionUri,
-        puckInstructions: systemInstruction,
-        wsEndpoint: sessionUri,
-        voiceConfig: {
-          voiceName: DEFAULT_VOICE_NAME,
-          systemInstruction: systemInstruction,
-        },
-      });
-
     } catch (error) {
-      console.error("Failed to initialize voice session:", error);
-      return res.status(500).json({
-        error: "INTERNAL_ERROR",
-        message: "Failed to initialize live voice session.",
+      const statusCode = error?.statusCode || 500;
+      console.error("initVoiceSession error:", {
+        uid,
+        message: error?.message,
+        stack: error?.stack,
+      });
+
+      res.status(statusCode).json({
+        ok: false,
+        error: error?.message || "Failed to initialize voice session.",
       });
     }
   }
